@@ -4,6 +4,8 @@ Forensics++ is a static, local-first browser workbench for CTF/MISC, lightweight
 
 It is built as a public web toolbox: open the page, choose a tool, process the data in the browser, and review the result without needing a backend service or database.
 
+Just try it [Forensics++](https://forensicspp.com)
+
 ## Highlights
 
 - Static web application
