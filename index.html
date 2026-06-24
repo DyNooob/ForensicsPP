@@ -1,0 +1,62 @@
+<!doctype html>
+<!--
+  ============================================================
+  Forensics++ (ForensicsPP.com)
+  Local-first browser forensics workbench
+
+  Author:   DyNooob
+  Website:  https://www.loken.cn
+  Platform: DigiForensics.cn
+  Project:  https://github.com/DyNooob/ForensicsPP
+
+  Forensics++ is a static, browser-side toolkit for CTF/MISC,
+  lightweight forensic triage, encoding/decoding, metadata
+  inspection, hashes, archive parsing, and local analysis.
+
+  Files and text are processed locally in the browser by default.
+  Do not use this project for unauthorized access, intrusion,
+  privacy infringement, or unlawful activity.
+
+  Copyright (c) 2026 DyNooob. All rights reserved.
+  ============================================================
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Forensics++ / ForensicsPP online DFIR workbench for file, document, log, memory, and network evidence triage."
+    />
+    <title>Forensics++ Workbench</title>
+    <script>
+      (() => {
+        const key = "__forensicspp_console_brand__";
+        if (window[key]) return;
+        window[key] = true;
+        const badge = "color:#07111f;background:#9bcaff;font-size:16px;font-weight:900;padding:5px 8px;border-radius:5px 0 0 5px";
+        const banner = "color:#dbeafe;background:#0b1624;font-size:16px;font-weight:900;padding:5px 10px;border-radius:0 5px 5px 0;letter-spacing:0.03em";
+        const label = "color:#9ca3af;font-weight:800";
+        const value = "color:#bfdbfe;font-weight:800";
+        const muted = "color:#cbd5e1;font-weight:700";
+        const warn = "color:#f59e0b;font-weight:900";
+        console.info("%cF++%c Forensics++  |  ForensicsPP.com ", badge, banner);
+        console.groupCollapsed("%cForensics++ project information", "color:#93c5fd;font-weight:900");
+        console.log("%cProject   %cForensics++ (ForensicsPP.com)", label, value);
+        console.log("%cAuthor    %cDyNooob", label, value);
+        console.log("%cWebsite   %chttps://www.loken.cn", label, value);
+        console.log("%cPlatform  %cDigiForensics.cn", label, value);
+        console.log("%cGitHub    %chttps://github.com/DyNooob/ForensicsPP", label, value);
+        console.log("%cMode      %cStatic browser-side workbench. Files are processed locally by default.", label, muted);
+        console.log("%cNotice    %cUse only in lawful and authorized scenarios.", label, warn);
+        console.log("%cCopyright %cCopyright (c) 2026 DyNooob. All rights reserved.", label, muted);
+        console.groupEnd();
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-B31x7O_N.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CTLd75CT.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

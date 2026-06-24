@@ -1,0 +1,345 @@
+<!doctype html>
+<!--
+  ============================================================
+  Forensics++ (ForensicsPP.com)
+  Local-first browser forensics workbench
+
+  Author:   DyNooob
+  Website:  https://www.loken.cn
+  Platform: DigiForensics.cn
+  Project:  https://github.com/DyNooob/ForensicsPP
+
+  Forensics++ is a static, browser-side toolkit for CTF/MISC,
+  lightweight forensic triage, encoding/decoding, metadata
+  inspection, hashes, archive parsing, and local analysis.
+
+  Files and text are processed locally in the browser by default.
+  Do not use this project for unauthorized access, intrusion,
+  privacy infringement, or unlawful activity.
+
+  Copyright (c) 2026 DyNooob. All rights reserved.
+  ============================================================
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forensics++ 法律说明</title>
+    <script>
+      (() => {
+        const key = "__forensicspp_console_brand__";
+        if (window[key]) return;
+        window[key] = true;
+        const badge = "color:#07111f;background:#9bcaff;font-size:16px;font-weight:900;padding:5px 8px;border-radius:5px 0 0 5px";
+        const banner = "color:#dbeafe;background:#0b1624;font-size:16px;font-weight:900;padding:5px 10px;border-radius:0 5px 5px 0;letter-spacing:0.03em";
+        const label = "color:#9ca3af;font-weight:800";
+        const value = "color:#bfdbfe;font-weight:800";
+        const muted = "color:#cbd5e1;font-weight:700";
+        const warn = "color:#f59e0b;font-weight:900";
+        console.info("%cF++%c Forensics++  |  ForensicsPP.com ", badge, banner);
+        console.groupCollapsed("%cForensics++ project information", "color:#93c5fd;font-weight:900");
+        console.log("%cProject   %cForensics++ (ForensicsPP.com)", label, value);
+        console.log("%cAuthor    %cDyNooob", label, value);
+        console.log("%cWebsite   %chttps://www.loken.cn", label, value);
+        console.log("%cPlatform  %cDigiForensics.cn", label, value);
+        console.log("%cGitHub    %chttps://github.com/DyNooob/ForensicsPP", label, value);
+        console.log("%cMode      %cStatic browser-side workbench. Files are processed locally by default.", label, muted);
+        console.log("%cNotice    %cUse only in lawful and authorized scenarios.", label, warn);
+        console.log("%cCopyright %cCopyright (c) 2026 DyNooob. All rights reserved.", label, muted);
+        console.groupEnd();
+      })();
+    </script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --ink: #111827;
+        --muted: #5f6b7a;
+        --line: #d7dde7;
+        --accent: #0061a4;
+        --accent-soft: #d2e4ff;
+        --danger: #b3261e;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101417;
+          --surface: #151a1d;
+          --ink: #e4e8ee;
+          --muted: #b7c0cb;
+          --line: #394149;
+          --accent: #9bcaff;
+          --accent-soft: #17324a;
+          --danger: #ffb4ab;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .page {
+        width: min(1040px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 34px 0 42px;
+      }
+
+      header {
+        display: grid;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 22px;
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(30px, 4vw, 48px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      header p {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .meta span {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+        color: var(--muted);
+        padding: 7px 10px;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      main {
+        display: grid;
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      section {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+        padding: 20px;
+      }
+
+      section h2 {
+        margin-bottom: 12px;
+        font-size: 22px;
+      }
+
+      section h3 {
+        margin: 16px 0 8px;
+        font-size: 16px;
+      }
+
+      section p,
+      li {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.72;
+      }
+
+      ul {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+        padding-left: 1.2em;
+      }
+
+      .notice {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+        background: var(--accent-soft);
+      }
+
+      .notice p,
+      .notice li {
+        color: var(--ink);
+      }
+
+      .danger h2 {
+        color: var(--danger);
+      }
+
+      footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 4px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+        color: var(--accent);
+        padding: 0 12px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          width: min(100% - 20px, 1040px);
+          padding-top: 22px;
+        }
+
+        section {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <span class="eyebrow">Forensics++</span>
+        <h1>法律说明</h1>
+        <p>
+          使用 Forensics++ 前，请确认你理解并接受以下条款、隐私说明、免责声明和开源许可说明。继续使用本站工具，即表示你同意按这些规则使用。
+        </p>
+        <div class="meta">
+          <span>当前版本：0.2.0</span>
+          <span>生效日期：2026-06-24</span>
+          <span>反馈邮箱：toolab@digiforensics.cn</span>
+        </div>
+        <div class="actions">
+          <a class="button" href="/">返回工作台</a>
+          <a class="button" href="mailto:toolab@digiforensics.cn">联系反馈</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="notice">
+          <h2>使用前确认</h2>
+          <ul>
+            <li>你只会在合法、授权、符合适用规则的场景中使用本站工具。</li>
+            <li>你确认自己有权处理输入的文件、文本、日志、流量包、镜像片段或其他数据。</li>
+            <li>你理解工具输出只是辅助结果，需要结合原始材料和专业判断复核。</li>
+            <li>你理解浏览器、扩展、系统、第三方静态包或本地环境可能影响工具行为。</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>服务定位</h2>
+          <p>
+            Forensics++ 是面向在线取证、CTF/MISC、教学、安全研究和个人数据分析的工具工作台。本站提供编码解码、哈希、图片、文件头、流量包、IOC、URL、时间戳、JSON、正则等辅助功能。
+          </p>
+          <h3>允许的使用场景</h3>
+          <ul>
+            <li>处理你本人拥有或已获得明确授权处理的数据。</li>
+            <li>在 CTF、靶场、课程、培训、内部演练和安全研究中分析样本。</li>
+            <li>对公开样例、测试数据、脱敏日志、合法收集的告警材料进行辅助分析。</li>
+          </ul>
+          <h3>禁止的使用场景</h3>
+          <ul>
+            <li>未授权访问、攻击、扫描、绕过安全控制或规避审计。</li>
+            <li>窃取、泄露、隐藏、篡改他人数据或协助违法违规行为。</li>
+            <li>侵犯第三方隐私、知识产权、商业秘密或其他合法权益。</li>
+            <li>把本站输出直接作为司法、合规、生产处置或高风险决策的唯一依据。</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>本地处理与数据存储</h2>
+          <ul>
+            <li>当前版本默认在浏览器内处理文件和文本，不会把文件本体上传到 Forensics++ 服务器。</li>
+            <li>常用文本输入、输出和部分解析结果可能保存在浏览器 localStorage，用于保留工作状态。</li>
+            <li>你可以在设置页清除本地缓存，也可以使用浏览器自带的站点数据清理功能。</li>
+            <li>请不要在公共电脑、共享账号或不可信浏览器环境中输入敏感数据。</li>
+            <li>如果你通过邮件反馈问题，邮件正文、附件、发件地址和相关元数据会由收件邮箱系统接收和保存。</li>
+          </ul>
+        </section>
+
+        <section class="danger">
+          <h2>免责声明</h2>
+          <ul>
+            <li>本站工具按现状提供，不保证持续可用、完全准确、完整、无错误或适合特定目的。</li>
+            <li>文件格式识别、哈希、解码、隐写预览、流量包摘要、IOC 提取和正则匹配等结果可能存在误报、漏报或解析偏差。</li>
+            <li>浏览器限制、文件损坏、编码差异、样本混淆、第三方库行为和用户输入都可能导致输出变化。</li>
+            <li>你需要自行评估工具输出、保留原始证据，并在必要时使用专业工具和人工复核。</li>
+            <li>因误用、误判、数据丢失、业务中断、合规争议或第三方工具行为造成的风险，由使用者自行承担。</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>第三方工具与开源许可</h2>
+          <p>
+            Forensics++ 集成或参考了若干开源项目和公开规范。第三方项目归其各自作者或权利人所有，并受对应开源许可证约束。
+          </p>
+          <ul>
+            <li>CyberChef：本地嵌入的编码、解码、哈希和 Recipe 工作台。</li>
+            <li>MDUI：Material Design 3 Web Components 与主题系统。</li>
+            <li>React：前端组件和状态管理。</li>
+            <li>CryptoJS：用于 MD5、SHA、HMAC、PBKDF2 等浏览器端摘要和密码辅助功能。</li>
+            <li>exifr、jsQR、bcrypt.js：用于图片元数据、二维码识别和 bcrypt 生成/校验。</li>
+            <li>fflate、sql-formatter：用于 ZIP/APK/JAR/OOXML 解包预览和 SQL 格式化。</li>
+            <li>Vite、TypeScript 等：用于本地开发、生产构建和类型检查。</li>
+          </ul>
+          <p>
+            如需审阅完整许可，请以项目仓库、依赖包自带 LICENSE 文件和第三方官方网站为准。本站不会将第三方项目名称、商标或许可证说明解释为任何形式的背书。
+          </p>
+        </section>
+
+        <section>
+          <h2>变更与反馈</h2>
+          <ul>
+            <li>这些说明可能随着功能、依赖、部署方式或法律合规要求调整。</li>
+            <li>重要更新可能会再次弹出确认；继续使用即表示接受更新后的说明。</li>
+            <li>如发现页面显示、工具输出、许可证标注或法律说明存在问题，请通过反馈邮箱联系。</li>
+          </ul>
+        </section>
+      </main>
+
+      <footer>
+        <p>本页面不构成法律意见。如你的使用场景涉及司法取证、合规调查、监管报送或其他高风险事项，请咨询专业人员。</p>
+      </footer>
+    </div>
+  </body>
+</html>
