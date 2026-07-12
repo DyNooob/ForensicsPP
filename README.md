@@ -156,6 +156,8 @@ SHA256SUMS.txt
 
 下载发布包请前往 [GitHub Releases](https://github.com/DyNooob/ForensicsPP/releases)。
 
+维护者的完整发布顺序、`main` 推送、版本标签和 Release 附件流程见 [`docs/RELEASE.md`](./docs/RELEASE.md)。
+
 ## 常用命令
 
 | 命令 | 用途 |
@@ -275,6 +277,8 @@ dist
 维护者发布新版本时应遵循 [`docs/RELEASE.md`](./docs/RELEASE.md)，版本变化记录在 [`CHANGELOG.md`](./CHANGELOG.md)。
 
 安全问题请按照 [`SECURITY.md`](./SECURITY.md) 私下报告，不要在公开 Issue 中附带真实检材、凭据或可直接利用的细节。
+
+一般反馈邮箱：[`i@digiforensics.cn`](mailto:i@digiforensics.cn)。
 
 ## License
 
