@@ -36,7 +36,7 @@ import { defaultYaraSample, runYaraScan, yaraBatchRowsToCsv, yaraHitsToCsv, yara
 import { extractPrintableStrings, stringRowKey, stringsToCsv } from "./features/strings/analyzer";
 import { analyzeWindowsArtifact } from "./features/windows/analyzer";
 import { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } from "./features/file/analyzer";
-import { analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "./features/image/analyzer";
+import { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "./features/image/analyzer";
 import { analyzePngEvidence } from "./features/png/analyzer";
 import { base64DecodeLoose, transformText } from "./features/codec/analyzer";
 import { affine, atbash, baconDecode, baconEncode, caesar, morseDecode, morseEncode, railFence, railFenceDecode, rot47, vigenere } from "./features/crypto/algorithms";
@@ -57,6 +57,9 @@ const JsonTool = React.lazy(() => import("./tools/JsonTool").then((module) => ({
 const SqlTool = React.lazy(() => import("./tools/SqlTool").then((module) => ({ default: module.SqlTool })));
 const HomeTool = React.lazy(() => import("./tools/HomeTool").then((module) => ({ default: module.HomeTool })));
 const SqliteTool = React.lazy(() => import("./tools/SqliteTool").then((module) => ({ default: module.SqliteTool })));
+const BrowserArtifactTool = React.lazy(() => import("./tools/BrowserArtifactTool").then((module) => ({ default: module.BrowserArtifactTool })));
+const EvtxTool = React.lazy(() => import("./tools/EvtxTool").then((module) => ({ default: module.EvtxTool })));
+const DocumentForensicsTool = React.lazy(() => import("./tools/DocumentForensicsTool").then((module) => ({ default: module.DocumentForensicsTool })));
 const IocTool = React.lazy(() => import("./tools/IocTool").then((module) => ({ default: module.IocTool })));
 const EmailTool = React.lazy(() => import("./tools/EmailTool").then((module) => ({ default: module.EmailTool })));
 const TimestampTool = React.lazy(() => import("./tools/TimestampTool").then((module) => ({ default: module.TimestampTool })));
@@ -178,6 +181,7 @@ const cryptoToolServices = {
 };
 
 const imageToolServices = {
+  analyzeImageBasics,
   analyzeImageBytes,
   analyzeUndecodedImageBytes,
   buildAutoRevealPreviews,
@@ -872,6 +876,9 @@ export function App() {
               {activeTool === "password" && <PasswordTool t={t} services={passwordToolServices} />}
               {activeTool === "sql" && <SqlTool t={t} />}
               {activeTool === "sqlite" && <SqliteTool t={t} />}
+              {activeTool === "browserartifacts" && <BrowserArtifactTool t={t} />}
+              {activeTool === "evtx" && <EvtxTool t={t} />}
+              {activeTool === "documentforensics" && <DocumentForensicsTool t={t} />}
               {activeTool === "android" && <AndroidManifestTool t={t} services={androidManifestToolServices} />}
               {activeTool === "ioc" && <IocTool t={t} />}
               {activeTool === "email" && <EmailTool t={t} />}

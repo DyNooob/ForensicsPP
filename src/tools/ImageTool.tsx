@@ -30,6 +30,7 @@ type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mi
 type ImageFinding = { level: string; title: string; detail: string };
 
 export type ImageToolServices = {
+  analyzeImageBasics: ImageService;
   analyzeImageBytes: ImageService;
   analyzeUndecodedImageBytes: ImageService;
   buildAutoRevealPreviews: ImageService;
@@ -61,11 +62,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   const isEnglish = t.waiting === "Waiting";
   const [imageInfo, setImageInfo] = React.useState<ImageInfo | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [advancedTask, setAdvancedTask] = React.useState<"hidden" | "channels" | "repair" | "">("");
   const [error, setError] = React.useState("");
   const [isImageDropActive, setIsImageDropActive] = React.useState(false);
   const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "repair">("overview");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
+  const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
 
   React.useEffect(() => () => {
     analysisIdRef.current += 1;
@@ -94,75 +97,11 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       }
       const sourceMime = /^image\//i.test(file.type) ? file.type : imageMimeForFormat(detectedFormat, file.type || "application/octet-stream");
       const rawDataUrl = await bytesToDataUrl(bytes, sourceMime);
-      const repairCandidates = buildImageRepairCandidates(bytes, detectedFormat);
-      const rebuiltPng = tryRebuildPngContainer(bytes);
-      const repairDownloads: ImageInfo["repairDownloads"] = [
-        ...repairCandidates.map((candidate: ImageRepairCandidate) => ({
-          label: candidate.label,
-          note: candidate.note,
-          size: candidate.bytes.length,
-          sha256: "",
-          extension: imageExtensionForMime(candidate.mime),
-          mime: candidate.mime,
-          bytes: candidate.bytes
-        })),
-        ...(rebuiltPng
-          ? [{
-              label: "Rebuilt PNG critical chunks",
-              note: rebuiltPng.notes.join(" "),
-              size: rebuiltPng.bytes.length,
-              sha256: "",
-              extension: "png",
-              mime: "image/png",
-              bytes: rebuiltPng.bytes
-            }]
-          : [])
-      ];
-      const decodeCandidates: Array<{ label: string; dataUrl: string; kind: "raw" | "trimmed" | "rebuilt" }> = [
-        { label: "Original container", dataUrl: rawDataUrl, kind: "raw" }
-      ];
-      for (const candidate of repairCandidates) {
-        decodeCandidates.push({
-          label: candidate.label,
-          dataUrl: await bytesToDataUrl(candidate.bytes, candidate.mime),
-          kind: candidate.label.includes("Trimmed") ? "trimmed" : "rebuilt"
-        });
-      }
-      if (rebuiltPng) decodeCandidates.push({ label: "Rebuilt PNG critical chunks", dataUrl: await bytesToDataUrl(rebuiltPng.bytes, "image/png"), kind: "rebuilt" });
-
-      const recoveryRows: Array<[string, string]> = [];
-      const repairCandidatePreviews: ImageInfo["repairPreviewItems"] = [];
-      let displayDataUrl = rawDataUrl;
-      let recoveryKind: "raw" | "trimmed" | "rebuilt" = "raw";
-      let recoveryLabel = "Original container";
       let image: HTMLImageElement | null = null;
-      for (const candidate of decodeCandidates) {
-        try {
-          const decoded = await loadBrowserImage(candidate.dataUrl);
-          if (!image) {
-            image = decoded;
-            displayDataUrl = candidate.dataUrl;
-            recoveryKind = candidate.kind;
-            recoveryLabel = candidate.label;
-          }
-          if (candidate.kind !== "raw") {
-            repairCandidatePreviews.push({
-              label: candidate.label,
-              src: candidate.dataUrl,
-              detail: candidate.kind === "trimmed"
-                ? "Trimmed to the logical image end and decoded successfully."
-                : "Rebuilt or patched container decoded successfully."
-            });
-          }
-          recoveryRows.push([candidate.label, "decoded"]);
-        } catch {
-          recoveryRows.push([candidate.label, "failed"]);
-        }
-      }
+      try { image = await loadBrowserImage(rawDataUrl); } catch { image = null; }
       if (image && image.naturalWidth * image.naturalHeight > 50_000_000) {
         throw new Error(isEnglish ? "Decoded image dimensions exceed the 50 megapixel analysis limit." : "解码后的图片尺寸超过 5000 万像素分析上限。");
       }
-      const sha256 = "";
       if (analysisId !== analysisIdRef.current) return;
       const exifrModule = await import("exifr");
       const exif =
@@ -170,106 +109,15 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
           .parse(file, { tiff: true, xmp: true, iptc: true, icc: true, jfif: true, ihdr: true, gps: true })
           .catch(() => null)) ?? {}) as Record<string, unknown>;
       const decoded = Boolean(image);
-      const failureDetail = `Image could not be decoded. Attempts: ${recoveryRows.map(([label, status]) => `${label}=${status}`).join(", ")}`;
       const dimensions = image ? { width: image.naturalWidth, height: image.naturalHeight } : guessImageDimensions(bytes, detectedFormat);
       const placeholderDataUrl = imagePlaceholderDataUrl(
         "Image pixels could not be decoded",
-        `${failureDetail}. Container-level evidence, trailer data, embedded payloads, and metadata were still analyzed.`,
-        "danger"
+        "Open the Repair page to try container recovery.",
+        "warn"
       );
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      const analysis = image ? analyzeImageBytes(bytes, file.type, image, exif) : analyzeUndecodedImageBytes(bytes, file.type, exif, recoveryRows);
-      if (analysisId !== analysisIdRef.current) return;
-      if (recoveryKind !== "raw" && image) {
-        analysis.findings.unshift({
-          level: "warn",
-          title: "Preview recovered from repaired candidate",
-          detail: `Original browser decode failed; displayed preview uses ${recoveryLabel}. Keep the original file hash for evidence records.`
-        });
-      }
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const expectedExtensions: Record<string, string[]> = {
-        PNG: ["png"],
-        JPEG: ["jpg", "jpeg", "jpe"],
-        GIF: ["gif"],
-        WEBP: ["webp"],
-        BMP: ["bmp"]
-      };
-      if (expectedExtensions[detectedFormat] && extension && !expectedExtensions[detectedFormat].includes(extension)) {
-        analysis.findings.unshift({
-          level: "warn",
-          title: "Extension does not match content",
-          detail: `Filename extension .${extension} does not match detected ${detectedFormat} signature.`
-        });
-      }
-      if (!image) {
-        analysis.findings.unshift({
-          level: "warn",
-          title: "No visual repair could recover pixels",
-          detail: "The tool attempted original, trimmed, appended-end-marker, and PNG rebuild candidates where applicable. None decoded to pixels in the browser."
-        });
-      }
-      const repairedDataUrl = image ? createNormalizedImageDataUrl(image) : placeholderDataUrl;
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      const channels = image ? createChannelPreviews(image) : emptyImageChannels(placeholderDataUrl);
-      const repairNotes = [
-        !image ? failureDetail : "",
-        recoveryKind !== "raw" && image ? `Original container failed to decode; the displayed source preview was recovered by: ${recoveryLabel}.` : "",
-        ...repairCandidates.map((candidate: ImageRepairCandidate) => candidate.note),
-        ...(rebuiltPng?.notes ?? []),
-        image
-          ? "Generated a normalized PNG by browser-decoding pixels and re-encoding them. This can strip trailing payloads, broken container bytes, and metadata, but it cannot recover pixels that the browser cannot decode."
-          : "Pixel-level repair is not available because every display candidate failed to decode. Container analysis and payload extraction remain available.",
-        image && repairedDataUrl !== rawDataUrl ? "Normalized preview differs from the original container representation." : ""
-      ].filter(Boolean);
-      const repairStatus = !image
-        ? (isEnglish ? "Pixels could not be decoded; container data remains available." : "无法解码像素；仍可查看容器数据。")
-        : recoveryKind !== "raw"
-        ? (isEnglish ? `Preview recovered via ${recoveryLabel}; normalized PNG created.` : `已通过 ${recoveryLabel} 恢复预览，并生成规范化 PNG。`)
-        : (isEnglish ? "Image opened successfully; normalized PNG created." : "图片可正常打开，并已生成规范化 PNG。");
-      const hiddenPayloadPreviews = await buildHiddenPayloadPreviews(analysis.hiddenPayloads);
-      const autoRevealPreviews = buildAutoRevealPreviews(channels, analysis.findings.some((finding: ImageFinding) => /Alpha/i.test(`${finding.title} ${finding.detail}`)));
-      const effectiveDisplayDataUrl = image ? displayDataUrl : placeholderDataUrl;
-      const decodedSignals = await buildImageDecodedSignals({
-        displayDataUrl: effectiveDisplayDataUrl,
-        repairedDataUrl,
-        autoRevealPreviews,
-        hiddenPayloadPreviews,
-        hiddenPayloads: analysis.hiddenPayloads,
-        lsbCandidates: analysis.lsbCandidates,
-        trailerText: analysis.trailerText,
-        pngTextEntries: analysis.pngTextEntries
-      });
-      if (analysisId !== analysisIdRef.current) return;
-      if (decodedSignals.length) {
-        const cleanIndex = analysis.findings.findIndex((finding: ImageFinding) => finding.title === "No obvious hidden-data marker");
-        if (cleanIndex >= 0) analysis.findings.splice(cleanIndex, 1);
-        analysis.findings.push({
-          level: decodedSignals.some((signal: ImageDecodedSignal) => signal.level === "danger") ? "danger" : decodedSignals.some((signal: ImageDecodedSignal) => signal.level === "warn") ? "warn" : "info",
-          title: "Decoded image evidence signal",
-          detail: decodedSignals.slice(0, 6).map((signal: ImageDecodedSignal) => `${signal.source}: ${signal.type}`).join(" / ")
-        });
-      }
-      const normalizedPreview = {
-        label: "Normalized PNG",
-        src: repairedDataUrl,
-        detail: image
-          ? "Browser-decoded pixels re-encoded as PNG. Use this cleaned display copy alongside the original evidence hash."
-          : "Not available because the source pixels could not be decoded."
-      };
-      const repairPreviewItems = [
-        {
-          label: !image ? "Decode failure report" : recoveryKind === "raw" ? "Original container preview" : `Recovered preview (${recoveryLabel})`,
-          src: effectiveDisplayDataUrl,
-          detail: !image
-            ? "No candidate produced pixels. This preview is a generated diagnostic placeholder, not reconstructed evidence pixels."
-            : recoveryKind === "raw"
-            ? "Original file decoded directly in the browser."
-            : "Original file did not decode cleanly; this is the first successful repaired display candidate."
-        },
-        ...repairCandidatePreviews,
-        normalizedPreview
-      ];
+      const effectiveDisplayDataUrl = image ? rawDataUrl : placeholderDataUrl;
+      const analysis = services.analyzeImageBasics(bytes, file.type, exif);
+      sourceRef.current = { file, bytes, image, exif, rawDataUrl, format: detectedFormat };
       if (analysisId !== analysisIdRef.current) return;
       setImageInfo({
         name: file.name,
@@ -278,13 +126,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         decoded,
         width: dimensions.width,
         height: dimensions.height,
-        sha256,
+        sha256: "",
         dataUrl: effectiveDisplayDataUrl,
-        repairedDataUrl,
-        repairedContainerBytes: rebuiltPng?.bytes ?? null,
-        repairNotes,
-        repairStatus,
-        recoveryRows,
+        repairedDataUrl: "",
+        repairedContainerBytes: null,
+        repairNotes: [],
+        repairStatus: decoded ? (isEnglish ? "Image opened successfully." : "图片可正常打开。") : (isEnglish ? "Open Repair to try recovery." : "可进入修复页尝试恢复。"),
+        recoveryRows: [],
         autoAssessment: { level: "info", title: "", subtitle: "", primaryAction: "", items: [] },
         scanSteps: [],
         triageRows: [],
@@ -292,7 +140,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         evidenceBoard: [],
         autoInsights: [],
         autoDisplayItems: [],
-        decodedSignals,
+        decodedSignals: [],
         briefing: "",
         recommendedActions: [],
         summaryCards: [],
@@ -309,14 +157,14 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         lsbText: analysis.lsbText,
         lsbCandidates: analysis.lsbCandidates,
         hiddenPayloads: analysis.hiddenPayloads,
-        repairDownloads,
+        repairDownloads: [],
         pngTextEntries: analysis.pngTextEntries,
         pngChunks: analysis.pngChunks,
-        hiddenPayloadPreviews,
-        repairPreviewItems,
-        autoRevealPreviews,
+        hiddenPayloadPreviews: [],
+        repairPreviewItems: [],
+        autoRevealPreviews: [],
         autoFocusPreviews: [],
-        channelDataUrls: channels
+        channelDataUrls: emptyImageChannels(placeholderDataUrl)
       });
       setImagePage("overview");
     } catch (caught) {
@@ -327,6 +175,71 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     } finally {
       if (analysisId === analysisIdRef.current) setLoading(false);
     }
+  };
+  const runHiddenAnalysis = async () => {
+    const source = sourceRef.current;
+    if (!source || !imageInfo || advancedTask) return;
+    const analysisId = analysisIdRef.current;
+    setAdvancedTask("hidden");
+    setError("");
+    try {
+      const analysis = source.image
+        ? analyzeImageBytes(source.bytes, source.file.type, source.image, source.exif)
+        : analyzeUndecodedImageBytes(source.bytes, source.file.type, source.exif, [["Original container", "failed"]]);
+      const hiddenPayloadPreviews = await buildHiddenPayloadPreviews(analysis.hiddenPayloads);
+      if (analysisId !== analysisIdRef.current) return;
+      setImageInfo((current) => current ? { ...current, findings: analysis.findings, hiddenRows: analysis.hiddenRows, stegoRows: analysis.stegoRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbText: analysis.lsbText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks, hiddenPayloadPreviews } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
+  };
+  const runChannelAnalysis = () => {
+    const source = sourceRef.current;
+    if (!source?.image || !imageInfo || advancedTask) return;
+    const analysisId = analysisIdRef.current;
+    setAdvancedTask("channels");
+    setError("");
+    window.setTimeout(() => {
+      try {
+        const channels = createChannelPreviews(source.image!);
+        if (analysisId !== analysisIdRef.current) return;
+        setImageInfo((current) => current ? { ...current, channelDataUrls: channels, autoRevealPreviews: buildAutoRevealPreviews(channels, false) } : current);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
+    }, 0);
+  };
+  const runRepairAnalysis = async () => {
+    const source = sourceRef.current;
+    if (!source || !imageInfo || advancedTask) return;
+    const analysisId = analysisIdRef.current;
+    setAdvancedTask("repair");
+    setError("");
+    try {
+      const candidates: ImageRepairCandidate[] = buildImageRepairCandidates(source.bytes, source.format);
+      const rebuiltPng = tryRebuildPngContainer(source.bytes);
+      if (rebuiltPng) candidates.push({ label: "Rebuilt PNG critical chunks", note: rebuiltPng.notes.join(" "), bytes: rebuiltPng.bytes, mime: "image/png" });
+      const previews: ImageInfo["repairPreviewItems"] = [];
+      const rows: Array<[string, string]> = [];
+      for (const candidate of candidates) {
+        const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
+        try { await loadBrowserImage(src); previews.push({ label: candidate.label, src, detail: candidate.note }); rows.push([candidate.label, "decoded"]); }
+        catch { rows.push([candidate.label, "failed"]); }
+      }
+      const normalized = source.image ? createNormalizedImageDataUrl(source.image) : "";
+      if (analysisId !== analysisIdRef.current) return;
+      setImageInfo((current) => current ? {
+        ...current,
+        repairedDataUrl: normalized || previews[0]?.src || "",
+        repairedContainerBytes: rebuiltPng?.bytes ?? null,
+        repairStatus: previews.length || normalized ? (isEnglish ? "Repair results are ready." : "修复结果已生成。") : (isEnglish ? "No repair result could be decoded." : "没有生成可用的修复结果。"),
+        recoveryRows: rows,
+        repairPreviewItems: previews,
+        repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, sha256: "", extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
+      } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
   };
   const handleImageDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -339,6 +252,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     setImageInfo(null);
     setError("");
     setLoading(false);
+    setAdvancedTask("");
     setIsImageDropActive(false);
     setImagePage("overview");
     if (inputRef.current) inputRef.current.value = "";
@@ -407,7 +321,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="text" disabled={!imageInfo && !error} onClick={clearImage}>{t.clear}</AButton>
         </div>
-        {loading && <ALinearProgress />}
+        {(loading || advancedTask) && <ALinearProgress />}
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
 
@@ -457,7 +371,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         </div>}
 
         {imagePage === "hidden" && <div className="tool-panel wide-panel image-simple-hidden-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runHiddenAnalysis()}>{advancedTask === "hidden" ? (isEnglish ? "Scanning..." : "正在扫描...") : (isEnglish ? "Scan hidden data" : "扫描隐藏数据")}</AButton><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
           <InfoTable rows={imageInfo.hiddenRows} />
           {imageInfo.hiddenPayloads.length > 0 && <><PanelTitle title={t.extractedPayloads} /><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Source" : "来源"}</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th></th></tr></thead><tbody>{imageInfo.hiddenPayloads.map((payload, index) => <tr key={`${payload.offset}-${index}`}><td>{payload.source}</td><td>{payload.offset}</td><td>{payload.label}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview.slice(0, 160) || "--"}</td><td><AButton variant="outlined" onClick={() => downloadHiddenPayload(payload, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div></>}
           {imageInfo.pngTextEntries.length > 0 && <><PanelTitle title={t.pngTextMetadata} /><div className="image-text-result-list">{imageInfo.pngTextEntries.map((entry) => <label key={`${entry.offset}-${entry.keyword}`}>{entry.keyword || entry.chunk}<textarea className="single-textarea compact-textarea" value={entry.text} readOnly /></label>)}</div></>}
@@ -467,16 +381,16 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         </div>}
 
         {imagePage === "channels" && <div className="tool-panel wide-panel image-simple-channels-panel">
-          <PanelTitle title={t.channels} />
+          <div className="panel-heading-row"><PanelTitle title={t.channels} /><AButton variant="filled" disabled={!imageInfo.decoded || Boolean(advancedTask)} onClick={runChannelAnalysis}>{advancedTask === "channels" ? (isEnglish ? "Generating..." : "正在生成...") : (isEnglish ? "Generate channels" : "生成通道图")}</AButton></div>
           <div className="image-channel-grid">{channelItems.map(([label, src]) => <figure key={label}><img src={src} alt={label} /><figcaption>{label}</figcaption></figure>)}</div>
           {imageInfo.autoRevealPreviews.length > 0 && <><PanelTitle title={t.autoReveal} /><div className="image-channel-grid">{imageInfo.autoRevealPreviews.map((item) => <figure key={item.label}><img src={item.src} alt={item.label} /><figcaption>{item.label}</figcaption></figure>)}</div></>}
         </div>}
 
         {imagePage === "repair" && <div className="tool-panel wide-panel image-simple-repair-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.decoded && imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-normalized.png`}>{t.downloadRepaired}</AButton>}</div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Generating..." : "正在生成...") : (isEnglish ? "Generate repair results" : "生成修复结果")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.decoded && imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-normalized.png`}>{t.downloadRepaired}</AButton>}</div></div>
           <InfoTable rows={imageInfo.recoveryRows} />
           <div className="image-repair-preview-grid">{imageInfo.repairPreviewItems.map((item) => <figure key={`${item.label}-${item.detail}`}><img src={item.src} alt={item.label} /><figcaption><strong>{item.label}</strong><span>{item.detail}</span></figcaption></figure>)}</div>
-          {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Candidate" : "候选项"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
+          {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
     </div>

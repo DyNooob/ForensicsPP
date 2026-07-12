@@ -37,11 +37,13 @@ const PAGE_SIZE = 200;
 
 export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services: StringsToolServices }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("strings.text.v2", "");
+  const [text, setText] = React.useState("");
   const [minLength, setMinLength] = useStoredState("strings.minLength", 4);
+  const [appliedMinLength, setAppliedMinLength] = React.useState(minLength);
   const [sourceName, setSourceName] = React.useState("text input");
-  const [bytes, setBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(text));
-  const [sourceSize, setSourceSize] = React.useState(() => new TextEncoder().encode(text).length);
+  const [pendingBytes, setPendingBytes] = React.useState<Uint8Array>(() => new Uint8Array());
+  const [bytes, setBytes] = React.useState<Uint8Array>(() => new Uint8Array());
+  const [sourceSize, setSourceSize] = React.useState(0);
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [encodingFilter, setEncodingFilter] = React.useState("");
@@ -50,9 +52,12 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const [dropActive, setDropActive] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [analyzing, setAnalyzing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const workerRef = React.useRef<Worker | null>(null);
+  const requestRef = React.useRef(0);
   const hasInput = bytes.length > 0;
-  const analysis = React.useMemo(() => services.extractPrintableStrings(bytes, minLength), [bytes, minLength, services]);
+  const [analysis, setAnalysis] = React.useState<StringsAnalysis>(() => services.extractPrintableStrings(new Uint8Array(), appliedMinLength));
   const types = React.useMemo(() => analysis.typeRows.map(([type]) => type), [analysis.typeRows]);
   const filteredItems = React.useMemo(() => {
     const query = filter.trim().toLowerCase();
@@ -85,7 +90,7 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
 
   React.useEffect(() => {
     setPage(0);
-  }, [encodingFilter, filter, minLength, typeFilter]);
+  }, [encodingFilter, filter, appliedMinLength, typeFilter]);
 
   React.useEffect(() => {
     if (page >= pageCount) setPage(pageCount - 1);
@@ -108,7 +113,9 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
     setSourceName("text input");
     const next = new TextEncoder().encode(value);
     setSourceSize(next.length);
-    setBytes(next);
+    setPendingBytes(next);
+    setBytes(new Uint8Array());
+    setAnalysis(services.extractPrintableStrings(new Uint8Array(), minLength));
     resetReview();
   };
 
@@ -120,7 +127,9 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
     try {
       setSourceName(file.name);
       setSourceSize(file.size);
-      setBytes(new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer()));
+      setPendingBytes(new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer()));
+      setBytes(new Uint8Array());
+      setAnalysis(services.extractPrintableStrings(new Uint8Array(), minLength));
       resetReview();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -133,22 +142,59 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
     setText("");
     setSourceName("text input");
     setSourceSize(0);
+    setPendingBytes(new Uint8Array());
     setBytes(new Uint8Array());
+    setAnalysis(services.extractPrintableStrings(new Uint8Array(), minLength));
     setError("");
     if (inputRef.current) inputRef.current.value = "";
     resetReview();
   };
 
+  const analyze = () => {
+    if (!pendingBytes.length) return;
+    workerRef.current?.terminate();
+    const requestId = ++requestRef.current;
+    const worker = new Worker(new URL("../workers/strings.worker.ts", import.meta.url), { type: "module" });
+    workerRef.current = worker;
+    const workerBytes = pendingBytes.slice();
+    setAnalyzing(true);
+    setError("");
+    worker.onmessage = (event: MessageEvent<{ id: number; analysis?: StringsAnalysis; error?: string }>) => {
+      if (event.data.id !== requestId) return;
+      worker.terminate();
+      workerRef.current = null;
+      setAnalyzing(false);
+      if (event.data.error || !event.data.analysis) {
+        setError(event.data.error || (english ? "String extraction failed." : "字符串提取失败。"));
+        return;
+      }
+      setAppliedMinLength(minLength);
+      setBytes(pendingBytes.slice());
+      setAnalysis(event.data.analysis);
+      resetReview();
+    };
+    worker.onerror = (event) => {
+      if (requestId !== requestRef.current) return;
+      worker.terminate();
+      workerRef.current = null;
+      setAnalyzing(false);
+      setError(event.message || (english ? "String worker failed." : "字符串提取任务失败。"));
+    };
+    worker.postMessage({ id: requestId, bytes: workerBytes, minLength }, [workerBytes.buffer]);
+  };
+
+  React.useEffect(() => () => workerRef.current?.terminate(), []);
+
   const sourceLabel = sourceName === "text input" ? (english ? "Text input" : "文本输入") : sourceName;
 
   return (
     <div className={`tool-grid strings-simple-workbench strings-workbench ${hasInput ? "has-strings" : "empty-strings"}`}>
-      {loading && <div className="wide-panel"><ALinearProgress /></div>}
+      {(loading || analyzing) && <div className="wide-panel"><ALinearProgress /></div>}
       {error && <pre className="result-box wide-panel">{error}</pre>}
 
       <section className="tool-panel wide-panel strings-simple-source-panel">
         <ToolPanelHeader
-          title={english ? "String source" : "字符串来源"}
+          title={english ? "File or text" : "输入文件或文本"}
           actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" onChange={(event) => void handleFile(event.target.files?.[0])} />
@@ -174,10 +220,11 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
         <div className="strings-simple-source-controls">
           <label>{t.minLength}<AInputNumber min={3} max={64} value={minLength} onChange={(value) => setMinLength(Math.max(3, Math.min(64, value ?? 4)))} /></label>
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
+          <AButton variant="filled" disabled={!pendingBytes.length || analyzing} onClick={analyze}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract strings" : "提取字符串")}</AButton>
         </div>
         <textarea
           className="single-textarea strings-simple-input"
-          aria-label={english ? "String extraction source" : "字符串提取来源"}
+          aria-label={english ? "File text for string extraction" : "需要提取字符串的文本"}
           value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${english ? "loaded" : "已读取"}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
           readOnly={sourceName !== "text input"}
           placeholder={t.textPlaceholder}

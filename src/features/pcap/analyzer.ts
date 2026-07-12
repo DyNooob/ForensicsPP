@@ -92,45 +92,12 @@ export function parsePcap(bytes: Uint8Array, name: string, size: number, sha256:
       return packet ? buildPcapExtractedFile(item, packet.payloadBytes) : null;
     })
     .filter(Boolean) as PcapExtractedFile[];
-  const iocs = analyzeIocs([
-    parsed.httpItems.map((item) => `${item.host} ${item.path} ${item.userAgent}`).join("\n"),
-    parsed.dnsItems.map((item) => item.name).join("\n"),
-    conversations.map((item) => `${item.endpointA}\n${item.endpointB}`).join("\n")
-  ].join("\n"), name).records.slice(0, 500);
-  const findings = buildPcapFindings(parsed.packets, conversations, parsed.httpItems, parsed.dnsItems, extractedFiles, iocs, pcapMagic.format, endpoints, portStats);
-  const timeline = buildPcapTimeline(parsed.packets);
-  const events = buildPcapTimelineEvents(parsed.packets, conversations, parsed.httpItems, parsed.dnsItems, extractedFiles, iocs, findings, timeline);
-  const evidenceMatrix = pcapEvidenceMatrixRows({
-    summary,
-    packets: parsed.packets,
-    conversations,
-    endpoints,
-    portStats,
-    httpItems: parsed.httpItems,
-    dnsItems: parsed.dnsItems,
-    extractedFiles,
-    iocs,
-    timeline,
-    events,
-    findings
-  });
-  const briefing = buildPcapBriefing({
-    name,
-    size,
-    format: pcapMagic.format,
-    sha256,
-    summary,
-    conversations,
-    endpoints,
-    portStats,
-    httpItems: parsed.httpItems,
-    dnsItems: parsed.dnsItems,
-    extractedFiles,
-    iocs,
-    findings,
-    timeline,
-    events
-  });
+  const iocs: PcapInfo["iocs"] = [];
+  const findings: PcapInfo["findings"] = [];
+  const timeline: PcapInfo["timeline"] = [];
+  const events: PcapInfo["events"] = [];
+  const evidenceMatrix: PcapInfo["evidenceMatrix"] = [];
+  const briefing = "";
 
   if (pcapMagic.format === "PCAPNG") {
     return {

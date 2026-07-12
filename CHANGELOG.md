@@ -4,11 +4,39 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-12
+
 ### Added
 
-- Automated tests for hashes, SM3, classical ciphers, timestamps, SQL/SQLite helpers, IOC extraction, Base32 and EML parsing.
-- Pull request verification, release artifact validation and Dependabot configuration.
-- Source repository contribution, security and release documentation.
+- Browser Artifact Studio for Chromium and Firefox history, downloads, cookies, logins, autofill and extension records.
+- Windows EVTX Explorer with BinXML parsing, structured event filtering, raw XML and strict local Sigma matching.
+- Office / PDF Forensics for PDF metadata and attachments, OOXML relationships and embedded parts, and OLE stream inspection.
+- Static release ZIP generation with a SHA-256 checksum.
+- Worker-based parsing for Android manifests, packet captures, IOC extraction and string extraction.
+
+### Changed
+
+- Reworked the desktop interface around a consistent Ant Design 5 tool layout.
+- Rebuilt SQLite Browser with persistent table navigation and Browse, Structure, SQL and Changes views.
+- Simplified password hash generation so bcrypt and Django PBKDF2 show only the requested result while common hashes remain available as a batch.
+- Added isolated HTML email preview and reliable raw EML display.
+- Changed archive browsing to read the directory first and extract entries only when requested.
+- Changed image, JSON, IOC and string tools to use explicit actions instead of automatic heavy processing.
+- Redesigned Settings, including Appearance, About, Local Data and a simplified open-source project list.
+- Standardized upload areas, expandable sections, typography and desktop spacing across tools.
+
+### Fixed
+
+- Prevented raw evidence input from being stored in localStorage by affected tools.
+- Moved large parsing tasks away from the main UI thread to reduce browser freezes.
+- Fixed transparent select popups, collapsed-sidebar focus behavior, hidden file input accessibility and several table overflow issues.
+- Corrected overly strong or ambiguous email authentication wording.
+
+### Verification
+
+- 31 automated tests across six test files.
+- Layout audit covers 34 tool pages, 17 populated states and 12 file-loaded states.
+- Production output is checked for required files, source leakage, copyright banners and size limits.
 
 ## [0.5.0] - 2026-07-12
 
@@ -33,5 +61,6 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/DyNooob/ForensicsPP/releases/tag/v0.5.0

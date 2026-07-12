@@ -56,6 +56,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   const [quickGenerated, setQuickGenerated] = React.useState(false);
   const [bcryptHash, setBcryptHash] = React.useState("");
   const [pbkdf2Hash, setPbkdf2Hash] = React.useState("");
+  const [generatedView, setGeneratedView] = React.useState<"common" | "bcrypt" | "pbkdf2" | "">("");
   const [targetHash, setTargetHash] = React.useState("");
   const [candidatePasswords, setCandidatePasswords] = React.useState("");
   const [verifyRows, setVerifyRows] = React.useState<PasswordVerifyRow[]>([]);
@@ -87,6 +88,12 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
     ...(bcryptHash ? [["bcrypt", bcryptHash] as [string, string]] : []),
     ...(pbkdf2Hash ? [["Django PBKDF2-SHA256", pbkdf2Hash] as [string, string]] : [])
   ], [bcryptHash, fastHashes, pbkdf2Hash]);
+  const visibleGeneratedHashes = React.useMemo<Array<[string, string]>>(() => {
+    if (generatedView === "common") return fastHashes;
+    if (generatedView === "bcrypt" && bcryptHash) return [["bcrypt", bcryptHash]];
+    if (generatedView === "pbkdf2" && pbkdf2Hash) return [["Django PBKDF2-SHA256", pbkdf2Hash]];
+    return [];
+  }, [bcryptHash, fastHashes, generatedView, pbkdf2Hash]);
   const candidates = React.useMemo(() => candidatePasswords.split(/\r?\n/).map((item) => item.trim()).filter(Boolean), [candidatePasswords]);
   const matchedCount = verifyRows.filter((row) => row.matched).length;
   const targetType = detectHashType(targetHash) || verifyRows[0]?.hashType || "--";
@@ -105,12 +112,14 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
     setQuickGenerated(false);
     setBcryptHash("");
     setPbkdf2Hash("");
+    setGeneratedView("");
   };
 
   const generateQuickHashes = () => {
     if (!password) return;
     setError("");
     setQuickGenerated(true);
+    setGeneratedView("common");
   };
 
   const generateBcrypt = async () => {
@@ -124,6 +133,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
         bcrypt.hash(password, rounds, (caught, encrypted) => caught || !encrypted ? reject(caught ?? new Error("bcrypt failed")) : resolve(encrypted));
       });
       setBcryptHash(value);
+      setGeneratedView("bcrypt");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -137,6 +147,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
     setError("");
     try {
       setPbkdf2Hash(await djangoPbkdf2(password, salt, pbkdf2Iterations));
+      setGeneratedView("pbkdf2");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -163,6 +174,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
     setQuickGenerated(false);
     setBcryptHash("");
     setPbkdf2Hash("");
+    setGeneratedView("");
     setTargetHash("");
     setCandidatePasswords("");
     setVerifyRows([]);
@@ -199,10 +211,10 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
               <AButton variant="outlined" disabled={!password || !salt || Boolean(loading)} onClick={() => void generatePbkdf2()}>{loading === "pbkdf2" ? "PBKDF2..." : t.generatePbkdf2}</AButton>
               <AButton variant="text" onClick={() => { setSalt(randomSalt()); clearGenerated(); }}>{english ? "New salt" : "新盐值"}</AButton>
             </div>
-            {generatedHashes.length > 0 && (
+            {visibleGeneratedHashes.length > 0 && (
               <div className="password-simple-output">
-                <ToolPanelHeader title={english ? "Generated hashes" : "生成结果"} actions={<AButton variant="text" onClick={() => void navigator.clipboard.writeText(generatedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{english ? "Copy all" : "复制全部"}</AButton>} />
-                <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{generatedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void navigator.clipboard.writeText(value)}>{value}</button></td></tr>)}</tbody></table></div>
+                <ToolPanelHeader title={english ? "Generated hash" : "生成结果"} actions={<AButton variant="text" onClick={() => void navigator.clipboard.writeText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (english ? "Copy all" : "复制全部") : (english ? "Copy" : "复制")}</AButton>} />
+                <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{visibleGeneratedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void navigator.clipboard.writeText(value)}>{value}</button></td></tr>)}</tbody></table></div>
               </div>
             )}
           </div>

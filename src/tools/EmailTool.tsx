@@ -26,12 +26,10 @@ import {
   emailAttachmentPreferredExtension,
   emailSummaryValue,
   parseEmail,
-  stripEmailHtml
 } from "../features/email/workbench";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
-import { useStoredState } from "../utils/storage";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
 
@@ -44,8 +42,23 @@ function safeEmailFilename(value: string, fallback: string) {
   return cleaned || fallback;
 }
 
+function sanitizeEmailHtml(value: string) {
+  if (!value.trim()) return "";
+  const document = new DOMParser().parseFromString(value, "text/html");
+  document.querySelectorAll("script, iframe, object, embed, form, input, button, link, meta").forEach((node) => node.remove());
+  document.querySelectorAll<HTMLElement>("*").forEach((node) => {
+    for (const attribute of Array.from(node.attributes)) {
+      if (/^on/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if (/^(src|srcset|background|poster|action|formaction)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if (attribute.name === "href" && !/^(?:#|mailto:|tel:)/i.test(attribute.value.trim())) node.setAttribute("href", "#");
+    }
+  });
+  const baseStyle = "body{margin:0;padding:18px;color:#182230;background:#fff;font:14px/1.65 system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}td,th{padding:6px;border:1px solid #d9e0e8}";
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${baseStyle}</style></head><body>${document.body.innerHTML}</body></html>`;
+}
+
 export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
-  const [input, setInput] = useStoredState("email.input.v2", "");
+  const [input, setInput] = React.useState("");
   const [parsed, setParsed] = React.useState<EmailAnalysis | null>(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -54,33 +67,19 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const english = t.waiting === "Waiting";
 
-  React.useEffect(() => {
-    if (!input.trim()) {
-      setParsed(null);
-      setError("");
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
+  const parseSource = async (source = input) => {
+    if (!source.trim()) return;
     setLoading(true);
-    parseEmail(input)
-      .then((result) => {
-        if (cancelled) return;
-        setParsed(result);
-        setError("");
-      })
-      .catch((caught) => {
-        if (cancelled) return;
-        setParsed(null);
-        setError(caught instanceof Error ? caught.message : String(caught));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [input]);
+    try {
+      setParsed(await parseEmail(source));
+      setError("");
+    } catch (caught) {
+      setParsed(null);
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -91,7 +90,9 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     }
     try {
       setError("");
-      setInput(await file.text());
+      const source = await file.text();
+      setInput(source);
+      await parseSource(source);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -141,15 +142,16 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   }, [parsed]);
 
   const bodyText = parsed?.bodyText.trim() || "";
-  const bodyHtmlText = parsed?.bodyHtml ? stripEmailHtml(parsed.bodyHtml).trim() : "";
-  const displayedBody = bodyMode === "html" ? bodyHtmlText : bodyText;
+  const safeBodyHtml = React.useMemo(() => sanitizeEmailHtml(parsed?.bodyHtml || ""), [parsed?.bodyHtml]);
+  const displayedBody = bodyMode === "html" ? parsed?.bodyHtml || "" : bodyText;
   const authSummary = parsed ? emailSummaryValue(parsed, "SPF / DKIM / DMARC") || "--" : "--";
 
   return (
     <div className={`tool-grid email-workbench ${parsed ? "has-email" : "empty-email"}`}>
       <div className="tool-panel wide-panel email-source-panel">
-        <PanelTitle title={english ? "Email source" : "邮件来源"} />
+        <PanelTitle title={english ? "Open email" : "打开邮件"} />
         <input
+          className="hidden-file-input"
           ref={inputRef}
           type="file"
           accept=".eml,message/rfc822,text/plain"
@@ -182,6 +184,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
+          <AButton variant="outlined" disabled={!input.trim() || loading} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
           <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>EML</AButton>
           <AButton variant="text" disabled={!input.trim()} onClick={clearEmail}>{t.clear}</AButton>
         </div>
@@ -190,7 +193,11 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
             className="single-textarea email-source-input"
             aria-label={english ? "Raw EML source" : "原始 EML 内容"}
             value={input}
-            onChange={(event) => setInput(event.currentTarget.value)}
+            onChange={(event) => {
+              setInput(event.currentTarget.value);
+              setParsed(null);
+              setError("");
+            }}
             placeholder={t.textPlaceholder}
           />
         )}
@@ -207,14 +214,14 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
 
           <div className="tool-panel wide-panel email-auth-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={t.emailAuth} />
+              <PanelTitle title={english ? "Authentication-Results header" : "邮件头记录的认证结果"} />
               <span className="status-pill">{authSummary}</span>
             </div>
             {parsed.authAssessments.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
                   <thead>
-                    <tr><th>{english ? "Mechanism" : "机制"}</th><th>{english ? "Result" : "结果"}</th><th>{english ? "Domain" : "域名"}</th><th>{english ? "Aligned" : "对齐"}</th></tr>
+                    <tr><th>{english ? "Mechanism" : "机制"}</th><th>{english ? "Reported result" : "头部记录"}</th><th>{english ? "Domain" : "域名"}</th><th>{english ? "Aligned" : "对齐"}</th></tr>
                   </thead>
                   <tbody>
                     {parsed.authAssessments.map((item) => (
@@ -255,7 +262,9 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
                 <AButton variant="text" disabled={!displayedBody} onClick={() => void navigator.clipboard.writeText(displayedBody)}>{t.copy}</AButton>
               </div>
             </div>
-            <textarea aria-label={english ? "Email body preview" : "邮件正文预览"} className="single-textarea email-body-preview" value={limitReportText(displayedBody || "--", 20000)} readOnly />
+            {bodyMode === "html" && safeBodyHtml
+              ? <iframe className="email-html-preview" title={english ? "Isolated email HTML preview" : "隔离的邮件 HTML 预览"} sandbox="" srcDoc={safeBodyHtml} />
+              : <textarea aria-label={english ? "Email body preview" : "邮件正文预览"} className="single-textarea email-body-preview" value={limitReportText(bodyText || "--", 20000)} readOnly />}
           </div>
 
           <div className="tool-panel wide-panel email-attachments-panel">
@@ -269,7 +278,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
                   <thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.emailSignature}</th><th>{t.emailDownloadAttachment}</th></tr></thead>
                   <tbody>
                     {parsed.attachments.map((attachment, index) => (
-                      <tr key={`${attachment.sha256}-${index}`}>
+                      <tr key={`${attachment.filename}-${attachment.size}-${index}`}>
                         <td>{attachment.filename || `attachment-${index + 1}`}</td>
                         <td>{attachment.contentType || "--"}</td>
                         <td>{formatBytes(attachment.size)}</td>
@@ -303,7 +312,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
               </div>
               <div className="tool-panel wide-panel">
                 <PanelTitle title={english ? "Raw EML" : "原始 EML"} />
-                <textarea className="single-textarea email-raw-input" value={input} readOnly />
+                <pre className="result-box email-raw-source">{input || "--"}</pre>
               </div>
             </div>
           </details>

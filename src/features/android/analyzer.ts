@@ -23,7 +23,6 @@ import { unzipSync } from "fflate";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../../models";
 import { fileSignatureForBytes, fileSignatures, previewText, shannonEntropy } from "../../utils/binary";
 import { archiveExtension, formatBytes } from "../../utils/files";
-import { sha256Bytes } from "../../utils/hash";
 
 const androidNamespace = "http://schemas.android.com/apk/res/android";
 
@@ -370,7 +369,7 @@ function classifyAndroidApkEntry(name: string, bytes: Uint8Array): AndroidApkEnt
     directory,
     extension: extension || "--",
     size: bytes.length,
-    sha256: sha256Bytes(bytes),
+    sha256: "",
     signature,
     role,
     risk,
@@ -419,9 +418,7 @@ function inspectAndroidArchive(bytes: Uint8Array) {
     wrapperRows.push(
       ["Outer archive entries", String(Object.keys(outerFiles).length)],
       ["Selected nested APK", selectedNestedApkName],
-      ["Selected nested APK size", selectedNestedApkBytes ? formatBytes(selectedNestedApkBytes.length) : "--"],
-      ["Selected nested APK SHA256", selectedNestedApkBytes ? sha256Bytes(selectedNestedApkBytes) : "--"],
-      ["Outer archive SHA256", sha256Bytes(bytes)]
+      ["Selected nested APK size", selectedNestedApkBytes ? formatBytes(selectedNestedApkBytes.length) : "--"]
     );
     wrapperFindings.push({
       level: "info",
@@ -460,9 +457,7 @@ function inspectAndroidArchive(bytes: Uint8Array) {
     ["Certificate / signature files", certEntries.join(", ") || "--"],
     ["Assets", String(assetEntries.length)],
     ["res/raw", String(rawEntries.length)],
-    ["Review entries", String(riskyApkEntries.length)],
-    ["Manifest SHA256", sha256Bytes(manifest)],
-    ["APK SHA256", selectedNestedApkBytes ? sha256Bytes(selectedNestedApkBytes) : sha256Bytes(bytes)]
+    ["Review entries", String(riskyApkEntries.length)]
   ];
   const findings = [
     ...wrapperFindings,
@@ -778,16 +773,14 @@ function androidApkEntriesToCsv(entries: AndroidApkEntry[]) {
     return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
   };
   return [
-    ["name", "directory", "extension", "role", "size", "sha256", "signature", "risk", "preview"].join(","),
+    ["name", "directory", "extension", "role", "size", "signature", "preview"].join(","),
     ...entries.map((entry) => [
       entry.name,
       entry.directory,
       entry.extension,
       entry.role,
       entry.size,
-      entry.sha256,
       entry.signature,
-      entry.risk.join("; "),
       entry.preview
     ].map(escape).join(","))
   ].join("\n");

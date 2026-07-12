@@ -11,7 +11,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-245F73?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-0F7B6C?style=flat-square" /></a>
-    <img alt="Version 0.5.0" src="https://img.shields.io/badge/Version-0.5.0-4457A6?style=flat-square" />
+    <img alt="Version 0.6.0" src="https://img.shields.io/badge/Version-0.6.0-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Source verification" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
@@ -28,7 +28,7 @@
 </div>
 
 > [!IMPORTANT]
-> Forensics++ 当前处于 `v0.5` 预发布阶段。工具输出用于辅助分析和快速初检，不应替代原始检材、标准取证流程或经过验证的专业软件。
+> Forensics++ `v0.6.0` 的工具输出用于辅助分析和快速初检，不应替代原始检材、标准取证流程或经过验证的专业软件。
 
 ## 项目概览
 
@@ -66,8 +66,8 @@ Forensics++ / ForensicsPP 是一个静态 React 应用。文件、文本和数�
     </tr>
     <tr>
       <td><strong>结构化数据</strong></td>
-      <td>SQLite、SQL 转储、JSON</td>
-      <td>查看表与视图、执行查询、编辑并导出数据库、解析 SQL 结构与 INSERT 数据</td>
+      <td>SQLite、SQL 转储、JSON、浏览器数据</td>
+      <td>查看与编辑 SQLite、解析 SQL 结构，并整理 Chromium / Firefox 历史、下载、Cookie 与登录记录</td>
     </tr>
     <tr>
       <td><strong>通信与网络</strong></td>
@@ -75,9 +75,9 @@ Forensics++ / ForensicsPP 是一个静态 React 应用。文件、文本和数�
       <td>EML/MIME、Received 链、认证结果、HTTP 结构、IOC 提取、PCAP/PCAPNG 会话与协议摘要</td>
     </tr>
     <tr>
-      <td><strong>系统制品</strong></td>
-      <td>AndroidManifest、Windows 制品、时间线</td>
-      <td>文本 XML/二进制 AXML、LNK/Prefetch/Zone.Identifier/REG、批量时间归一化</td>
+      <td><strong>系统记录</strong></td>
+      <td>AndroidManifest、Windows 文件、EVTX、文档取证、时间线</td>
+      <td>二进制 AXML、LNK/Prefetch/REG、EVTX/BinXML 与 Sigma、本地检查 PDF/OOXML/OLE、批量时间归一化</td>
     </tr>
     <tr>
       <td><strong>转换与安全辅助</strong></td>
@@ -87,7 +87,7 @@ Forensics++ / ForensicsPP 是一个静态 React 应用。文件、文本和数�
   </tbody>
 </table>
 
-完整工具列表以应用首页为准。当前版本在首页提供 30 个工具入口，其中包含内置 CyberChef 工作台。
+完整工具列表以应用首页为准。当前版本在首页提供 33 个工具入口，其中包含内置 CyberChef 工作台。
 
 ## 隐私与数据边界
 
@@ -104,7 +104,7 @@ Forensics++ / ForensicsPP 是一个静态 React 应用。文件、文本和数�
 
 ### 环境要求
 
-- Node.js `20` 或更高版本
+- Node.js `22.13` 或更高版本
 - npm `10` 或更高版本
 - 支持 WebAssembly、Web Workers 和现代 Web Crypto API 的浏览器
 
@@ -134,7 +134,27 @@ npm run preview
 4. 使用 Vite 生成新的静态生产文件。
 5. 检查发布目录的关键文件、版权标识、体积和敏感文件边界。
 
-`dist/` 是生成产物，不提交到 `main` 分支。
+`dist/` 是构建生成的文件，不提交到 `main` 分支。
+
+### 静态发布包
+
+每个 GitHub Release 都提供已经构建完成的 `ForensicsPP-vX.Y.Z-static.zip`。该压缩包不包含源码、Node.js 依赖或开发工具，解压后可直接发布到 GitHub Pages、Nginx、Apache、对象存储或其他静态网站服务。
+
+本地生成相同的发布包：
+
+```bash
+npm run build
+npm run release:package
+```
+
+生成文件位于 `release/`：
+
+```text
+ForensicsPP-v0.6.0-static.zip
+SHA256SUMS.txt
+```
+
+下载发布包请前往 [GitHub Releases](https://github.com/DyNooob/ForensicsPP/releases)。
 
 ## 常用命令
 
@@ -146,7 +166,8 @@ npm run preview
 | `npm test` | 运行核心解析器和转换逻辑测试。 |
 | `npm run test:watch` | 在开发中持续运行相关测试。 |
 | `npm run typecheck` | 执行 TypeScript 类型检查。 |
-| `npm run verify:dist` | 检查生成产物是否完整且未混入源码或本地文件。 |
+| `npm run verify:dist` | 检查构建文件是否完整且未混入源码或本地文件。 |
+| `npm run release:package` | 将已构建的 `dist/` 打包为静态发布 ZIP，并生成 SHA-256。 |
 | `npm run build` | 干净地生成生产版本。 |
 | `npm run verify` | 依次运行自动测试和完整生产构建。 |
 | `npm run preview` | 本地预览 `dist/`。 |
@@ -159,6 +180,7 @@ npm run preview
 ForensicsPP/
 ├── .github/                     # CI、Pages、Issue 与 PR 模板
 ├── docs/RELEASE.md              # 正式发布清单
+├── docs/releases/               # GitHub Release 中英文说明
 ├── public/                      # 法律页面、图标、PWA、CyberChef 静态资源
 ├── scripts/                     # 构建清理与全站布局审计
 ├── src/
@@ -216,7 +238,7 @@ npm run audit:layout
 
 ### GitHub Pages
 
-仓库已经包含 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml)。推送到 `main` 后，Actions 会安装锁定依赖、执行生产构建、检查发布产物并部署 `dist/`。
+仓库已经包含 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml)。推送到 `main` 后，Actions 会安装锁定依赖、执行生产构建、检查构建文件并部署 `dist/`。
 
 首次切换到源码部署时，在 GitHub 仓库中打开：
 
@@ -244,7 +266,7 @@ dist
 
 主要运行时依赖包括 React、Ant Design、CryptoJS、sm-crypto、bcrypt.js、sql.js、postal-mime、exifr、jsQR、fflate 和 sql-formatter。CyberChef 以静态资源形式内置，Vitest 用于核心逻辑自动测试。
 
-完整版本、用途、许可证和仓库地址可在 [`src/config/openSource.ts`](./src/config/openSource.ts) 以及应用设置中的“开源依赖”页面查看。第三方代码遵循各自许可证。
+完整版本、用途、许可证和仓库地址记录在 [`src/config/openSource.ts`](./src/config/openSource.ts)。应用设置中的“开源项目”页面提供项目仓库入口，第三方代码遵循各自许可证。
 
 ## 参与贡献
 

@@ -125,15 +125,17 @@ function pathsToCsv(rows: JsonPathItem[]) {
 }
 
 export function JsonTool({ t, ..._services }: JsonToolProps) {
-  const [input, setInput] = useStoredState("json.input.v2", "");
+  const [input, setInput] = React.useState("");
+  const [analyzedInput, setAnalyzedInput] = React.useState("");
   const [storedMode, setStoredMode] = useStoredState("json.outputMode", "format");
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [selectedPath, setSelectedPath] = React.useState("");
+  const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const english = t.waiting === "Waiting";
   const mode = (["format", "minify", "jsonl", "escape", "unescape"] as JsonMode[]).includes(storedMode as JsonMode) ? storedMode as JsonMode : "format";
-  const parsed = React.useMemo(() => parseJson(input), [input]);
+  const parsed = React.useMemo(() => parseJson(analyzedInput), [analyzedInput]);
   const paths = React.useMemo(() => parsed.ok ? collectPaths(parsed.value) : [], [parsed]);
   const pathTypes = React.useMemo(() => Array.from(new Set(paths.map((row) => row.type))).sort(), [paths]);
   const visiblePaths = React.useMemo(() => {
@@ -145,10 +147,10 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
   }, [filter, paths, typeFilter]);
   const selected = React.useMemo(() => paths.find((row) => row.path === selectedPath) ?? visiblePaths[0] ?? null, [paths, selectedPath, visiblePaths]);
   const output = React.useMemo(() => {
-    if (mode === "escape") return JSON.stringify(input);
+    if (mode === "escape") return JSON.stringify(analyzedInput);
     if (mode === "unescape") {
       try {
-        const value: unknown = JSON.parse(input);
+        const value: unknown = JSON.parse(analyzedInput);
         return typeof value === "string" ? value : JSON.stringify(value, null, 2);
       } catch (error) {
         return error instanceof Error ? error.message : String(error);
@@ -158,18 +160,37 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
     if (mode === "minify") return parsed.minified;
     if (mode === "jsonl") return parsed.jsonl;
     return parsed.normalized;
-  }, [input, mode, parsed]);
-  const hasInput = Boolean(input.trim());
+  }, [analyzedInput, mode, parsed]);
+  const hasInput = Boolean(analyzedInput.trim());
 
   const openFile = async (file?: File) => {
     if (!file) return;
+    if (file.size > 16 * 1024 * 1024) {
+      setError(english ? "JSON file exceeds the 16 MiB processing limit." : "JSON 文件超过 16 MiB 处理上限。");
+      return;
+    }
     setInput(await file.text());
+    setAnalyzedInput("");
+    setError("");
     setFilter("");
     setTypeFilter("");
     setSelectedPath("");
   };
   const clear = () => {
     setInput("");
+    setAnalyzedInput("");
+    setFilter("");
+    setTypeFilter("");
+    setSelectedPath("");
+    setError("");
+  };
+  const analyze = () => {
+    if (new TextEncoder().encode(input).length > 16 * 1024 * 1024) {
+      setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
+      return;
+    }
+    setAnalyzedInput(input);
+    setError("");
     setFilter("");
     setTypeFilter("");
     setSelectedPath("");
@@ -183,10 +204,12 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
           title={t.json}
           actions={<>
             <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.jsonOpenFile}</AButton>
-            <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
+            <AButton variant="filled" disabled={!input.trim()} onClick={analyze}>{english ? "Process JSON" : "处理 JSON"}</AButton>
+            <AButton variant="text" disabled={!input && !hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
         <input ref={inputRef} type="file" accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
+        {error && <div className="empty-state error-state">{error}</div>}
         <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={english ? "JSON operation" : "JSON 操作"}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>
           <ASegmentedButton value="minify" onClick={() => setStoredMode("minify")}>{t.minifyJson}</ASegmentedButton>
@@ -196,7 +219,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void navigator.clipboard.writeText(input)}>{t.copyInput}</AButton></div>
-          <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
+          <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
         <div className="text-panel json-simple-text-panel">

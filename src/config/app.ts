@@ -29,6 +29,9 @@ const toolDefinitions = [
   { id: "password", category: "analysis", name: "password", desc: "passwordDesc" },
   { id: "sql", category: "analysis", name: "sql", desc: "sqlDesc" },
   { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc" },
+  { id: "browserartifacts", category: "analysis", name: "browserartifacts", desc: "browserartifactsDesc" },
+  { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc" },
+  { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc" },
   { id: "android", category: "analysis", name: "android", desc: "androidDesc" },
   { id: "ioc", category: "analysis", name: "ioc", desc: "iocDesc" },
   { id: "email", category: "analysis", name: "email", desc: "emailDesc" },
@@ -78,12 +81,12 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "0.5";
+export const appVersion = "0.6.0";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
 export const lastUpdated = "2026-07-12";
 export const legalVersion = "2026-07-09";
-export const feedbackEmail = "toolab@digiforensics.cn";
+export const feedbackEmail = "i@digiforensics.cn";
 
 export const themePresets: ReadonlyArray<{
   id: string;

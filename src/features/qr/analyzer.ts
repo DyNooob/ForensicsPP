@@ -20,8 +20,7 @@
  */
 
 import { analyzeCodecCandidates } from "../codec/analyzer";
-import { parseUrlInput } from "../url/analyzer";
-import { safeDecodeURIComponent } from "../../utils/url";
+import { parseUrlInput, safeDecodeURIComponent } from "../../utils/url";
 
 function classifyQrPayload(payload: string) {
   const trimmed = payload.trim();

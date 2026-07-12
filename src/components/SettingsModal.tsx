@@ -29,10 +29,10 @@ import {
   InfoCircleOutlined,
   LinkOutlined,
   MoonOutlined,
-  SearchOutlined,
+  ReloadOutlined,
   SunOutlined
 } from "@ant-design/icons";
-import { Button, ColorPicker, Descriptions, Empty, Input, Menu, Modal, Segmented, Tag, Typography } from "antd";
+import { Button, ColorPicker, Menu, Modal, Segmented, Typography } from "antd";
 import type { ThemeMode } from "../models";
 import {
   appVersion,
@@ -74,35 +74,21 @@ export function SettingsModal({
   onClearWorkspace
 }: SettingsModalProps) {
   const [page, setPage] = React.useState<SettingsPage>("appearance");
-  const [dependencyQuery, setDependencyQuery] = React.useState("");
-  const normalizedQuery = dependencyQuery.trim().toLowerCase();
-  const visibleProjects = openSourceProjects.filter((project) => (
-    !normalizedQuery
-    || [project.name, project.license, project.category, project.purpose.zh, project.purpose.en]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalizedQuery)
-  ));
 
   const labels = lang === "zh" ? {
     appearance: "外观",
     appearanceDesc: "调整界面主题与强调色。",
     project: "关于项目",
     storage: "本地数据",
-    openSource: "开源依赖",
+    openSource: "开源项目",
     themeMode: "主题模式",
     themeColor: "强调色",
     system: "跟随系统",
     reset: "恢复默认",
     clearTitle: "清除本地工作区",
     clearDesc: "删除界面偏好、最近使用、收藏和工具保存的输入。",
-    dependenciesTitle: "开源项目与许可证",
-    dependenciesDesc: `共 ${openSourceProjects.length} 个直接使用或随项目内置的开源项目。`,
-    search: "搜索项目、用途或许可证",
-    runtime: "运行时",
-    embedded: "内置",
-    development: "开发",
-    notices: "声明",
+    dependenciesTitle: "开源项目",
+    dependenciesDesc: `Forensics++ 使用了以下 ${openSourceProjects.length} 个开源项目。`,
     openRepo: "打开仓库"
   } : {
     appearance: "Appearance",
@@ -116,13 +102,8 @@ export function SettingsModal({
     reset: "Reset",
     clearTitle: "Clear local workspace",
     clearDesc: "Remove interface preferences, recent tools, favorites, and saved tool inputs.",
-    dependenciesTitle: "Open-source projects and licenses",
-    dependenciesDesc: `${openSourceProjects.length} open-source projects used directly or embedded in this repository.`,
-    search: "Search project, purpose, or license",
-    runtime: "Runtime",
-    embedded: "Embedded",
-    development: "Development",
-    notices: "Notices",
+    dependenciesTitle: "Open-source projects",
+    dependenciesDesc: `Forensics++ uses the following ${openSourceProjects.length} open-source projects.`,
     openRepo: "Open Repository"
   };
 
@@ -172,6 +153,10 @@ export function SettingsModal({
 
           {page === "appearance" && (
             <div className="settings-form">
+              <div className="settings-appearance-preview" aria-hidden="true">
+                <div className="settings-preview-sidebar"><span className="settings-preview-logo">F++</span><i /><i /><i /></div>
+                <div className="settings-preview-main"><span /><div><b /><b /><b /></div><i /><i /></div>
+              </div>
               <div className="settings-form-row">
                 <div className="settings-form-label">{labels.themeMode}</div>
                 <Segmented
@@ -198,7 +183,7 @@ export function SettingsModal({
                       title={preset.name[lang]}
                       style={{ "--settings-swatch": preset.hex } as React.CSSProperties}
                       onClick={() => onThemeColorChange(preset.hex)}
-                    />
+                    ><span className="settings-color-dot" /></button>
                   ))}
                   <ColorPicker
                     value={themeColor}
@@ -207,18 +192,23 @@ export function SettingsModal({
                   />
                 </div>
               </div>
-              <Button type="link" className="settings-reset-button" onClick={onResetAppearance}>{labels.reset}</Button>
+              <Button className="settings-reset-button" icon={<ReloadOutlined />} onClick={onResetAppearance}>{labels.reset}</Button>
             </div>
           )}
 
           {page === "project" && (
             <div className="settings-project">
-              <Descriptions bordered size="small" column={2}>
-                <Descriptions.Item label={t.projectLicense}>{projectLicense}</Descriptions.Item>
-                <Descriptions.Item label={t.projectVersion}>{appVersion}</Descriptions.Item>
-                <Descriptions.Item label={t.githubRepo}><a href={projectLinks.repo} target="_blank" rel="noreferrer">{projectRepoName}</a></Descriptions.Item>
-                <Descriptions.Item label={t.lastUpdated}>{lastUpdated}</Descriptions.Item>
-              </Descriptions>
+              <div className="settings-project-hero">
+                <div className="settings-project-mark">F++</div>
+                <div><strong>Forensics++</strong><Typography.Text type="secondary">{t.aboutProjectDesc}</Typography.Text></div>
+                <Button type="primary" href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{labels.openRepo}</Button>
+              </div>
+              <div className="settings-project-meta">
+                <div><span>{t.projectVersion}</span><strong>{appVersion}</strong></div>
+                <div><span>{t.projectLicense}</span><strong>{projectLicense}</strong></div>
+                <div><span>{t.lastUpdated}</span><strong>{lastUpdated}</strong></div>
+                <div><span>{t.githubRepo}</span><a href={projectLinks.repo} target="_blank" rel="noreferrer">{projectRepoName}</a></div>
+              </div>
               <div className="settings-action-line">
                 <div>
                   <strong>{t.usageGuide}</strong>
@@ -226,12 +216,12 @@ export function SettingsModal({
                 </div>
                 <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
               </div>
-              <div className="settings-action-line">
+              <div className="settings-friend-links">
+                <strong>{lang === "zh" ? "友情链接" : "Related sites"}</strong>
                 <div>
-                  <strong>GitHub</strong>
-                  <Typography.Text type="secondary">{projectRepoName}</Typography.Text>
+                  <a href="https://www.电子取证.com" target="_blank" rel="noreferrer">电子取证.com</a>
+                  <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>
-                <Button href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{labels.openRepo}</Button>
               </div>
             </div>
           )}
@@ -250,28 +240,12 @@ export function SettingsModal({
 
           {page === "opensource" && (
             <div className="settings-dependencies">
-              <Input
-                allowClear
-                prefix={<SearchOutlined />}
-                value={dependencyQuery}
-                placeholder={labels.search}
-                onChange={(event) => setDependencyQuery(event.target.value)}
-              />
               <div className="settings-dependency-table">
-                {visibleProjects.map((project) => (
-                  <div className="settings-dependency-item" key={`${project.category}-${project.name}`}>
-                    <div className="settings-dependency-name">
-                      <a href={project.repository} target="_blank" rel="noreferrer">{project.name}</a>
-                      <Typography.Text type="secondary">{project.purpose[lang]}</Typography.Text>
-                    </div>
-                    <Tag bordered={false}>{project.category === "runtime" ? labels.runtime : project.category === "embedded" ? labels.embedded : labels.development}</Tag>
-                    <span className="settings-license">{project.license}</span>
-                    {project.notices
-                      ? <a href={project.notices} target="_blank" rel="noreferrer">{labels.notices}</a>
-                      : <span className="settings-dependency-version">{project.version ? `v${project.version}` : ""}</span>}
-                  </div>
+                {openSourceProjects.map((project) => (
+                  <a className="settings-dependency-item" href={project.repository} target="_blank" rel="noreferrer" key={`${project.category}-${project.name}`}>
+                    <span>{project.name}</span><LinkOutlined aria-hidden="true" />
+                  </a>
                 ))}
-                {!visibleProjects.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
               </div>
             </div>
           )}

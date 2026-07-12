@@ -26,3 +26,12 @@ export function safeDecodeURIComponent(value: string) {
     return value;
   }
 }
+
+export function parseUrlInput(value: string) {
+  const normalized = value.trim()
+    .replace(/^hxxps:/i, "https:")
+    .replace(/^hxxp:/i, "http:")
+    .replace(/\[\.\]|\(\.\)|\{\.\}/g, ".")
+    .replace(/\[:\]/g, ":");
+  return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) ? normalized : `https://${normalized}`);
+}

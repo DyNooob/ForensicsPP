@@ -49,6 +49,9 @@ const tools = [
   "password",
   "sql",
   "sqlite",
+  "browserartifacts",
+  "evtx",
+  "documentforensics",
   "android",
   "ioc",
   "email",
@@ -309,6 +312,27 @@ function createAuditPng(width = 64, height = 48) {
   ]);
 }
 
+function createAuditPdf() {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>",
+    "<< /Length 0 >>\nstream\n\nendstream",
+    "<< /Title (ForensicsPP layout fixture) /Author (Forensics++) >>"
+  ];
+  let pdf = "%PDF-1.7\n";
+  const offsets = [0];
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index <= objects.length; index += 1) pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "utf8");
+}
+
 async function createFileToolFixtures() {
   const dir = await mkdtemp(join(tmpdir(), "forensicspp-file-fixtures-"));
   const pngPath = join(dir, "layout-image.png");
@@ -317,6 +341,8 @@ async function createFileToolFixtures() {
   const binaryPath = join(dir, "layout-binary.exe");
   const windowsPath = join(dir, "POWERSHELL.EXE-12345678.pf");
   const pcapPath = join(dir, "layout-traffic.pcap");
+  const pdfPath = join(dir, "layout-document.pdf");
+  const browserHistoryPath = join(dir, "History");
 
   const png = Buffer.concat([createAuditPng(), Buffer.from("\nFPP_TRAILER_TEST\n", "utf8")]);
   await writeFile(pngPath, png);
@@ -385,8 +411,26 @@ async function createFileToolFixtures() {
     sequence: 2
   });
   await writeFile(pcapPath, makeClassicPcap([requestFrame, responseFrame]));
+  await writeFile(pdfPath, createAuditPdf());
+  const browserDb = spawn("sqlite3", [browserHistoryPath], { stdio: ["pipe", "ignore", "pipe"] });
+  browserDb.stdin.end(`
+    CREATE TABLE urls (id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, typed_count INTEGER);
+    CREATE TABLE visits (id INTEGER PRIMARY KEY, url INTEGER, visit_time INTEGER, transition INTEGER, visit_duration INTEGER);
+    CREATE TABLE downloads (id INTEGER PRIMARY KEY, start_time INTEGER, end_time INTEGER, target_path TEXT, current_path TEXT, received_bytes INTEGER, total_bytes INTEGER, state INTEGER, mime_type TEXT, tab_url TEXT, site_url TEXT, referrer TEXT);
+    CREATE TABLE downloads_url_chains (id INTEGER, chain_index INTEGER, url TEXT);
+    INSERT INTO urls VALUES (1, 'https://case.example.org/review', 'Case review', 3, 1);
+    INSERT INTO visits VALUES (7, 1, 13348638245000000, 805306368, 2500000);
+    INSERT INTO downloads VALUES (9, 13348638245000000, 13348638246000000, '/Users/analyst/report.zip', '/tmp/report.zip', 128, 128, 1, 'application/zip', '', '', 'https://case.example.org/review');
+    INSERT INTO downloads_url_chains VALUES (9, 0, 'https://case.example.org/report.zip');
+  `);
+  await new Promise((resolve, reject) => {
+    let message = "";
+    browserDb.stderr.on("data", (chunk) => { message += chunk.toString(); });
+    browserDb.on("error", reject);
+    browserDb.on("close", (code) => code === 0 ? resolve() : reject(new Error(message)));
+  });
 
-  return { dir, pngPath, qrPath, archivePath, binaryPath, windowsPath, pcapPath };
+  return { dir, pngPath, qrPath, archivePath, binaryPath, windowsPath, pcapPath, pdfPath, browserHistoryPath, evtxPath: join(process.cwd(), "tests/fixtures/Application.evtx") };
 }
 
 function wait(ms) {
@@ -1010,6 +1054,11 @@ async function auditLoadedSqlite(client) {
       10000
     );
     await client.send("Runtime.evaluate", {
+      expression: `document.querySelector('.sqlite-edit-mode .ant-switch')?.click()`,
+      awaitPromise: true
+    });
+    await waitForRuntimeValue(client, "document.querySelector('.sqlite-edit-mode .ant-switch')?.getAttribute('aria-checked') === 'true'", 3000);
+    await client.send("Runtime.evaluate", {
       expression: `document.querySelector('.sqlite-browse-table tbody tr')?.querySelectorAll('td')?.[4]?.click()`,
       awaitPromise: true
     });
@@ -1064,7 +1113,7 @@ async function auditLoadedSqlite(client) {
     });
     const changeRecorded = await waitForRuntimeValue(client, "document.querySelector('.sqlite-simple-changes-panel tbody')?.textContent.includes('cell-update')", 5000);
     await client.send("Runtime.evaluate", {
-      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '数据')?.click()`,
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '浏览')?.click()`,
       awaitPromise: true
     });
     await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-browse-table'))", 5000);
@@ -1147,6 +1196,24 @@ async function auditLoadedEmail(client) {
       "Boolean(document.querySelector('.email-workbench.has-email .email-summary-panel') && document.querySelector('.email-auth-panel') && document.querySelector('.email-route-panel'))",
       12000
     );
+    await client.send("Runtime.evaluate", {
+      expression: `(() => {
+        const htmlButton = [...document.querySelectorAll('.email-body-panel button')]
+          .find((button) => button.textContent?.trim() === 'HTML');
+        htmlButton?.click();
+      })()`
+    });
+    await waitForRuntimeValue(
+      client,
+      "Boolean(document.querySelector('.email-html-preview')?.getAttribute('srcdoc')?.includes('Evidence triage summary'))",
+      5000
+    );
+    await client.send("Runtime.evaluate", {
+      expression: `(() => {
+        const details = document.querySelector('.email-advanced-shell');
+        if (details instanceof HTMLDetailsElement) details.open = true;
+      })()`
+    });
     await wait(400);
     const result = await client.send("Runtime.evaluate", {
       expression: `(() => {
@@ -1155,17 +1222,30 @@ async function auditLoadedEmail(client) {
         const summary = document.querySelector(".email-summary-panel");
         const auth = document.querySelector(".email-auth-panel");
         const route = document.querySelector(".email-route-panel");
+        const htmlPreview = document.querySelector(".email-html-preview");
+        const rawSource = document.querySelector(".email-raw-source");
         const containerRect = container?.getBoundingClientRect();
         const summaryRect = summary?.getBoundingClientRect();
+        const htmlPreviewReady = Boolean(
+          htmlPreview?.getAttribute("srcdoc")?.includes("Evidence triage summary")
+        );
+        const rawSourceReady = Boolean(
+          rawSource?.textContent?.includes("From:")
+          && rawSource.textContent.includes("Subject:")
+        );
         return {
           id: "email-loaded",
           ok: Boolean(containerRect && source && summary && auth && route)
+            && htmlPreviewReady
+            && rawSourceReady
             && document.documentElement.scrollWidth === document.documentElement.clientWidth
             && summaryRect.width >= containerRect.width * 0.9,
           container: containerRect ? { w: Math.round(containerRect.width), h: Math.round(containerRect.height) } : null,
           summary: summaryRect ? { w: Math.round(summaryRect.width), h: Math.round(summaryRect.height) } : null,
           authRows: document.querySelectorAll('.email-auth-panel tbody tr').length,
           routeRows: document.querySelectorAll('.email-route-panel tbody tr').length,
+          htmlPreviewReady,
+          rawSourceReady,
           overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
         };
       })()`,
@@ -1236,7 +1316,10 @@ const loadedFileToolStates = [
   { tool: "binary", selector: ".binary-workbench input[type=file]", readyClass: ".binary-workbench.has-binary", path: "binaryPath" },
   { tool: "windows", selector: ".windows-artifact-workbench input[type=file]", readyClass: ".windows-artifact-workbench.has-windows", path: "windowsPath" },
   { tool: "fileid", selector: ".fileid-workbench input[type=file]", readyClass: ".fileid-workbench.has-fileid", path: "pngPath" },
-  { tool: "pcap", selector: ".pcap-workbench input[type=file]", readyClass: ".pcap-workbench.has-pcap", path: "pcapPath" }
+  { tool: "pcap", selector: ".pcap-workbench input[type=file]", readyClass: ".pcap-workbench.has-pcap", path: "pcapPath" },
+  { tool: "browserartifacts", selector: ".browser-artifact-workbench input[type=file]", readyClass: ".browser-artifact-results-panel", path: "browserHistoryPath", action: ["开始解析", "Parse data"] },
+  { tool: "evtx", selector: ".evtx-workbench input[type=file]", readyClass: ".evtx-results-panel", path: "evtxPath", action: ["解析日志", "Parse logs"] },
+  { tool: "documentforensics", selector: ".document-forensics-workbench input[type=file]", readyClass: ".document-forensics-results", path: "pdfPath", action: ["检查文档", "Inspect document"] }
 ];
 
 async function auditLoadedFileTools(client) {
@@ -1267,6 +1350,13 @@ async function auditLoadedFileTools(client) {
           "Boolean(document.querySelector('.hash-file-browser-panel'))"
         );
       }
+      if (state.action) {
+        await clickRuntimeButton(
+          client,
+          `[...document.querySelectorAll('button')].find((node) => ${JSON.stringify(state.action)}.includes((node.textContent || '').trim()))?.click();`,
+          `Boolean(document.querySelector(${JSON.stringify(state.readyClass)}))`
+        );
+      }
       const ready = await waitForRuntimeValue(client, `Boolean(document.querySelector(${JSON.stringify(state.readyClass)}))`, 15000);
       await wait(500);
       const result = await client.send("Runtime.evaluate", {
@@ -1280,7 +1370,8 @@ async function auditLoadedFileTools(client) {
           resultCards: document.querySelectorAll('.result-copy-card').length,
           images: [...document.images].filter((image) => image.offsetParent !== null).map((image) => ({ width: image.naturalWidth, height: image.naturalHeight })).slice(0, 4),
           canvasCount: [...document.querySelectorAll('canvas')].filter((canvas) => canvas.offsetParent !== null).length,
-          detailsCount: [...document.querySelectorAll('details')].filter((node) => node.offsetParent !== null).length
+          detailsCount: [...document.querySelectorAll('details')].filter((node) => node.offsetParent !== null).length,
+          errorText: document.querySelector('.error-state')?.textContent?.trim() || ''
         }))()`,
         returnByValue: true
       });
@@ -1339,19 +1430,14 @@ const seededToolStates = [
   {
     tool: "android",
     readyClass: ".manifest-overview-panel",
-    afterLoad: `[...document.querySelectorAll('button')].find((node) => /解析 Manifest|Parse Manifest/i.test(node.textContent || ''))?.click()`,
-    values: {
-      "android.manifestText": "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"org.example.forensics\"><uses-permission android:name=\"android.permission.INTERNET\"/><application android:debuggable=\"true\" android:label=\"Evidence App\"><activity android:name=\".MainActivity\" android:exported=\"true\"/></application></manifest>",
-      "android.sourceName": "AndroidManifest.xml"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.manifest-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.example.forensics"><uses-permission android:name="android.permission.INTERNET"/><application android:debuggable="true" android:label="Evidence App"><activity android:name=".MainActivity" android:exported="true"/></application></manifest>'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>/解析 Manifest|Parse Manifest/i.test(node.textContent||''))?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "ioc",
     readyClass: ".ioc-workbench.has-ioc",
-    values: {
-      "ioc.text.v2": "2026-07-08T09:12:33Z src=10.0.0.5 dst=203.0.113.42 url=https://case.example.org/review?id=42 sha256=e54d7df2f5f74355fda98fac48a726f451a0f9c89d6e8786f71ab4f241b128a9",
-      "ioc.source": "case-001.log"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.ioc-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'2026-07-08T09:12:33Z src=10.0.0.5 dst=203.0.113.42 url=https://case.example.org/review?id=42 sha256=e54d7df2f5f74355fda98fac48a726f451a0f9c89d6e8786f71ab4f241b128a9'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>/提取 IOC|Extract indicators/i.test(node.textContent||''))?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "urltool",
@@ -1388,10 +1474,8 @@ const seededToolStates = [
   {
     tool: "json",
     readyClass: ".json-workbench.has-json",
-    values: {
-      "json.input.v2": "{\"caseId\":\"FPP-001\",\"sourceIp\":\"203.0.113.42\",\"url\":\"https://case.example.org/review\",\"events\":[{\"time\":\"2026-07-08T09:12:33Z\",\"action\":\"login\"}]}",
-      "json.outputMode": "format"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.json-simple-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'{"caseId":"FPP-001","sourceIp":"203.0.113.42","url":"https://case.example.org/review","events":[{"time":"2026-07-08T09:12:33Z","action":"login"}]}'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>/处理 JSON|Process JSON/i.test(node.textContent||''))?.click(),50); })()`,
+    values: { "json.outputMode": "format" }
   },
   {
     tool: "regex",
@@ -1413,10 +1497,8 @@ const seededToolStates = [
   {
     tool: "strings",
     readyClass: ".strings-workbench.has-strings",
-    values: {
-      "strings.text.v2": "MZ....This program cannot be run in DOS mode....https://case.example.org/payload....user=analyst....token=review123....invoice.pdf",
-      "strings.minLength": 4
-    }
+    afterLoad: `(() => { const input=document.querySelector('.strings-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'MZ....This program cannot be run in DOS mode....https://case.example.org/payload....user=analyst....token=review123....invoice.pdf'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>/提取字符串|Extract strings/i.test(node.textContent||''))?.click(),50); })()`,
+    values: { "strings.minLength": 4 }
   },
   {
     tool: "entropy",

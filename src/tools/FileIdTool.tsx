@@ -134,7 +134,7 @@ export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
   return (
     <div className={`tool-grid fileid-workbench ${result ? "has-fileid" : "empty-fileid"}`}>
       <div className="tool-panel wide-panel fileid-source-panel">
-        <PanelTitle title={english ? "File source" : "文件来源"} />
+        <PanelTitle title={english ? "Open file" : "选择文件"} />
         <input ref={inputRef} type="file" onChange={(event) => void handleFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}

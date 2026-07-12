@@ -43,7 +43,8 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const [bytes, setBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(text));
   const [sourceSize, setSourceSize] = React.useState(() => new TextEncoder().encode(text).length);
   const [blockSize, setBlockSize] = useStoredState("entropy.blockSize", 1024);
-  const [view, setView] = React.useState<"blocks" | "ranges">("blocks");
+  const [view, setView] = React.useState<"blocks" | "ranges">("ranges");
+  const [showDetails, setShowDetails] = React.useState(false);
   const [classFilter, setClassFilter] = React.useState("");
   const [selectedKey, setSelectedKey] = React.useState("");
   const [page, setPage] = React.useState(0);
@@ -124,7 +125,8 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
     setClassFilter("");
     setSelectedKey("");
     setPage(0);
-    setView("blocks");
+    setView("ranges");
+    setShowDetails(false);
   };
 
   const handleText = (value: string) => {
@@ -170,7 +172,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
 
       <section className="tool-panel wide-panel entropy-simple-source-panel">
         <ToolPanelHeader
-          title={english ? "Entropy source" : "熵分析来源"}
+          title={english ? "File or text" : "输入文件或文本"}
           actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" onChange={(event) => void handleFile(event.target.files?.[0])} />
@@ -198,7 +200,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
         </div>
         <textarea
           className="single-textarea entropy-simple-input"
-          aria-label={english ? "Entropy analysis source" : "熵分析来源"}
+          aria-label={english ? "Text for entropy analysis" : "需要计算熵值的文本"}
           value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${english ? "loaded" : "已读取"}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
           readOnly={sourceName !== "text input"}
           placeholder={t.textPlaceholder}
@@ -211,10 +213,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
           <ToolPanelHeader
             title={english ? "Entropy map" : "熵值分布"}
             subtitle={sourceName === "text input" ? (english ? "Text input" : "文本输入") : sourceName}
-            actions={<>
-              <AButton variant="outlined" onClick={() => downloadTextFile(`entropy-blocks-${Date.now()}.csv`, services.entropyBlocksToCsv(filteredBlocks), "text/csv;charset=utf-8")}>{english ? "Blocks CSV" : "分块 CSV"}</AButton>
-              <AButton variant="text" onClick={() => downloadTextFile(`entropy-ranges-${Date.now()}.csv`, services.entropyRangesToCsv(analysis.ranges), "text/csv;charset=utf-8")}>{english ? "Ranges CSV" : "范围 CSV"}</AButton>
-            </>}
+            actions={<AButton variant="outlined" onClick={() => setShowDetails((value) => !value)}>{showDetails ? (english ? "Hide details" : "收起详细数据") : (english ? "Detailed data" : "查看详细数据")}</AButton>}
           />
 
           <div className="entropy-simple-summary">
@@ -224,6 +223,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
             <span><small>{t.entropyRanges}</small><strong>{analysis.ranges.length}</strong></span>
           </div>
 
+          {showDetails && <>
           <div className="entropy-simple-toolbar">
             <ASegmentedGroup value={view} selects="single">
               <ASegmentedButton value="blocks" onClick={() => setView("blocks")}>{t.entropyBlocks}</ASegmentedButton>
@@ -232,6 +232,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
             {view === "blocks" && (
               <ASelect aria-label={english ? "Entropy class" : "熵值分类"} value={classFilter} onChange={(value) => setClassFilter(String(value))} options={[{ value: "", label: english ? "All classifications" : "全部类型" }, ...classes.map((item) => ({ value: item, label: item }))]} />
             )}
+            <AButton variant="text" onClick={() => downloadTextFile(`entropy-${view}-${Date.now()}.csv`, view === "blocks" ? services.entropyBlocksToCsv(filteredBlocks) : services.entropyRangesToCsv(analysis.ranges), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
           </div>
 
           {view === "blocks" ? (
@@ -278,6 +279,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
               <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton>
             </div>
           )}
+          </>}
         </section>
       )}
 

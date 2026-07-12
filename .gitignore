@@ -1,6 +1,7 @@
 node_modules
 .vite
 dist
+release
 .DS_Store
 *.log
 *.tsbuildinfo

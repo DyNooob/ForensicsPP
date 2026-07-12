@@ -21,7 +21,6 @@
 
 import { fileSignatureForBytes, hexPreview, previewText } from "../../utils/binary";
 import { formatBytes, limitReportText } from "../../utils/files";
-import { detectHashType } from "../../utils/hash";
 import type {
   SqliteCellSelection,
   SqliteChangeLog,
@@ -132,20 +131,10 @@ export function sqliteCellPreviewRows(value: SqliteValue): Array<[string, string
   ];
 }
 
-export function sqliteValueRisk(column: string, value: SqliteValue) {
-  const text = displaySqliteValue(value);
-  const risks = [
-    /(pass(word)?|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|refresh[_-]?token|client[_-]?secret|session|cookie|auth|jwt|bearer|credential|salt|hash)/i.test(column) ? "sensitive column name" : "",
-    /\bhttps?:\/\/[^\s"'<>]+/i.test(text) ? "URL value" : "",
-    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text) ? "email value" : "",
-    /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/.test(text) ? "IPv4 value" : "",
-    /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(text) ? "JWT-like value" : "",
-    /(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{22,}|sk-[A-Za-z0-9_-]{24,}|-----BEGIN [A-Z ]+PRIVATE KEY-----/i.test(text) ? "known secret pattern" : "",
-    detectHashType(text) ? `hash-like ${detectHashType(text)}` : "",
-    text.length > 512 ? "long value" : "",
-    value instanceof Uint8Array && value.byteLength > 0 ? "blob value" : ""
-  ].filter(Boolean);
-  return Array.from(new Set(risks));
+export function sqliteValueRisk(column: string, value: SqliteValue): string[] {
+  void column;
+  void value;
+  return [];
 }
 
 export function sqliteColumnProfiles(data: SqliteDataSet, columns: SqliteColumnInfo[]): SqliteColumnProfile[] {
@@ -207,36 +196,6 @@ export function sqliteSensitiveHits(data: SqliteDataSet) {
 
 export function sqliteDefaultCellSelection(data: SqliteDataSet): SqliteCellSelection | null {
   if (!data.columns.length || !data.values.length) return null;
-  let best: SqliteCellSelection | null = null;
-  let bestScore = -Infinity;
-  data.values.slice(0, Math.min(data.values.length, 80)).forEach((row, rowIndex) => {
-    data.columns.forEach((column, columnIndex) => {
-      const value = row[columnIndex] ?? null;
-      const text = displaySqliteValue(value);
-      const lowered = column.toLowerCase();
-      const risk = sqliteValueRisk(column, value);
-      const score = (
-        risk.length * 120
-        + (/pass|token|secret|key|session|cookie|auth|jwt|credential/i.test(lowered) ? 160 : 0)
-        + (/url|uri|link|host|domain|ip|email|mail|phone|path|file|name|title/i.test(lowered) ? 80 : 0)
-        + (/(time|date|created|updated|modified|deleted|expires|timestamp|last)/i.test(lowered) ? 45 : 0)
-        + (value instanceof Uint8Array && value.byteLength ? 70 : 0)
-        + (text && text !== "NULL" ? Math.min(text.length, 80) / 8 : -80)
-        + (/^(id|rowid|pk)$/i.test(column) ? -140 : 0)
-      );
-      if (score > bestScore) {
-        bestScore = score;
-        best = {
-          rowIndex,
-          columnIndex,
-          column,
-          rowid: data.rowids[rowIndex] ?? null,
-          value
-        };
-      }
-    });
-  });
-  if (best) return best;
   const columnIndex = Math.max(0, data.columns.findIndex((column) => !/^(id|rowid)$/i.test(column)));
   return {
     rowIndex: 0,
@@ -275,14 +234,10 @@ export function getSqliteTables(db: { exec: (sql: string) => Array<{ columns: st
 }
 
 export function sqliteObjectRisk(type: string, name: string, sql: string) {
-  const risks = [
-    /^sqlite_/i.test(name) ? "internal sqlite object" : "",
-    type === "trigger" ? "trigger changes data automatically" : "",
-    /\b(delete|drop|update|insert|replace)\b/i.test(sql) && type === "trigger" ? "mutating trigger" : "",
-    /\b(load_extension|attach\s+database|pragma\s+writable_schema)\b/i.test(sql) ? "dangerous SQL capability" : "",
-    /password|token|secret|credential|auth|session|cookie|key/i.test(`${name} ${sql}`) ? "sensitive-name marker" : ""
-  ].filter(Boolean);
-  return Array.from(new Set(risks));
+  void type;
+  void name;
+  void sql;
+  return [];
 }
 
 export function getSqliteObjects(db: { exec: (sql: string) => Array<{ columns: string[]; values: SqliteValue[][] }> }): SqliteObjectInfo[] {

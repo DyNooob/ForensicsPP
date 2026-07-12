@@ -47,6 +47,7 @@ function copyrightCssPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), copyrightCssPlugin()],
   build: {
+    target: "es2022",
     rollupOptions: {
       output: {
         banner: copyrightBanner,
@@ -64,6 +65,7 @@ export default defineConfig({
     }
   },
   worker: {
+    format: "es",
     rollupOptions: {
       output: {
         banner: copyrightBanner

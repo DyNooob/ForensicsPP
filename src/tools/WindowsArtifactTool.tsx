@@ -72,7 +72,7 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
   return (
     <div className={`tool-grid windows-artifact-workbench ${analysis ? "has-windows" : "empty-windows"}`}>
       <div className="tool-panel wide-panel windows-source-panel">
-        <PanelTitle title={english ? "Windows artifact" : "Windows 制品"} />
+        <PanelTitle title={english ? "Windows file" : "选择 Windows 文件"} />
         <input ref={inputRef} type="file" accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}

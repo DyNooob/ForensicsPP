@@ -43,6 +43,8 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
   const [error, setError] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const workerRef = React.useRef<Worker | null>(null);
+  const requestRef = React.useRef(0);
 
   const packets = React.useMemo(() => {
     const value = packetFilter.trim().toLowerCase();
@@ -63,24 +65,48 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
     }
     setLoading(true);
     try {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const next = parsePcap(bytes, file.name, file.size, "");
-      setPcap(next);
-      setSelectedPacketNo(next.packets[0]?.no ?? null);
-      setPacketFilter("");
-      setPacketPage(0);
-      setView("overview");
+      workerRef.current?.terminate();
+      const requestId = ++requestRef.current;
+      const worker = new Worker(new URL("../workers/pcap.worker.ts", import.meta.url), { type: "module" });
+      workerRef.current = worker;
+      worker.onmessage = (event: MessageEvent<{ id: number; result?: PcapInfo; error?: string }>) => {
+        if (event.data.id !== requestId) return;
+        worker.terminate();
+        workerRef.current = null;
+        setLoading(false);
+        if (event.data.error || !event.data.result) {
+          setPcap(null);
+          setError(event.data.error || (english ? "Packet parsing failed." : "流量包解析失败。"));
+          return;
+        }
+        const next = event.data.result;
+        setPcap(next);
+        setSelectedPacketNo(next.packets[0]?.no ?? null);
+        setPacketFilter("");
+        setPacketPage(0);
+        setView("overview");
+      };
+      worker.onerror = (event) => {
+        if (requestId !== requestRef.current) return;
+        worker.terminate();
+        workerRef.current = null;
+        setLoading(false);
+        setPcap(null);
+        setError(event.message || (english ? "Packet worker failed." : "流量包解析任务失败。"));
+      };
+      worker.postMessage({ id: requestId, bytes, name: file.name, size: file.size }, [bytes.buffer]);
     } catch (caught) {
       setPcap(null);
       setSelectedPacketNo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
+    workerRef.current?.terminate();
+    workerRef.current = null;
     setPcap(null);
     setSelectedPacketNo(null);
     setPacketFilter("");
@@ -110,10 +136,12 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
     if (packetPage >= packetPageCount) setPacketPage(packetPageCount - 1);
   }, [packetPage, packetPageCount]);
 
+  React.useEffect(() => () => workerRef.current?.terminate(), []);
+
   return (
     <div className={`tool-grid pcap-workbench ${pcap ? "has-pcap" : "empty-pcap"}`}>
       <section className="tool-panel wide-panel pcap-source-panel">
-        <ToolPanelHeader title={english ? "Packet capture" : "流量包来源"} actions={<AButton variant="text" disabled={!pcap && !error} onClick={clear}>{t.clear}</AButton>} />
+        <ToolPanelHeader title={english ? "Open packet capture" : "选择流量包"} actions={<AButton variant="text" disabled={!pcap && !error} onClick={clear}>{t.clear}</AButton>} />
         <input ref={inputRef} type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}

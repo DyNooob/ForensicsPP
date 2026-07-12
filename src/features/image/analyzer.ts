@@ -23,12 +23,10 @@ import { decompressSync, strFromU8 } from "fflate";
 import type { ImageDecodedSignal, ImageInfo, IocRecord, PngChunkInfo, PngTextEntry, QrAnalysis } from "../../models";
 import { crc32, findEmbeddedFileSignatures, hexPreview, previewText, readAscii, shannonEntropy } from "../../utils/binary";
 import { formatBytes, limitReportText } from "../../utils/files";
-import { sha256Bytes } from "../../utils/hash";
 import { analyzeCodecCandidates } from "../codec/analyzer";
 import { analyzeIocs } from "../ioc/analyzer";
 import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
 import { classifyQrPayload, parseQrPayloadDetails, qrGeometryRows } from "../qr/analyzer";
-import { analyzeUrl } from "../url/analyzer";
 
 const imageObjectUrls = new Set<string>();
 
@@ -516,7 +514,7 @@ function collectHiddenPayloads(bytes: Uint8Array, logicalEnd: number, trailer: U
       source,
       offset,
       size: carvedBytes.length,
-      sha256: sha256Bytes(carvedBytes),
+      sha256: "",
       extension: meta.extension,
       mime: meta.mime,
       preview: previewText(carvedBytes, 4096),
@@ -548,7 +546,7 @@ function collectPngChunkPayloads(bytes: Uint8Array, chunks: PngChunkInfo[]) {
       source: `PNG ancillary chunk ${chunk.type}`,
       offset: chunk.dataOffset,
       size: carvedBytes.length,
-      sha256: sha256Bytes(carvedBytes),
+      sha256: "",
       extension: meta.extension,
       mime: meta.mime,
       preview: previewText(carvedBytes, 4096),
@@ -606,7 +604,7 @@ function collectLsbPayloadsFromImageData(source: ImageData) {
           source: `LSB byte stream (${mode.label} bit ${bitPlane} ${bitOrder.toUpperCase()})`,
           offset: payloadOffset,
           size: payloadBytes.length,
-            sha256: sha256Bytes(payloadBytes),
+            sha256: "",
             extension: meta.extension,
             mime: meta.mime,
             preview: previewText(payloadBytes, 4096),
@@ -647,7 +645,7 @@ async function buildHiddenPayloadPreviews(payloads: ImageInfo["hiddenPayloads"])
         const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
         await loadBrowserImage(src);
         const repaired = candidate.label !== "Original payload candidate";
-        const sha256 = sha256Bytes(candidate.bytes);
+        const sha256 = "";
         previews.push({
           label: repaired ? `${payload.label} / repaired` : payload.label,
           offset: payload.offset,
@@ -710,17 +708,11 @@ function classifyImageTextSignal(source: string, text: string) {
     });
   }
   if (urls.length) {
-    const urlRows = urls.flatMap((url, index) => {
-      const findings = analyzeUrl(url).findings.filter((finding) => finding.level !== "info").slice(0, 3);
-      return [
-        [`URL ${index + 1}`, url],
-        [`URL ${index + 1} checks`, findings.map((finding) => finding.title).join(" / ") || "--"]
-      ] as Array<[string, string]>;
-    });
+    const urlRows = urls.map((url, index) => [`URL ${index + 1}`, url] as [string, string]);
     addImageSignal(signals, {
       source,
       type: "URL / Link",
-      level: urlRows.some(([, risk]) => risk !== "--" && /review|redirect|credential|private|suspicious|danger/i.test(risk)) ? "warn" : "info",
+      level: "info",
       value: urls.join("\n"),
       detail: "文本片段中提取到 URL，可继续用 URL 分析器核验跳转、参数和主机信息。",
       rows: urlRows
@@ -778,7 +770,7 @@ async function decodeQrSignalFromDataUrl(src: string, source: string) {
     const payloadType = classifyQrPayload(code.data);
     const payloadRows = parseQrPayloadDetails(code.data, payloadType);
     const iocAnalysis = analyzeIocs(code.data, `${source} QR`);
-    const urlFindings = payloadType === "URL" ? analyzeUrl(code.data).findings.filter((finding) => finding.level !== "info") : [];
+    const urlFindings: Array<{ level: string; title: string; detail: string }> = [];
     const geometryRows: Array<[string, string]> = code.location ? qrGeometryRows(code.location as unknown as Record<string, unknown>, canvas.width, canvas.height) : [["Geometry", "--"]];
     const findings = buildQrFindings(code.data, payloadType, payloadRows, iocAnalysis.records, urlFindings, true, geometryRows, 0);
     const level = findings.some((finding) => finding.level === "danger") ? "danger" : findings.some((finding) => finding.level === "warn") ? "warn" : "info";
@@ -1399,6 +1391,24 @@ function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: R
   };
 }
 
+function analyzeImageBasics(bytes: Uint8Array, fileType: string, exif: Record<string, unknown>) {
+  const container = inspectImageContainerBytes(bytes, fileType, exif);
+  return {
+    rows: container.rows,
+    findings: container.findings,
+    hiddenRows: [],
+    stegoRows: [],
+    trailerBytes: container.trailer,
+    trailerPreview: container.trailer.length ? hexPreview(container.trailer, 256) : "",
+    trailerText: container.trailer.length ? previewText(container.trailer, 4096) : "",
+    lsbText: "",
+    lsbCandidates: [],
+    hiddenPayloads: [],
+    pngTextEntries: container.pngTextEntries,
+    pngChunks: container.pngChunks
+  };
+}
+
 function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImageElement, exif: Record<string, unknown>) {
   const container = inspectImageContainerBytes(bytes, fileType, exif);
   const { rows, findings, pngTextEntries, pngChunks, embeddedHits, logicalEnd, trailer } = container;
@@ -1566,4 +1576,4 @@ function buildQrFindings(payload: string, payloadType: string, payloadRows: Arra
   return findings;
 }
 
-export { analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };

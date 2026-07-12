@@ -113,9 +113,11 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const [selectedName, setSelectedName] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [loadingEntry, setLoadingEntry] = React.useState("");
   const [error, setError] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const archiveBytesRef = React.useRef<Uint8Array | null>(null);
 
   const entries = archive?.entries ?? [];
   const visibleEntries = React.useMemo(() => {
@@ -145,26 +147,10 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const metadata = parseLocalEntries(bytes);
       if (!metadata.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
-      let extractedBytes = 0;
-      let extractedFiles = 0;
-      let skipped = 0;
-      const extracted: Record<string, Uint8Array> = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
-        unzip(bytes, {
-          filter: (entry) => {
-            const ratio = entry.size > 0 ? entry.originalSize / entry.size : 0;
-            const allowed = entry.originalSize <= MAX_ENTRY_BYTES
-              && extractedBytes + entry.originalSize <= MAX_EXTRACTED_BYTES
-              && extractedFiles < 1000
-              && !(ratio > 500 && entry.originalSize > 16 * 1024 * 1024);
-            if (allowed) { extractedBytes += entry.originalSize; extractedFiles += 1; }
-            else skipped += 1;
-            return allowed;
-          }
-        }, (caught, data) => caught ? reject(caught) : resolve(data));
-      }).catch(() => ({} as Record<string, Uint8Array>));
-      const nextEntries = metadata.map((entry) => ({ ...entry, data: extracted[entry.name] }));
+      archiveBytesRef.current = bytes;
+      const nextEntries = metadata.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
-      setArchive({ name: file.name, size: file.size, kind: inferKind(file.name, metadata), entries: nextEntries, skipped });
+      setArchive({ name: file.name, size: file.size, kind: inferKind(file.name, metadata), entries: nextEntries, skipped: 0 });
       setSelectedName(firstFile?.name ?? "");
       setQuery("");
     } catch (caught) {
@@ -176,11 +162,35 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clear = () => {
+    archiveBytesRef.current = null;
     setArchive(null);
     setSelectedName("");
     setQuery("");
     setError("");
+    setLoadingEntry("");
     if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const loadEntry = async (entry: ArchiveEntry) => {
+    const bytes = archiveBytesRef.current;
+    if (!bytes || entry.name.endsWith("/") || entry.encrypted || entry.data || loadingEntry) return;
+    const ratio = entry.compressed > 0 ? entry.uncompressed / entry.compressed : 0;
+    if (entry.uncompressed > MAX_ENTRY_BYTES || (ratio > 500 && entry.uncompressed > 16 * 1024 * 1024)) {
+      setError(english ? "This entry is too large or expands too aggressively for browser preview." : "该条目过大或解压倍率过高，无法在浏览器中预览。");
+      return;
+    }
+    setLoadingEntry(entry.name);
+    setError("");
+    try {
+      const extracted = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+        unzip(bytes, { filter: (candidate) => candidate.name === entry.name }, (caught, data) => caught ? reject(caught) : resolve(data));
+      });
+      const data = extracted[entry.name];
+      if (!data) throw new Error(english ? "Entry could not be extracted." : "无法提取该条目。");
+      setArchive((current) => current ? { ...current, entries: current.entries.map((item) => item.name === entry.name ? { ...item, data } : item) } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally { setLoadingEntry(""); }
   };
 
   const downloadEntry = () => {
@@ -241,7 +251,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
             <input className="text-input" aria-label={english ? "Search archive paths" : "搜索压缩包路径"} value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={english ? "Search path" : "搜索路径"} />
             <div className="archive-file-list">
               {visibleEntries.map((entry) => (
-                <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => setSelectedName(entry.name)}>
+                <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); void loadEntry(entry); }}>
                   <span>{entry.name}</span>
                   <small>{entry.name.endsWith("/") ? (english ? "Directory" : "目录") : formatBytes(entry.uncompressed)}</small>
                 </button>
@@ -253,7 +263,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="tool-panel archive-preview-panel">
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Preview" : "预览"} />
-              <AButton variant="outlined" disabled={!selected?.data} onClick={downloadEntry}>{english ? "Save entry" : "保存条目"}</AButton>
+              <div className="button-row compact-buttons"><AButton variant="filled" disabled={!selected || Boolean(selected.data) || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => selected && void loadEntry(selected)}>{loadingEntry ? (english ? "Loading..." : "正在提取...") : (english ? "Load preview" : "加载预览")}</AButton><AButton variant="outlined" disabled={!selected?.data} onClick={downloadEntry}>{english ? "Save entry" : "保存条目"}</AButton></div>
             </div>
             {selected ? <>
               <InfoTable rows={[

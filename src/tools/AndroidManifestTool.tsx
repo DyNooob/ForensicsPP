@@ -25,7 +25,6 @@ import { copy } from "../i18n";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../models";
 import { hexPreview } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
-import { useStoredState } from "../utils/storage";
 
 type Finding = { level: string; title: string; detail: string };
 type ArchiveInspection = {
@@ -53,9 +52,9 @@ const MAX_ARCHIVE_SIZE = 256 * 1024 * 1024;
 
 export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; services: AndroidManifestToolServices }) {
   const english = t.waiting === "Waiting";
-  const [info, setInfo] = useStoredState<AndroidManifestInfo | null>("android.info", null);
-  const [manifestText, setManifestText] = useStoredState("android.manifestText", "");
-  const [sourceName, setSourceName] = useStoredState("android.sourceName", "pasted AndroidManifest.xml");
+  const [info, setInfo] = React.useState<AndroidManifestInfo | null>(null);
+  const [manifestText, setManifestText] = React.useState("");
+  const [sourceName, setSourceName] = React.useState("pasted AndroidManifest.xml");
   const [view, setView] = React.useState<AndroidView>("overview");
   const [componentFilter, setComponentFilter] = React.useState("");
   const [entryFilter, setEntryFilter] = React.useState("");
@@ -65,6 +64,8 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   const [parsing, setParsing] = React.useState(false);
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const workerRef = React.useRef<Worker | null>(null);
+  const requestRef = React.useRef(0);
   const hasSource = Boolean(info || manifestText.trim() || error);
   const visibleComponents = React.useMemo(() => {
     const query = componentFilter.trim().toLowerCase();
@@ -120,26 +121,49 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     setParsing(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const archive = hexPreview(bytes, 4) === "50 4B 03 04" ? services.inspectAndroidArchive(bytes) : undefined;
-      const manifestBytes = archive?.manifest ?? bytes;
-      const axml = services.inspectAndroidBinaryXml(manifestBytes);
-      const xml = services.decodeAndroidManifestBytes(manifestBytes);
-      const archiveInfo = archive
-        ? { ...archive, axmlRows: axml.rows, axmlFindings: axml.findings }
-        : { rows: [], findings: [], axmlRows: axml.rows, axmlFindings: axml.findings };
-      setManifestText(xml);
-      setSourceName(file.name);
-      setInfo(services.parseAndroidManifest(xml, file.name, file.size, archiveInfo));
-      resetReview();
+      workerRef.current?.terminate();
+      const requestId = ++requestRef.current;
+      const worker = new Worker(new URL("../workers/android.worker.ts", import.meta.url), { type: "module" });
+      workerRef.current = worker;
+      worker.onmessage = (event: MessageEvent<{ id: number; xml?: string; archiveInfo?: { rows: Array<[string, string]>; findings: Finding[]; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Finding[] }; error?: string }>) => {
+        if (event.data.id !== requestId) return;
+        worker.terminate();
+        workerRef.current = null;
+        setParsing(false);
+        if (event.data.error || !event.data.archiveInfo || event.data.xml == null) {
+          setInfo(null);
+          setError(event.data.error || (english ? "Android parsing failed." : "Android 解析失败。"));
+          return;
+        }
+        try {
+          setManifestText(event.data.xml);
+          setSourceName(file.name);
+          setInfo(services.parseAndroidManifest(event.data.xml, file.name, file.size, event.data.archiveInfo));
+          resetReview();
+        } catch (caught) {
+          setInfo(null);
+          setError(caught instanceof Error ? caught.message : String(caught));
+        }
+      };
+      worker.onerror = (event) => {
+        if (requestId !== requestRef.current) return;
+        worker.terminate();
+        workerRef.current = null;
+        setParsing(false);
+        setInfo(null);
+        setError(event.message || (english ? "Android worker failed." : "Android 解析任务失败。"));
+      };
+      worker.postMessage({ id: requestId, bytes, name: file.name, size: file.size }, [bytes.buffer]);
     } catch (caught) {
       setInfo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setParsing(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
+    workerRef.current?.terminate();
+    workerRef.current = null;
     setManifestText("");
     setInfo(null);
     setError("");
@@ -147,6 +171,8 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     resetReview();
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  React.useEffect(() => () => workerRef.current?.terminate(), []);
 
   const exportInfoJson = () => {
     if (!info) return;
@@ -159,7 +185,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
 
       <section className="tool-panel wide-panel android-simple-source-panel manifest-input-panel">
         <ToolPanelHeader
-          title={english ? "Manifest source" : "Manifest 来源"}
+          title={english ? "Open APK or manifest" : "选择 APK 或 Manifest"}
           actions={<AButton variant="text" disabled={!manifestText && !info} onClick={clear}>{t.clear}</AButton>}
         />
         <input
@@ -187,13 +213,18 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
           <strong>{info ? sourceName : t.uploadManifest}</strong>
           <span>{info ? `${info.sourceFormat} · ${formatBytes(info.size)}` : (english ? "APK, XML, or binary AXML" : "支持 APK、XML 和二进制 AXML")}</span>
         </div>
-        <textarea
+        {info ? <details className="android-xml-details"><summary>{english ? "View decoded XML" : "查看解码 XML"}</summary><textarea
+          className="single-textarea android-simple-editor manifest-textarea"
+          aria-label={english ? "Decoded AndroidManifest XML" : "解码后的 AndroidManifest XML"}
+          value={manifestText}
+          readOnly
+        /></details> : <textarea
           className="single-textarea android-simple-editor manifest-textarea"
           aria-label={english ? "AndroidManifest XML input" : "AndroidManifest XML 输入"}
           value={manifestText}
           onChange={(event) => { setManifestText(event.target.value); setSourceName("pasted AndroidManifest.xml"); setInfo(null); resetReview(); }}
           placeholder="<manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; ...>"
-        />
+        />}
         <div className="android-simple-primary-action">
           <AButton variant="filled" disabled={parsing || !manifestText.trim()} onClick={() => parseText()}>{t.parseManifest}</AButton>
           <AButton variant="outlined" disabled={parsing} onClick={() => inputRef.current?.click()}>{t.uploadManifest}</AButton>
@@ -282,7 +313,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
                 <AButton variant="outlined" disabled={!visibleEntries.length} onClick={() => downloadTextFile(`android-apk-entries-${Date.now()}.csv`, services.androidApkEntriesToCsv(visibleEntries), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
               </div>
               <div className="table-scroll android-simple-table-scroll">
-                <table className="data-table android-simple-entries-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Role" : "类型"}</th><th>{t.fileSize}</th><th>Signature</th><th>SHA256</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr className={selectedEntryName === entry.name ? "selected-row" : ""} key={entry.name} onClick={() => setSelectedEntryName(entry.name)}><td>{entry.name}</td><td>{entry.role}</td><td>{formatBytes(entry.size)}</td><td>{entry.signature}</td><td className="mono-cell">{entry.sha256.slice(0, 20)}...</td></tr>)}</tbody></table>
+                <table className="data-table android-simple-entries-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Role" : "类型"}</th><th>{t.fileSize}</th><th>Signature</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr className={selectedEntryName === entry.name ? "selected-row" : ""} key={entry.name} onClick={() => setSelectedEntryName(entry.name)}><td>{entry.name}</td><td>{entry.role}</td><td>{formatBytes(entry.size)}</td><td>{entry.signature}</td></tr>)}</tbody></table>
               </div>
             </div>
           )}
@@ -308,14 +339,13 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
 
       {view === "entries" && selectedEntry && (
         <section className="tool-panel wide-panel android-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected APK entry" : "当前 APK 条目"} actions={<AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedEntry.sha256)}>SHA256</AButton>} />
+          <ToolPanelHeader title={english ? "Selected APK entry" : "当前 APK 条目"} />
           <InfoTable rows={[
             [english ? "Name" : "名称", selectedEntry.name],
             [english ? "Directory" : "目录", selectedEntry.directory || "--"],
             [english ? "Role" : "类型", selectedEntry.role],
             [t.fileSize, formatBytes(selectedEntry.size)],
-            ["Signature", selectedEntry.signature],
-            ["SHA256", selectedEntry.sha256]
+            ["Signature", selectedEntry.signature]
           ]} />
           {selectedEntry.preview && <pre className="result-box android-simple-entry-preview">{selectedEntry.preview}</pre>}
         </section>
