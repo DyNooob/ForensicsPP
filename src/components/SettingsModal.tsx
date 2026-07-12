@@ -133,6 +133,7 @@ export function SettingsModal({
     closeAll: "全部关闭",
     noOpenTools: "当前没有打开的工具",
     activeTool: "正在使用",
+    relatedLinks: "相关链接",
     dependenciesTitle: "开源项目",
     dependenciesDesc: `Forensics++ 使用了以下 ${openSourceProjects.length} 个开源项目。`,
     openRepo: "打开仓库"
@@ -159,6 +160,7 @@ export function SettingsModal({
     closeAll: "Close all",
     noOpenTools: "No tools are currently open",
     activeTool: "Active",
+    relatedLinks: "Links",
     dependenciesTitle: "Open-source projects",
     dependenciesDesc: `Forensics++ uses the following ${openSourceProjects.length} open-source projects.`,
     openRepo: "Open Repository"
@@ -174,7 +176,7 @@ export function SettingsModal({
 
   return (
     <Modal
-      className="settings-modal"
+      className={`settings-modal settings-page-${page}`}
       open={open}
       centered
       width={920}
@@ -257,7 +259,7 @@ export function SettingsModal({
             <div className="settings-project">
               <div className="settings-project-hero">
                 <div className="settings-project-mark">F++</div>
-                <div><strong>Forensics++</strong><Typography.Text type="secondary">{t.aboutProjectDesc}</Typography.Text></div>
+                <div><strong>Forensics++</strong><Typography.Text type="secondary">ForensicsPP.com</Typography.Text></div>
                 <Button type="primary" href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{labels.openRepo}</Button>
               </div>
               <div className="settings-project-meta">
@@ -266,16 +268,10 @@ export function SettingsModal({
                 <div><span>{t.lastUpdated}</span><strong>{lastUpdated}</strong></div>
                 <div><span>{t.githubRepo}</span><a href={projectLinks.repo} target="_blank" rel="noreferrer">{projectRepoName}</a></div>
               </div>
-              <div className="settings-action-line">
+              <div className="settings-project-links">
+                <strong>{labels.relatedLinks}</strong>
                 <div>
-                  <strong>{t.usageGuide}</strong>
-                  <Typography.Text type="secondary">{t.usageGuideDesc}</Typography.Text>
-                </div>
-                <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
-              </div>
-              <div className="settings-friend-links">
-                <strong>{lang === "zh" ? "友情链接" : "Related sites"}</strong>
-                <div>
+                  <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
                   <a href="https://www.电子取证.com" target="_blank" rel="noreferrer">电子取证.com</a>
                   <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>
@@ -285,10 +281,6 @@ export function SettingsModal({
 
           {page === "storage" && (
             <div className="settings-storage-page">
-              <div className="settings-section-heading">
-                <strong>{labels.persistentTitle}</strong>
-                <Typography.Text type="secondary">{labels.persistentDesc}</Typography.Text>
-              </div>
               <div className="settings-storage-summary">
                 <div><span>{labels.siteUsage}</span><strong>{formatStorageMb(storage.usage)}</strong></div>
                 <div><span>{labels.localStorageUsage}</span><strong>{formatStorageMb(storage.local)}</strong></div>

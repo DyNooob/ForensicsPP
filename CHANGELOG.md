@@ -4,6 +4,18 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-13
+
+### Changed
+
+- Shortened the About page and made Local Data fit common desktop viewports without page scrolling.
+- Added a compact two-column list for tools retained in the current browser tab.
+
+### Fixed
+
+- Rebuilt EXIF output as a bounded table with predictable field width and wrapped values.
+- Added EXIF overflow coverage to the desktop layout audit.
+
 ## [0.7.0] - 2026-07-12
 
 ### Added
@@ -88,7 +100,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/DyNooob/ForensicsPP/releases/tag/v0.5.0

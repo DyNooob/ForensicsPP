@@ -285,6 +285,35 @@ function pngChunk(type, data) {
   return Buffer.concat([length, typeBytes, data, crc]);
 }
 
+function createAuditExif() {
+  const fields = [
+    [0x010e, `ForensicsPP EXIF layout fixture ${"A".repeat(360)}`],
+    [0x010f, "ForensicsPP"],
+    [0x0110, "Browser Workbench Test Image"],
+    [0x0131, "Forensics++ layout audit"],
+    [0x0132, "2026:07:13 00:00:00"]
+  ];
+  const ifdSize = 2 + fields.length * 12 + 4;
+  const encoded = fields.map(([, value]) => Buffer.from(`${value}\0`, "ascii"));
+  const tiff = Buffer.alloc(8 + ifdSize + encoded.reduce((total, value) => total + value.length, 0));
+  tiff.write("II", 0, "ascii");
+  tiff.writeUInt16LE(42, 2);
+  tiff.writeUInt32LE(8, 4);
+  tiff.writeUInt16LE(fields.length, 8);
+  let dataOffset = 8 + ifdSize;
+  fields.forEach(([tag], index) => {
+    const entryOffset = 10 + index * 12;
+    const value = encoded[index];
+    tiff.writeUInt16LE(tag, entryOffset);
+    tiff.writeUInt16LE(2, entryOffset + 2);
+    tiff.writeUInt32LE(value.length, entryOffset + 4);
+    tiff.writeUInt32LE(dataOffset, entryOffset + 8);
+    value.copy(tiff, dataOffset);
+    dataOffset += value.length;
+  });
+  return tiff;
+}
+
 function createAuditPng(width = 64, height = 48) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
@@ -309,6 +338,7 @@ function createAuditPng(width = 64, height = 48) {
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     pngChunk("IHDR", ihdr),
+    pngChunk("eXIf", createAuditExif()),
     pngChunk("IDAT", deflateSync(raw)),
     pngChunk("IEND", Buffer.alloc(0))
   ]);
@@ -1364,12 +1394,39 @@ async function auditLoadedFileTools(client) {
         );
       }
       const ready = await waitForRuntimeValue(client, `Boolean(document.querySelector(${JSON.stringify(state.readyClass)}))`, 15000);
+      if (state.tool === "image") {
+        await clickRuntimeButton(
+          client,
+          `[...document.querySelectorAll('.image-page-tabs button')].find((node) => ['结构', 'Structure'].includes((node.textContent || '').trim()))?.click();`,
+          "Boolean(document.querySelector('.image-exif-table tbody tr'))"
+        );
+      }
       await wait(500);
       const result = await client.send("Runtime.evaluate", {
         expression: visiblePanelAuditExpression(state.tool),
         returnByValue: true
       });
       const value = result.result.value;
+      if (state.tool === "image") {
+        const exifResult = await client.send("Runtime.evaluate", {
+          expression: `(() => {
+            const scroll = document.querySelector('.image-exif-scroll');
+            const table = document.querySelector('.image-exif-table');
+            const panel = document.querySelector('.image-simple-structure-panel');
+            return {
+              present: Boolean(scroll && table && panel),
+              rows: table?.querySelectorAll('tbody tr').length || 0,
+              pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              panelOverflow: panel ? panel.scrollWidth - panel.clientWidth : null,
+              tableOverflow: scroll ? scroll.scrollWidth - scroll.clientWidth : null
+            };
+          })()`,
+          returnByValue: true
+        });
+        const exif = exifResult.result.value;
+        value.ok = value.ok && exif.present && exif.rows >= 5 && exif.pageOverflow === 0 && exif.panelOverflow === 0;
+        value.exif = exif;
+      }
       const detail = await client.send("Runtime.evaluate", {
         expression: `(() => ({
           tableRows: document.querySelectorAll('tbody tr').length,
@@ -1382,6 +1439,12 @@ async function auditLoadedFileTools(client) {
         returnByValue: true
       });
       results.push({ ...value, id: `${state.tool}-file-loaded`, ready, detail: detail.result.value });
+      if (saveScreenshots && state.tool === "image") {
+        await client.send("Runtime.evaluate", {
+          expression: "document.querySelector('.image-exif-heading')?.scrollIntoView({ block: 'start' })"
+        });
+        await wait(200);
+      }
       if (saveScreenshots) await captureViewport(client, `${state.tool}-file-loaded.png`);
     }
   } finally {

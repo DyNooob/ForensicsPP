@@ -29,6 +29,32 @@ type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
 type ImageFinding = { level: string; title: string; detail: string };
 
+function formatExifValue(value: unknown) {
+  if (value == null) return "--";
+  if (typeof value === "string") return value || "--";
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+  if (typeof value !== "object") return String(value);
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, item: unknown) => {
+      if (typeof item === "bigint") return item.toString();
+      if (item instanceof Date) return Number.isNaN(item.getTime()) ? String(item) : item.toISOString();
+      if (ArrayBuffer.isView(item)) {
+        const bytes = new Uint8Array(item.buffer, item.byteOffset, item.byteLength);
+        const preview = Array.from(bytes.subarray(0, 256), (byte) => byte.toString(16).padStart(2, "0")).join(" ");
+        return bytes.byteLength > 256 ? `${preview} ... (${bytes.byteLength} bytes)` : preview;
+      }
+      if (item && typeof item === "object") {
+        if (seen.has(item)) return "[Circular]";
+        seen.add(item);
+      }
+      return item;
+    }, 2) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export type ImageToolServices = {
   analyzeImageBasics: ImageService;
   analyzeImageBytes: ImageService;
@@ -366,8 +392,17 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
           <PanelTitle title={t.imageStructure} />
           <InfoTable rows={imageInfo.structureRows} />
           {imageInfo.pngChunks.length > 0 && <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td></tr>)}</tbody></table></div>}
-          <PanelTitle title={t.exif} />
-          {Object.keys(imageInfo.exif).length ? <div className="kv-grid">{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => <React.Fragment key={key}><strong>{key}</strong><span>{String(value)}</span></React.Fragment>)}</div> : <div className="empty-state">{t.noExif}</div>}
+          <div className="panel-heading-row image-exif-heading">
+            <PanelTitle title={t.exif} />
+            {Object.keys(imageInfo.exif).length > 0 && <span className="status-pill">{Math.min(100, Object.keys(imageInfo.exif).length)}/{Object.keys(imageInfo.exif).length}</span>}
+          </div>
+          {Object.keys(imageInfo.exif).length ? <div className="image-exif-scroll">
+            <table className="image-exif-table">
+              <colgroup><col className="image-exif-field-col" /><col /></colgroup>
+              <thead><tr><th>{isEnglish ? "Field" : "字段"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead>
+              <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => <tr key={key}><th scope="row"><code>{key}</code></th><td><pre>{formatExifValue(value)}</pre></td></tr>)}</tbody>
+            </table>
+          </div> : <div className="empty-state">{t.noExif}</div>}
         </div>}
 
         {imagePage === "hidden" && <div className="tool-panel wide-panel image-simple-hidden-panel">
