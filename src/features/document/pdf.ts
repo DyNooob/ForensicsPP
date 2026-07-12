@@ -26,6 +26,16 @@ import type { DocumentAnalysis, DocumentFinding, DocumentExtract } from "./analy
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 function ensureModernUint8Array() {
+  const promiseConstructor = Promise as unknown as {
+    try?: (callback: (...args: unknown[]) => unknown, ...args: unknown[]) => Promise<unknown>;
+  };
+  promiseConstructor.try ??= (callback, ...args) => new Promise((resolve, reject) => {
+    try {
+      resolve(callback(...args));
+    } catch (error) {
+      reject(error);
+    }
+  });
   const prototype = Uint8Array.prototype as Uint8Array & { toHex?: (this: Uint8Array) => string; toBase64?: (this: Uint8Array) => string };
   prototype.toHex ??= function toHex(this: Uint8Array) {
     return Array.from(this, (value) => value.toString(16).padStart(2, "0")).join("");
