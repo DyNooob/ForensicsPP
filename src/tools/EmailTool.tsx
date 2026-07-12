@@ -27,6 +27,7 @@ import {
   emailSummaryValue,
   parseEmail,
 } from "../features/email/workbench";
+import { isMsgFile, parseMsg } from "../features/email/msg";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
@@ -59,6 +60,8 @@ function sanitizeEmailHtml(value: string) {
 
 export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const [input, setInput] = React.useState("");
+  const [sourceFormat, setSourceFormat] = React.useState<"eml" | "msg">("eml");
+  const [sourceBytes, setSourceBytes] = React.useState<Uint8Array | null>(null);
   const [parsed, setParsed] = React.useState<EmailAnalysis | null>(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -90,16 +93,35 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     }
     try {
       setError("");
-      const source = await file.text();
-      setInput(source);
-      await parseSource(source);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (isMsgFile(file, bytes)) {
+        setLoading(true);
+        const result = await parseMsg(bytes);
+        setInput(result.source);
+        setSourceBytes(bytes);
+        setSourceFormat("msg");
+        setParsed(result.analysis);
+        setError("");
+        setLoading(false);
+      } else {
+        const source = new TextDecoder().decode(bytes);
+        setInput(source);
+        setSourceBytes(null);
+        setSourceFormat("eml");
+        await parseSource(source);
+      }
     } catch (caught) {
+      setLoading(false);
+      setParsed(null);
+      setSourceBytes(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
 
   const clearEmail = () => {
     setInput("");
+    setSourceFormat("eml");
+    setSourceBytes(null);
     setParsed(null);
     setError("");
     setBodyMode("text");
@@ -108,8 +130,10 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const downloadRawEmail = () => {
-    if (!input.trim()) return;
-    downloadTextFile(`email-source-${Date.now()}.eml`, input, "message/rfc822;charset=utf-8");
+    if (sourceFormat === "msg" && sourceBytes) {
+      const bytes = sourceBytes.slice();
+      downloadBlob(`email-source-${Date.now()}.msg`, new Blob([bytes.buffer], { type: "application/vnd.ms-outlook" }));
+    } else if (input.trim()) downloadTextFile(`email-source-${Date.now()}.eml`, input, "message/rfc822;charset=utf-8");
   };
 
   const downloadAttachment = (attachment: EmailAnalysis["attachments"][number]) => {
@@ -154,7 +178,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           className="hidden-file-input"
           ref={inputRef}
           type="file"
-          accept=".eml,message/rfc822,text/plain"
+          accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
           onChange={(event) => void handleFile(event.target.files?.[0])}
         />
         <div
@@ -184,8 +208,8 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="outlined" disabled={!input.trim() || loading} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
-          <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>EML</AButton>
+          <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
+          <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim()} onClick={clearEmail}>{t.clear}</AButton>
         </div>
         {!parsed && (
@@ -311,7 +335,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
                 ) : <div className="empty-state">--</div>}
               </div>
               <div className="tool-panel wide-panel">
-                <PanelTitle title={english ? "Raw EML" : "原始 EML"} />
+                <PanelTitle title={sourceFormat === "msg" ? (english ? "MSG properties" : "MSG 属性") : (english ? "Raw EML" : "原始 EML")} />
                 <pre className="result-box email-raw-source">{input || "--"}</pre>
               </div>
             </div>

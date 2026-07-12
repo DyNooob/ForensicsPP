@@ -24,7 +24,7 @@ import initSqlJs from "sql.js";
 import type { Database, SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { CopyOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
-import { Popconfirm, Switch } from "antd";
+import { message, Popconfirm, Switch } from "antd";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type {
@@ -67,6 +67,7 @@ import {
   sqliteValueSize
 } from "../features/sqlite/analyzer";
 import { previewText } from "../utils/binary";
+import { applySqliteWal, type SqliteWalInfo } from "../features/sqlite/wal";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
 import { useStoredState } from "../utils/storage";
 
@@ -78,10 +79,6 @@ function sqliteColumnPreferredWidth(column: string) {
   if (/(name|title|slug|key|email|phone|host|domain|ip|path|file)/.test(normalized)) return 160;
   if (/(url|uri|link|summary|description|feature|spec|sql|json|xml|html|body|content|value|data|blob|text|message|remark|note)/.test(normalized)) return 260;
   return 180;
-}
-
-function sqliteColumnWidthClass(width: number) {
-  return `sqlite-col-${width}`;
 }
 
 function chooseSqliteDefaultTable(tables: SqliteTableInfo[], preferred = "") {
@@ -97,11 +94,14 @@ function chooseSqliteDefaultTable(tables: SqliteTableInfo[], preferred = "") {
 }
 
 export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
+  const [messageApi, messageContextHolder] = message.useMessage();
   const sqlRef = React.useRef<SqlJsStatic | null>(null);
   const dbRef = React.useRef<Database | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState(0);
+  const [walInfo, setWalInfo] = React.useState<SqliteWalInfo | null>(null);
+  const [hasShm, setHasShm] = React.useState(false);
   const [originalBytes, setOriginalBytes] = React.useState<Uint8Array | null>(null);
   const [tables, setTables] = React.useState<SqliteTableInfo[]>([]);
   const [objects, setObjects] = React.useState<SqliteObjectInfo[]>([]);
@@ -128,6 +128,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   const [queryHistory, setQueryHistory] = useStoredState<SqliteQueryHistoryEntry[]>("sqlite.queryHistory", []);
   const [dirty, setDirty] = React.useState(false);
   const [editingEnabled, setEditingEnabled] = React.useState(false);
+  const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [error, setError] = React.useState("");
   const [isSqliteDropActive, setSqliteDropActive] = React.useState(false);
   const [sqlitePage, setSqlitePage] = React.useState<"data" | "sql" | "schema" | "changes">("data");
@@ -146,6 +147,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   }, [objectFilter, objects]);
   const sqliteTemplates = React.useMemo(() => sqliteQueryTemplates(activeTable, columns), [activeTable, columns]);
   const hasSqliteDb = Boolean(fileName && dbRef.current);
+  const sqliteColumnKey = React.useCallback((column: string) => `${selectedTable}\u0000${column}`, [selectedTable]);
   const queryMutating = React.useMemo(() => sqliteSqlIsMutating(sql.trim()), [sql]);
 
   const refreshTables = React.useCallback((nextSelectedTable?: string) => {
@@ -246,11 +248,35 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
     setCellEditOpen(false);
   }, []);
 
+  const resizeSqliteColumn = React.useCallback((column: string, width: number) => {
+    setColumnWidths((current) => ({
+      ...current,
+      [sqliteColumnKey(column)]: Math.max(64, Math.min(560, Math.round(width)))
+    }));
+  }, [sqliteColumnKey]);
+
+  const beginSqliteColumnResize = React.useCallback((event: React.PointerEvent<HTMLSpanElement>, column: string, width: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const move = (pointerEvent: PointerEvent) => resizeSqliteColumn(column, width + pointerEvent.clientX - startX);
+    const finish = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      document.body.classList.remove("sqlite-column-resizing");
+    };
+    document.body.classList.add("sqlite-column-resizing");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish, { once: true });
+  }, [resizeSqliteColumn]);
+
   const clearSqliteWorkspace = React.useCallback(() => {
     dbRef.current?.close();
     dbRef.current = null;
     setFileName("");
     setFileSize(0);
+    setWalInfo(null);
+    setHasShm(false);
     setOriginalBytes(null);
     setTables([]);
     setObjects([]);
@@ -265,19 +291,31 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
     setQueryHistory([]);
     setDirty(false);
     setEditingEnabled(false);
+    setColumnWidths({});
     setError("");
     setSqliteDropActive(false);
     resetSqliteViewState();
   }, [resetSqliteViewState, setQueryHistory]);
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+  const handleFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
+    if (!databaseFile) { setError(english ? "Select the SQLite database together with its WAL/SHM files." : "请同时选择 SQLite 数据库主文件。"); return; }
+    const baseName = databaseFile.name.replace(/\.(?:db|sqlite|sqlite3)$/i, "");
+    const walFile = files.find((file) => /(?:-wal|\.wal)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-wal|\.wal)$/i.test(file.name));
+    const shmFile = files.find((file) => /(?:-shm|\.shm)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-shm|\.shm)$/i.test(file.name));
     setSqliteDropActive(false);
     try {
       const SQL = sqlRef.current ?? await initSqlJs({ locateFile: () => sqlWasmUrl });
       sqlRef.current = SQL;
       dbRef.current?.close();
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array(await databaseFile.arrayBuffer());
+      let nextWalInfo: SqliteWalInfo | null = null;
+      if (walFile) {
+        const merged = applySqliteWal(bytes, new Uint8Array(await walFile.arrayBuffer()));
+        bytes = merged.bytes;
+        nextWalInfo = merged.info;
+      }
       const sourceBytes = new Uint8Array(bytes.byteLength);
       sourceBytes.set(bytes);
       const db = new SQL.Database(bytes);
@@ -285,8 +323,10 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
       const nextTables = getSqliteTables(db);
       const nextObjects = getSqliteObjects(db);
       const nextPragmas = getSqlitePragmaRows(db);
-      setFileName(file.name);
-      setFileSize(file.size);
+      setFileName(databaseFile.name);
+      setFileSize(files.reduce((total, file) => total + file.size, 0));
+      setWalInfo(nextWalInfo);
+      setHasShm(Boolean(shmFile));
       setOriginalBytes(sourceBytes);
       setTables(nextTables);
       setObjects(nextObjects);
@@ -305,6 +345,8 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setFileName("");
       setFileSize(0);
+      setWalInfo(null);
+      setHasShm(false);
       setTables([]);
       setObjects([]);
       setPragmaRows([]);
@@ -582,7 +624,10 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   };
   const canGoNext = data.totalRows == null ? data.values.length >= limit : offset + limit < data.totalRows;
   const pageEnd = data.totalRows == null ? offset + data.values.length : Math.min(offset + limit, data.totalRows);
-  const sqliteColumnWidths = React.useMemo(() => data.columns.map((column) => sqliteColumnPreferredWidth(column)), [data.columns]);
+  const sqliteColumnWidths = React.useMemo(
+    () => data.columns.map((column) => columnWidths[sqliteColumnKey(column)] ?? sqliteColumnPreferredWidth(column)),
+    [columnWidths, data.columns, sqliteColumnKey]
+  );
   const sqliteQueryColumnWidths = React.useMemo(() => queryResult.columns.map((column) => sqliteColumnPreferredWidth(column)), [queryResult.columns]);
   const sqliteDataMinWidth = Math.max(760, 96 + sqliteColumnWidths.reduce((sum, width) => sum + width, 0));
   const sqliteQueryMinWidth = Math.max(720, sqliteQueryColumnWidths.reduce((sum, width) => sum + width, 0));
@@ -623,22 +668,23 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
     : "--";
   return (
     <div className={`tool-grid sqlite-browser-grid sqlite-browser-simple ${hasSqliteDb ? "has-sqlite" : "empty-sqlite"}`}>
+      {messageContextHolder}
       <div className="tool-panel wide-panel sqlite-source-panel">
         <PanelTitle title={english ? "SQLite database" : "SQLite 数据库"} />
-        <input ref={inputRef} type="file" accept=".db,.sqlite,.sqlite3" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" multiple onChange={(event) => void handleFiles(Array.from(event.target.files ?? []))} />
         <div className={`desktop-drop-zone ${isSqliteDropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(event) => { event.preventDefault(); setSqliteDropActive(true); }} onDragLeave={() => setSqliteDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}>
+          onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); void handleFiles(Array.from(event.dataTransfer.files ?? [])); }}>
           <strong>{fileName || t.dropFileTitle}</strong>
-          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}` : t.sqliteDropHint}</span>
+          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${english ? "checksum verified" : "校验通过"}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${english ? "SHM detected (not used for recovery)" : "已检测 SHM（恢复不使用）"}` : ""}` : (english ? "Select the database and optional -wal/-shm files together" : "可同时选择数据库及对应的 -wal/-shm 文件")}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
           <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={clearSqliteWorkspace}>{t.clear}</AButton>
-          {hasSqliteDb && <label className="sqlite-edit-mode"><span>{english ? "Edit mode" : "编辑模式"}</span><Switch checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></label>}
+          {hasSqliteDb && <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit" : "编辑"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>}
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
@@ -670,11 +716,22 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
             </div>
             <div className="table-scroll sqlite-data-scroll">
               {data.columns.length ? <table className="data-table sqlite-data-table sqlite-browse-table" style={{ "--sqlite-table-width": `${sqliteDataMinWidth}px` } as React.CSSProperties}>
-                <colgroup><col className="sqlite-action-col" />{data.columns.map((column, index) => <col className={`sqlite-value-col ${sqliteColumnWidthClass(sqliteColumnWidths[index])}`} key={column} />)}</colgroup>
-                <thead><tr><th className="sqlite-action-cell">{english ? "Actions" : "操作"}</th>{data.columns.map((column) => <th key={column} title={column}>{column}</th>)}</tr></thead>
+                <colgroup><col className="sqlite-action-col" />{data.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteColumnWidths[index] }} key={column} />)}</colgroup>
+                <thead><tr><th className="sqlite-action-cell">{english ? "Actions" : "操作"}</th>{data.columns.map((column, index) => <th key={column} title={column}><span className="sqlite-column-label">{column}</span><span className="sqlite-column-resizer" role="separator" aria-label={`${english ? "Resize" : "调整列宽"} ${column}`} aria-orientation="vertical" tabIndex={0} onPointerDown={(event) => beginSqliteColumnResize(event, column, sqliteColumnWidths[index])} onDoubleClick={(event) => { event.stopPropagation(); resizeSqliteColumn(column, sqliteColumnPreferredWidth(column)); }} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); resizeSqliteColumn(column, sqliteColumnWidths[index] + (event.key === "ArrowRight" ? 12 : -12) * (event.shiftKey ? 3 : 1)); }} /></th>)}</tr></thead>
                 <tbody>{data.values.map((row, rowIndex) => <tr key={`${data.rowids[rowIndex] ?? rowIndex}`}>
                   <td className="sqlite-action-cell"><div className="button-row compact-buttons sqlite-row-action-buttons">{editingEnabled && data.editable && <AButton variant="text" icon={<EditOutlined aria-hidden="true" />} aria-label={sqliteRowActions.edit} title={sqliteRowActions.edit} onClick={() => startEdit(rowIndex)} />}<AButton variant="text" icon={<CopyOutlined aria-hidden="true" />} aria-label={sqliteRowActions.copy} title={sqliteRowActions.copy} onClick={() => copySqliteRow(data, row)} />{editingEnabled && data.editable && <Popconfirm title={`${t.sqliteDeleteRow}: rowid ${data.rowids[rowIndex] ?? rowIndex + 1}?`} okText={t.sqliteDeleteRow} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => deleteRow(rowIndex)}><AButton variant="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={sqliteRowActions.delete} title={sqliteRowActions.delete} /></Popconfirm>}</div></td>
-                  {data.columns.map((column, columnIndex) => { const value = row[columnIndex] ?? null; const active = selectedCell?.rowIndex === rowIndex && selectedCell.columnIndex === columnIndex; return <td className={active ? "active-cell" : ""} key={column} title={displaySqliteValue(value)} onClick={() => setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value })} onDoubleClick={() => { setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value }); if (editingEnabled && data.editable && typeof data.rowids[rowIndex] === "number") setCellEditOpen(true); }}>{displaySqliteValue(value)}</td>; })}
+                  {data.columns.map((column, columnIndex) => {
+                    const value = row[columnIndex] ?? null;
+                    const active = selectedCell?.rowIndex === rowIndex && selectedCell.columnIndex === columnIndex;
+                    const inlineEditing = active && cellEditOpen;
+                    return <td className={`${active ? "active-cell" : ""} ${inlineEditing ? "editing-cell" : ""}`} key={column} title={inlineEditing ? undefined : displaySqliteValue(value)} onClick={() => { if (!inlineEditing) setCellEditOpen(false); setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value }); }} onDoubleClick={() => {
+                      setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value });
+                      if (!editingEnabled) { messageApi.info(english ? "Enable edit mode first" : "请先开启编辑模式"); return; }
+                      if (!data.editable || typeof data.rowids[rowIndex] !== "number") { messageApi.warning(english ? "This table or view cannot be edited directly" : "当前表或视图不支持直接编辑"); return; }
+                      setSelectedCellDraft(editableSqliteValue(value));
+                      setCellEditOpen(true);
+                    }}>{inlineEditing ? <input autoFocus className="sqlite-inline-cell-editor" aria-label={`${english ? "Edit" : "编辑"} ${column}`} value={selectedCellDraft} onChange={(event) => setSelectedCellDraft(event.currentTarget.value)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); saveSelectedCell(); } else if (event.key === "Escape") { event.preventDefault(); setCellEditOpen(false); setSelectedCellDraft(editableSqliteValue(value)); } }} /> : displaySqliteValue(value)}</td>;
+                  })}
                 </tr>)}</tbody>
               </table> : <div className="empty-state">--</div>}
             </div>
@@ -684,8 +741,8 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
           {selectedCell && <div className="tool-panel sqlite-simple-cell-panel">
             <div className="panel-heading-row"><PanelTitle title={`${selectedCell.column}`} /><span className="status-pill">{selectedCell.rowid == null ? `row ${selectedCell.rowIndex + 1}` : `rowid ${selectedCell.rowid}`}</span></div>
             <InfoTable rows={[[english ? "Type" : "类型", sqliteValueKind(selectedCell.value)], [t.fileSize, formatBytes(sqliteValueSize(selectedCell.value))], [english ? "Value" : "值", selectedCellDisplay || "--"]]} />
-            <textarea aria-label={english ? "Selected cell value" : "选中单元格值"} className="single-textarea sqlite-cell-value" value={cellEditOpen ? selectedCellDraft : selectedCellTextPreview} readOnly={!cellEditOpen} onChange={(event) => setSelectedCellDraft(event.currentTarget.value)} />
-            <div className="action-row"><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedCellDisplay)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{english ? "Copy row JSON" : "复制行 JSON"}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton>{editingEnabled && data.editable && typeof selectedCell.rowid === "number" && !cellEditOpen && <AButton variant="filled" onClick={() => setCellEditOpen(true)}>{english ? "Edit cell" : "编辑单元格"}</AButton>}{cellEditOpen && <><AButton variant="filled" onClick={saveSelectedCell}>{t.saveChanges}</AButton><AButton variant="text" onClick={() => { setCellEditOpen(false); setSelectedCellDraft(editableSqliteValue(selectedCell.value)); }}>{t.cancelEdit}</AButton></>}</div>
+            <textarea aria-label={english ? "Selected cell value" : "选中单元格值"} className="single-textarea sqlite-cell-value" value={selectedCellTextPreview} readOnly />
+            <div className="action-row"><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedCellDisplay)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{english ? "Copy row JSON" : "复制行 JSON"}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton></div>
           </div>}
 
           {editing && <div className="tool-panel sqlite-row-editor-panel"><PanelTitle title={`${t.editRow}: rowid ${editing.rowid}`} /><div className="sqlite-editor-fields">{data.columns.map((column) => <label key={column}>{column}<textarea className="single-textarea compact-textarea" value={editing.values[column] ?? ""} onChange={(event) => setEditing({ ...editing, values: { ...editing.values, [column]: event.currentTarget.value } })} /></label>)}</div><div className="action-row"><AButton variant="filled" onClick={saveEdit}>{t.saveChanges}</AButton><AButton variant="text" onClick={() => setEditing(null)}>{t.cancelEdit}</AButton></div></div>}
@@ -700,7 +757,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
           </details>
           <textarea className="single-textarea sqlite-query-input" value={sql} onChange={(event) => setSql(event.currentTarget.value)} />
           <div className="panel-heading-row"><PanelTitle title={t.sqliteQueryResult} /><div className="button-row compact-buttons"><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => copyDataCsv(queryResult)}>{t.copyCsv}</AButton><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => downloadDataCsv(queryResult, "sqlite-query")}>{t.exportCsv}</AButton></div></div>
-          <div className="table-scroll sqlite-query-scroll">{queryResult.columns.length ? <table className="data-table sqlite-data-table sqlite-query-table" style={{ "--sqlite-table-width": `${sqliteQueryMinWidth}px` } as React.CSSProperties}><colgroup>{queryResult.columns.map((column, index) => <col className={`sqlite-value-col ${sqliteColumnWidthClass(sqliteQueryColumnWidths[index])}`} key={column} />)}</colgroup><thead><tr>{queryResult.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{queryResult.values.map((row, rowIndex) => <tr key={rowIndex}>{queryResult.columns.map((column, columnIndex) => <td key={column}>{displaySqliteValue(row[columnIndex] ?? null)}</td>)}</tr>)}</tbody></table> : <div className="empty-state">{queryResult.message || "--"}</div>}</div>
+          <div className="table-scroll sqlite-query-scroll">{queryResult.columns.length ? <table className="data-table sqlite-data-table sqlite-query-table" style={{ "--sqlite-table-width": `${sqliteQueryMinWidth}px` } as React.CSSProperties}><colgroup>{queryResult.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteQueryColumnWidths[index] }} key={column} />)}</colgroup><thead><tr>{queryResult.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{queryResult.values.map((row, rowIndex) => <tr key={rowIndex}>{queryResult.columns.map((column, columnIndex) => <td key={column}>{displaySqliteValue(row[columnIndex] ?? null)}</td>)}</tr>)}</tbody></table> : <div className="empty-state">{queryResult.message || "--"}</div>}</div>
         </div>}
 
         {sqlitePage === "schema" && <div className="tool-panel wide-panel sqlite-simple-schema-panel">

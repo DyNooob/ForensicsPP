@@ -58,12 +58,18 @@ describe("Office and PDF container detection", () => {
     const canvas = await import("@napi-rs/canvas");
     Object.assign(globalThis, { DOMMatrix: canvas.DOMMatrix, ImageData: canvas.ImageData, Path2D: canvas.Path2D });
     const { analyzePdf } = await import("../src/features/document/pdf");
-    const pdfjs = await import("pdfjs-dist");
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL("../node_modules/pdfjs-dist/build/pdf.worker.mjs", import.meta.url).href;
-    const result = await analyzePdf(minimalPdf(), "fixture.pdf");
-    expect(result.pages).toBe(1);
-    expect(result.revisions).toBe(1);
-    expect(result.metadata).toContainEqual(["Title", "Fixture PDF"]);
+    const promiseConstructor = Promise as unknown as { try?: unknown };
+    const nativePromiseTry = promiseConstructor.try;
+    delete promiseConstructor.try;
+    try {
+      const result = await analyzePdf(minimalPdf(), "fixture.pdf");
+      expect(result.pages).toBe(1);
+      expect(result.revisions).toBe(1);
+      expect(result.metadata).toContainEqual(["Title", "Fixture PDF"]);
+    } finally {
+      if (nativePromiseTry) promiseConstructor.try = nativePromiseTry;
+      else delete promiseConstructor.try;
+    }
   });
 });
 

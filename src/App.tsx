@@ -20,189 +20,18 @@
  */
 
 import React from "react";
-import { ConfigProvider, Spin, theme as antdTheme } from "antd";
+import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CodeOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
-import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField, ToolWorkspaceFrame } from "./components/ui";
+import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField } from "./components/ui";
 import { GithubIconButton } from "./components/GithubIconButton";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsModal } from "./components/SettingsModal";
-import { analyzeEntropy, entropyBlockKey, entropyBlocksToCsv, entropyRangesToCsv } from "./features/entropy/analyzer";
-import { androidApkEntriesToCsv, androidComponentKey, androidComponentsToCsv, androidManifestSecurityRows, androidPermissionsToCsv, componentExportedEffective, decodeAndroidManifestBytes, inspectAndroidArchive, inspectAndroidBinaryXml, parseAndroidManifest } from "./features/android/analyzer";
-import { annotateBatchHashMatches, parseExpectedHashSet } from "./features/hash/matching";
-import { extractJwtTokens, inspectJwtToken, jwtCryptoAlgorithm, signJwtHS256, verifyJwtAsymmetricSignature } from "./features/jwt/analyzer";
-import { mysqlNativePassword, passwordRowsToCsv, randomSalt, verifyPasswordCandidates } from "./features/password/analyzer";
-import { classifyQrPayload, parseQrPayloadDetails, qrGeometryRows, qrPointRow } from "./features/qr/analyzer";
-import { defaultYaraSample, runYaraScan, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates } from "./features/yara/analyzer";
-import { extractPrintableStrings, stringRowKey, stringsToCsv } from "./features/strings/analyzer";
-import { analyzeWindowsArtifact } from "./features/windows/analyzer";
-import { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } from "./features/file/analyzer";
-import { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "./features/image/analyzer";
-import { analyzePngEvidence } from "./features/png/analyzer";
-import { base64DecodeLoose, transformText } from "./features/codec/analyzer";
-import { affine, atbash, baconDecode, baconEncode, caesar, morseDecode, morseEncode, railFence, railFenceDecode, rot47, vigenere } from "./features/crypto/algorithms";
-import { parseTimestampCandidates } from "./features/timestamp/analyzer";
-import { analyzeIocs, iocRisk } from "./features/ioc/analyzer";
+import { ToolHost } from "./components/ToolHost";
 import { getToolTitle as resolveToolTitle, legalVersion, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
 import type { ToolId } from "./config/app";
 import { copy } from "./i18n";
-import { base64UrlDecode } from "./utils/base64";
 import { clearForensicsStorage, useStoredState } from "./utils/storage";
 import type { Lang, ThemeMode, AppCommand } from "./models";
-
-const CyberChefTool = React.lazy(() => import("./tools/CyberChefTool").then((module) => ({ default: module.CyberChefTool })));
-const BaseConvertTool = React.lazy(() => import("./tools/BaseConvertTool").then((module) => ({ default: module.BaseConvertTool })));
-const UuidTool = React.lazy(() => import("./tools/UuidTool").then((module) => ({ default: module.UuidTool })));
-const RegexTool = React.lazy(() => import("./tools/RegexTool").then((module) => ({ default: module.RegexTool })));
-const JsonTool = React.lazy(() => import("./tools/JsonTool").then((module) => ({ default: module.JsonTool })));
-const SqlTool = React.lazy(() => import("./tools/SqlTool").then((module) => ({ default: module.SqlTool })));
-const HomeTool = React.lazy(() => import("./tools/HomeTool").then((module) => ({ default: module.HomeTool })));
-const SqliteTool = React.lazy(() => import("./tools/SqliteTool").then((module) => ({ default: module.SqliteTool })));
-const BrowserArtifactTool = React.lazy(() => import("./tools/BrowserArtifactTool").then((module) => ({ default: module.BrowserArtifactTool })));
-const EvtxTool = React.lazy(() => import("./tools/EvtxTool").then((module) => ({ default: module.EvtxTool })));
-const DocumentForensicsTool = React.lazy(() => import("./tools/DocumentForensicsTool").then((module) => ({ default: module.DocumentForensicsTool })));
-const IocTool = React.lazy(() => import("./tools/IocTool").then((module) => ({ default: module.IocTool })));
-const EmailTool = React.lazy(() => import("./tools/EmailTool").then((module) => ({ default: module.EmailTool })));
-const TimestampTool = React.lazy(() => import("./tools/TimestampTool").then((module) => ({ default: module.TimestampTool })));
-const TimelineTool = React.lazy(() => import("./tools/TimelineTool").then((module) => ({ default: module.TimelineTool })));
-const PcapTool = React.lazy(() => import("./tools/PcapSimpleTool").then((module) => ({ default: module.PcapTool })));
-const ImageTool = React.lazy(() => import("./tools/ImageTool").then((module) => ({ default: module.ImageTool })));
-const CryptoTool = React.lazy(() => import("./tools/CryptoTool").then((module) => ({ default: module.CryptoTool })));
-const CodecTool = React.lazy(() => import("./tools/CodecTool").then((module) => ({ default: module.CodecTool })));
-const HashTool = React.lazy(() => import("./tools/HashTool").then((module) => ({ default: module.HashTool })));
-const JwtTool = React.lazy(() => import("./tools/JwtTool").then((module) => ({ default: module.JwtTool })));
-const PasswordTool = React.lazy(() => import("./tools/PasswordTool").then((module) => ({ default: module.PasswordTool })));
-const AndroidManifestTool = React.lazy(() => import("./tools/AndroidManifestTool").then((module) => ({ default: module.AndroidManifestTool })));
-const QrTool = React.lazy(() => import("./tools/QrTool").then((module) => ({ default: module.QrTool })));
-const YaraTool = React.lazy(() => import("./tools/YaraTool").then((module) => ({ default: module.YaraTool })));
-const StringsTool = React.lazy(() => import("./tools/StringsTool").then((module) => ({ default: module.StringsTool })));
-const EntropyTool = React.lazy(() => import("./tools/EntropyTool").then((module) => ({ default: module.EntropyTool })));
-const FileIdTool = React.lazy(() => import("./tools/FileIdTool").then((module) => ({ default: module.FileIdTool })));
-const BinaryTool = React.lazy(() => import("./tools/BinaryTool").then((module) => ({ default: module.BinaryTool })));
-const HttpTool = React.lazy(() => import("./tools/HttpTool").then((module) => ({ default: module.HttpTool })));
-const WindowsArtifactTool = React.lazy(() => import("./tools/WindowsArtifactTool").then((module) => ({ default: module.WindowsArtifactTool })));
-const PngTool = React.lazy(() => import("./tools/PngTool").then((module) => ({ default: module.PngTool })));
-const UrlTool = React.lazy(() => import("./tools/UrlTool").then((module) => ({ default: module.UrlTool })));
-const ArchiveTool = React.lazy(() => import("./tools/ArchiveTool").then((module) => ({ default: module.ArchiveTool })));
-
-const pngToolServices = {
-  analyzePngEvidence
-};
-
-const windowsArtifactToolServices = {
-  analyzeWindowsArtifact
-};
-
-const binaryToolServices = {
-  analyzeFileBytes,
-  binaryHexDumpRows,
-  parseByteOffset
-};
-
-const stringsToolServices = {
-  extractPrintableStrings,
-  stringRowKey,
-  stringsToCsv
-};
-
-const entropyToolServices = {
-  analyzeEntropy,
-  entropyBlockKey,
-  entropyBlocksToCsv,
-  entropyRangesToCsv
-};
-
-function getYaraToolServices() {
-  return {
-  defaultYaraSample,
-  runYaraScan,
-  yaraBatchRowsToCsv,
-  yaraHitsToCsv,
-  yaraRuleTemplates
-  };
-}
-
-const qrToolServices = {
-  classifyQrPayload,
-  detectImageFormat,
-  parseQrPayloadDetails,
-  qrGeometryRows,
-  qrPointRow
-};
-
-const androidManifestToolServices = {
-  androidComponentKey,
-  androidManifestSecurityRows,
-  componentExportedEffective,
-  parseAndroidManifest,
-  inspectAndroidArchive,
-  inspectAndroidBinaryXml,
-  decodeAndroidManifestBytes,
-  androidComponentsToCsv,
-  androidPermissionsToCsv,
-  androidApkEntriesToCsv
-};
-
-const passwordToolServices = {
-  mysqlNativePassword,
-  randomSalt,
-  verifyPasswordCandidates,
-  passwordRowsToCsv
-};
-
-const jwtToolServices = {
-  inspectJwtToken,
-  extractJwtTokens,
-  jwtCryptoAlgorithm,
-  verifyJwtAsymmetricSignature,
-  signJwtHS256
-};
-
-const hashToolServices = {
-  annotateBatchHashMatches,
-  parseExpectedHashSet,
-};
-
-const codecToolServices = {
-  transformText
-};
-
-const cryptoToolServices = {
-  caesar,
-  atbash,
-  rot47,
-  vigenere,
-  affine,
-  morseEncode,
-  morseDecode,
-  baconEncode,
-  baconDecode,
-  railFence,
-  railFenceDecode
-};
-
-const imageToolServices = {
-  analyzeImageBasics,
-  analyzeImageBytes,
-  analyzeUndecodedImageBytes,
-  buildAutoRevealPreviews,
-  buildHiddenPayloadPreviews,
-  buildImageDecodedSignals,
-  buildImageRepairCandidates,
-  bytesToDataUrl,
-  createChannelPreviews,
-  createNormalizedImageDataUrl,
-  detectImageFormat,
-  emptyImageChannels,
-  guessImageDimensions,
-  imageEvidenceReportText,
-  imageExtensionForMime,
-  imageMimeForFormat,
-  imagePlaceholderDataUrl,
-  loadBrowserImage,
-  revokeImageObjectUrls,
-  tryRebuildPngContainer
-};
-
 
 function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
   return resolveToolTitle(tool, lang, copy[lang]);
@@ -283,6 +112,7 @@ export function App() {
   const [query, setQuery] = useStoredState("app.query", "");
   const [themeMode, setThemeMode] = useStoredState<ThemeMode>("app.themeMode", "light");
   const [themeColor, setThemeColor] = useStoredState("app.themeColor", themePresets[0].hex);
+  const [themeDefaultMigrated, setThemeDefaultMigrated] = useStoredState("app.themeDefaultV070", false);
   const [acceptedLegalVersion, setAcceptedLegalVersion] = useStoredState("legal.acceptedVersion", "");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [cacheClearArmed, setCacheClearArmed] = React.useState(false);
@@ -311,6 +141,11 @@ export function App() {
     [appliedTheme, resolvedThemeColor]
   );
   const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? storedActiveTool : "home");
+  const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
+  const retainedTools = mountedTools.includes(activeTool) ? mountedTools : [...mountedTools, activeTool];
+  React.useEffect(() => {
+    setMountedTools((current) => current.includes(activeTool) ? current : [...current, activeTool]);
+  }, [activeTool]);
   const rememberToolUse = (tool: ToolId) => {
     if (tool === "home") return;
     setRecentTools((items) => [tool, ...items.filter((item) => item !== tool && tools.some((known) => known.id === item))].slice(0, maxRecentTools));
@@ -321,6 +156,15 @@ export function App() {
     rememberToolUse(tool);
     writeToolHash(tool, options?.replaceHash);
     if (isNarrowShell) setSidebarCollapsed(true);
+  };
+  const closeMountedTool = (tool: ToolId) => {
+    if (tool === "home") return;
+    if (activeTool === tool) setActiveTool("home");
+    setMountedTools((current) => current.filter((item) => item !== tool));
+  };
+  const closeAllMountedTools = () => {
+    if (activeTool !== "home") setActiveTool("home");
+    setMountedTools((current) => current.filter((tool) => tool === "home"));
   };
   const active = tools.find((tool) => tool.id === activeTool) ?? tools[0];
   const favoriteIds = new Set(favoriteTools.filter((id) => id !== "home" && tools.some((tool) => tool.id === id)));
@@ -361,6 +205,12 @@ export function App() {
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, []);
+
+  React.useEffect(() => {
+    if (themeDefaultMigrated) return;
+    if (themeColor.toUpperCase() === "#245F73") setThemeColor(themePresets[0].hex);
+    setThemeDefaultMigrated(true);
+  }, [setThemeColor, setThemeDefaultMigrated, themeColor, themeDefaultMigrated]);
 
   React.useEffect(() => {
     if (themeColor !== resolvedThemeColor) {
@@ -688,8 +538,7 @@ export function App() {
     <div
       className={[
         "workbench-shell",
-        acceptedLegalVersion !== legalVersion ? "consent-active" : "",
-        settingsOpen || commandOpen ? "overlay-open" : "",
+        settingsOpen || commandOpen || acceptedLegalVersion !== legalVersion ? "overlay-open" : "",
         sidebarCollapsed ? "sidebar-collapsed" : "",
         isNarrowShell ? "shell-narrow" : ""
       ].filter(Boolean).join(" ")}
@@ -853,83 +702,30 @@ export function App() {
         </header>
 
         <section className={detailsExpanded || activeTool === "home" ? "tool-body" : "tool-body compact-results"}>
-          {activeTool === "home" ? (
-            <HomeTool
-              t={t}
-              lang={lang}
-              recentTools={recentTools}
-              setActiveTool={setActiveTool}
-            />
-          ) : (
-            <ToolWorkspaceFrame>
-              <React.Suspense fallback={(
-                <div className="tool-loading-state" role="status" aria-live="polite">
-                  <Spin size="small" />
-                  <span>{t.loadingTool}</span>
-                </div>
-              )}>
-              {activeTool === "cyberchef" && <CyberChefTool t={t} />}
-              {activeTool === "image" && <ImageTool t={t} services={imageToolServices} />}
-              {activeTool === "codec" && <CodecTool t={t} services={codecToolServices} />}
-              {activeTool === "crypto" && <CryptoTool t={t} services={cryptoToolServices} />}
-              {activeTool === "jwt" && <JwtTool t={t} services={jwtToolServices} />}
-              {activeTool === "password" && <PasswordTool t={t} services={passwordToolServices} />}
-              {activeTool === "sql" && <SqlTool t={t} />}
-              {activeTool === "sqlite" && <SqliteTool t={t} />}
-              {activeTool === "browserartifacts" && <BrowserArtifactTool t={t} />}
-              {activeTool === "evtx" && <EvtxTool t={t} />}
-              {activeTool === "documentforensics" && <DocumentForensicsTool t={t} />}
-              {activeTool === "android" && <AndroidManifestTool t={t} services={androidManifestToolServices} />}
-              {activeTool === "ioc" && <IocTool t={t} />}
-              {activeTool === "email" && <EmailTool t={t} />}
-              {activeTool === "urltool" && <UrlTool t={t} />}
-              {activeTool === "http" && <HttpTool t={t} />}
-              {activeTool === "qr" && <QrTool t={t} services={qrToolServices} />}
-              {activeTool === "fileid" && <FileIdTool t={t} />}
-              {activeTool === "png" && <PngTool t={t} services={pngToolServices} />}
-              {activeTool === "archive" && <ArchiveTool t={t} />}
-              {activeTool === "binary" && <BinaryTool t={t} services={binaryToolServices} />}
-              {activeTool === "windows" && <WindowsArtifactTool t={t} services={windowsArtifactToolServices} />}
-              {activeTool === "strings" && <StringsTool t={t} services={stringsToolServices} />}
-              {activeTool === "entropy" && <EntropyTool t={t} services={entropyToolServices} />}
-              {activeTool === "hash" && <HashTool t={t} services={hashToolServices} />}
-              {activeTool === "timestamp" && <TimestampTool t={t} />}
-              {activeTool === "timeline" && <TimelineTool t={t} />}
-              {activeTool === "baseconvert" && <BaseConvertTool t={t} />}
-              {activeTool === "uuid" && <UuidTool t={t} />}
-              {activeTool === "json" && (
-                <JsonTool
-                  t={t}
-                  analyzeIocs={analyzeIocs}
-                  parseTimestampCandidates={parseTimestampCandidates}
-                  decodeBase64Url={base64UrlDecode}
-                  decodeBase64Loose={base64DecodeLoose}
-                />
-              )}
-              {activeTool === "regex" && <RegexTool t={t} classifyIocRisk={iocRisk} />}
-              {activeTool === "pcap" && <PcapTool t={t} />}
-              {activeTool === "yara" && <YaraTool t={t} services={getYaraToolServices()} />}
-              </React.Suspense>
-            </ToolWorkspaceFrame>
-          )}
-          {acceptedLegalVersion !== legalVersion && activeTool === "home" && (
-            <div className="consent-inline-panel" role="status" aria-live="polite" aria-labelledby="legal-consent-title">
-              <div className="consent-inline-copy">
-                <strong id="legal-consent-title">{t.legalNoticeTitle}</strong>
-                <span>{t.legalNoticeBody}</span>
-              </div>
-              <div className="consent-actions">
-                <AButton href="/legal.html" target="_blank" variant="outlined">
-                  {t.viewFullTerms}
-                </AButton>
-                <AButton variant="filled" onClick={() => setAcceptedLegalVersion(legalVersion)}>
-                  {t.acceptTerms}
-                </AButton>
-              </div>
-            </div>
-          )}
+          {retainedTools.map((mountedTool) => (
+            <ToolHost key={mountedTool} toolId={mountedTool} active={mountedTool === activeTool} t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} />
+          ))}
         </section>
       </main>
+
+      <Modal
+        className="legal-consent-modal"
+        open={acceptedLegalVersion !== legalVersion}
+        centered
+        width={520}
+        title={t.legalNoticeTitle}
+        closable={false}
+        maskClosable={false}
+        keyboard={false}
+        footer={(
+          <div className="legal-consent-actions">
+            <AButton href="/legal.html" target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
+            <AButton variant="filled" onClick={() => setAcceptedLegalVersion(legalVersion)}>{t.acceptTerms}</AButton>
+          </div>
+        )}
+      >
+        <p className="legal-consent-body">{t.legalNoticeBody}</p>
+      </Modal>
 
       <SettingsModal
         open={settingsOpen}
@@ -943,6 +739,15 @@ export function App() {
         onThemeColorChange={applyThemeColor}
         onResetAppearance={resetThemeAppearance}
         onClearWorkspace={clearLocalWorkspace}
+        openTools={retainedTools
+          .filter((tool) => tool !== "home")
+          .map((tool) => ({
+            id: tool,
+            title: getToolTitle(tools.find((item) => item.id === tool) ?? tools[0], lang),
+            active: tool === activeTool
+          }))}
+        onCloseTool={closeMountedTool}
+        onCloseAllTools={closeAllMountedTools}
       />
       {commandOpen && (
         <CommandPalette

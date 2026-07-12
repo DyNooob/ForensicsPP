@@ -4,6 +4,33 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-12
+
+### Added
+
+- Registry Hive and Apple Plist browsers.
+- Outlook MSG parsing in the email tool.
+- SQLite WAL / SHM loading.
+- Storage usage and quota display in Settings.
+- Current-session tool management for releasing open files and results.
+
+### Changed
+
+- Tool pages remain mounted after they are opened, preserving state while navigating.
+- SQLite columns can be resized and cells can be edited in place.
+- Default accent color changed to `#4457A6`; four additional presets were added.
+- Terms confirmation is a blocking modal again.
+- README, Settings copy, and release notes were shortened.
+- Persistent browser storage is now shown separately from current-tab memory.
+- Tool loading and rendering were moved out of `App.tsx` into a dedicated host.
+
+### Fixed
+
+- PDF.js compatibility with Node.js 22 environments without `Promise.try`.
+- Ant Design Switch styling inside tool panels.
+- SQLite WAL recovery now verifies header and frame checksums and ignores corrupt tail frames.
+- Generic OLE files are no longer accepted as Outlook MSG, and Registry Hive headers receive stricter validation.
+
 ## [0.6.0] - 2026-07-12
 
 ### Added
@@ -61,6 +88,7 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/DyNooob/ForensicsPP/releases/tag/v0.5.0

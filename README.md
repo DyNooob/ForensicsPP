@@ -4,111 +4,60 @@
   </a>
 
   <h1>Forensics++ Workbench</h1>
-
-  <p><strong>开源、浏览器本地运行的电子数据取证与证据初检工具站</strong></p>
-  <p>Open-source browser-local DFIR tools for evidence triage.</p>
+  <p>浏览器端电子数据取证工具箱</p>
 
   <p>
-    <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-245F73?style=flat-square" /></a>
-    <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-0F7B6C?style=flat-square" /></a>
-    <img alt="Version 0.6.0" src="https://img.shields.io/badge/Version-0.6.0-4457A6?style=flat-square" />
+    <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
+    <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
+    <img alt="Version 0.7.0" src="https://img.shields.io/badge/Version-0.7.0-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
-    <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Source verification" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
-    <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/pages.yml"><img alt="Pages deployment" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/pages.yml/badge.svg" /></a>
+    <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Verify source" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
   </p>
 
   <p>
     <a href="https://www.forensicspp.com/">在线使用</a>
-    · <a href="#快速开始">快速开始</a>
-    · <a href="#工具能力">工具能力</a>
-    · <a href="#部署">部署</a>
-    · <a href="./CONTRIBUTING.md">参与贡献</a>
+    · <a href="#本地运行">本地运行</a>
+    · <a href="#生产构建">生产构建</a>
+    · <a href="./CONTRIBUTING.md">参与开发</a>
   </p>
 </div>
 
-> [!IMPORTANT]
-> Forensics++ `v0.6.0` 的工具输出用于辅助分析和快速初检，不应替代原始检材、标准取证流程或经过验证的专业软件。
+## 这是什么
 
-## 项目概览
+Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、日志等工具直接在浏览器中运行，不需要 Forensics++ 服务器。
 
-Forensics++ / ForensicsPP 是一个静态 React 应用。文件、文本和数据库由浏览器端代码处理，正常使用不需要 Forensics++ 后端、账号、API Key 或服务器数据库。
+仓库包含 React / TypeScript 源码、Worker、构建脚本、测试和页面资源。构建结果在 `dist/`，不提交到 `main`。
 
-本仓库从 `v0.5` 起保存**完整源码**。早期版本直接提交构建后的 HTML、CSS 和 JavaScript；现在 `main` 分支保存 TypeScript、React 组件、构建脚本、静态资源和文档，GitHub Actions 在每次发布时自动生成并部署 `dist/`。
+## 工具
 
-| 原则 | 实现方式 |
+| 类别 | 工具 |
 | --- | --- |
-| Browser Local | 核心工具在浏览器中读取和处理输入，不调用 Forensics++ 后端。 |
-| Explicit Actions | 选择输入、执行分析、复制或导出均由用户明确触发。 |
-| Evidence-Oriented | 结果强调可复核的字段、偏移、哈希、时间和结构信息。 |
-| Fully Open Source | 前端源码、构建配置、静态页面、Worker 和依赖声明均在本仓库中。 |
+| 文件 | 文件哈希、文件头、字符串、熵、PE / ELF / Mach-O、YARA |
+| 图片与压缩包 | 图片工作台、PNG、二维码、ZIP / APK / JAR / OOXML |
+| 数据库与结构化数据 | SQLite（含 WAL / SHM）、SQL 转储、JSON、Plist、浏览器数据 |
+| 邮件与网络 | EML / MSG、HTTP、URL、IOC、PCAP / PCAPNG |
+| 系统记录 | Registry Hive、EVTX、LNK、Prefetch、REG、AndroidManifest |
+| 文档与时间 | PDF / OOXML / OLE、时间戳转换、时间线 |
+| 转换 | CyberChef、编码解码、进制、UUID、JWT、常见密码哈希 |
 
-## 工具能力
+应用首页列出全部 36 个入口。
 
-<table>
-  <thead>
-    <tr>
-      <th>方向</th>
-      <th>主要工具</th>
-      <th>核心能力</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>文件与完整性</strong></td>
-      <td>文件哈希、文件头、字符串、熵、二进制头</td>
-      <td>批量摘要、哈希比对、签名识别、ASCII/UTF-16LE 字符串、PE/ELF/Mach-O 基础结构</td>
-    </tr>
-    <tr>
-      <td><strong>图片与容器</strong></td>
-      <td>图片工作台、PNG、二维码、压缩包</td>
-      <td>EXIF、通道与低位视图、PNG chunks、尾部数据、二维码识别、ZIP/APK/JAR/OOXML 浏览</td>
-    </tr>
-    <tr>
-      <td><strong>结构化数据</strong></td>
-      <td>SQLite、SQL 转储、JSON、浏览器数据</td>
-      <td>查看与编辑 SQLite、解析 SQL 结构，并整理 Chromium / Firefox 历史、下载、Cookie 与登录记录</td>
-    </tr>
-    <tr>
-      <td><strong>通信与网络</strong></td>
-      <td>邮件、HTTP、URL、IOC、流量包</td>
-      <td>EML/MIME、Received 链、认证结果、HTTP 结构、IOC 提取、PCAP/PCAPNG 会话与协议摘要</td>
-    </tr>
-    <tr>
-      <td><strong>系统记录</strong></td>
-      <td>AndroidManifest、Windows 文件、EVTX、文档取证、时间线</td>
-      <td>二进制 AXML、LNK/Prefetch/REG、EVTX/BinXML 与 Sigma、本地检查 PDF/OOXML/OLE、批量时间归一化</td>
-    </tr>
-    <tr>
-      <td><strong>转换与安全辅助</strong></td>
-      <td>CyberChef、编码、时间戳、JWT、后台密码、YARA</td>
-      <td>常见编码与古典密码、取证时间格式、JWT 校验、常见密码哈希、YARA 常用规则子集</td>
-    </tr>
-  </tbody>
-</table>
+## 数据保存
 
-完整工具列表以应用首页为准。当前版本在首页提供 33 个工具入口，其中包含内置 CyberChef 工作台。
+- 切换工具时，已经打开的页面会保留在当前标签页中，输入和结果不会因为切页消失。
+- 刷新或关闭标签页后，文件和大体积分析结果不会保留。
+- 主题、语言、最近使用等小型设置保存在 `localStorage`。
+- 设置 → 本地数据可以查看占用量并清除本地数据。
 
-## 隐私与数据边界
+不要把浏览器页面当作检材保管位置。需要长期保存的内容请使用工具提供的导出功能。
 
-- 核心工具默认在当前浏览器页面中处理文件和文本。
-- 项目不提供用于接收检材的 Forensics++ 后端接口。
-- 主题、语言、最近使用工具和部分输入状态可能保存在 `localStorage`。
-- 本地数据可以从应用设置中的“本地数据”页面清除。
-- 嵌入的 CyberChef 具备独立功能，其中部分操作可以主动发起网络请求；使用这些操作前应检查 Recipe。
-- 对敏感检材，仍建议使用受控工作站、可信浏览器环境和隔离网络。
+## 本地运行
 
-详细说明见应用内设置、[`public/legal.html`](./public/legal.html) 和 [`SECURITY.md`](./SECURITY.md)。
-
-## 快速开始
-
-### 环境要求
+需要：
 
 - Node.js `22.13` 或更高版本
 - npm `10` 或更高版本
-- 支持 WebAssembly、Web Workers 和现代 Web Crypto API 的浏览器
-
-### 本地开发
 
 ```bash
 git clone https://github.com/DyNooob/ForensicsPP.git
@@ -117,175 +66,93 @@ npm ci
 npm run dev
 ```
 
-Vite 会输出实际访问地址，通常为 `http://localhost:5173/`。
+Vite 会打印访问地址，默认通常是 `http://localhost:5173/`。
 
-### 生产构建
+## 生产构建
 
 ```bash
 npm run build
+```
+
+该命令会：
+
+1. 清理旧的 `dist/`。
+2. 检查源码版权头。
+3. 执行 TypeScript 类型检查。
+4. 使用 Vite 构建静态文件。
+5. 检查 `dist/` 是否缺文件、混入源码或超过体积限制。
+
+本地预览：
+
+```bash
 npm run preview
 ```
 
-`npm run build` 会依次：
+完整测试和构建：
 
-1. 删除旧的 `dist/`。
-2. 检查项目自有文件的版权头。
-3. 执行 TypeScript 类型检查。
-4. 使用 Vite 生成新的静态生产文件。
-5. 检查发布目录的关键文件、版权标识、体积和敏感文件边界。
+```bash
+npm run verify
+```
 
-`dist/` 是构建生成的文件，不提交到 `main` 分支。
-
-### 静态发布包
-
-每个 GitHub Release 都提供已经构建完成的 `ForensicsPP-vX.Y.Z-static.zip`。该压缩包不包含源码、Node.js 依赖或开发工具，解压后可直接发布到 GitHub Pages、Nginx、Apache、对象存储或其他静态网站服务。
-
-本地生成相同的发布包：
+## 静态发布包
 
 ```bash
 npm run build
 npm run release:package
 ```
 
-生成文件位于 `release/`：
+输出：
 
 ```text
-ForensicsPP-v0.6.0-static.zip
-SHA256SUMS.txt
+release/ForensicsPP-v0.7.0-static.zip
+release/SHA256SUMS.txt
 ```
 
-下载发布包请前往 [GitHub Releases](https://github.com/DyNooob/ForensicsPP/releases)。
-
-维护者的完整发布顺序、`main` 推送、版本标签和 Release 附件流程见 [`docs/RELEASE.md`](./docs/RELEASE.md)。
+ZIP 内只有已经构建的静态网站。解压后可放到 GitHub Pages、Nginx、Apache、对象存储或其他静态托管服务。
 
 ## 常用命令
 
-| 命令 | 用途 |
+| 命令 | 作用 |
 | --- | --- |
-| `npm run dev` | 启动本地开发服务器。 |
-| `npm run clean` | 删除生成的 `dist/`。 |
-| `npm run check:headers` | 检查项目自有源码的版权头。 |
-| `npm test` | 运行核心解析器和转换逻辑测试。 |
-| `npm run test:watch` | 在开发中持续运行相关测试。 |
-| `npm run typecheck` | 执行 TypeScript 类型检查。 |
-| `npm run verify:dist` | 检查构建文件是否完整且未混入源码或本地文件。 |
-| `npm run release:package` | 将已构建的 `dist/` 打包为静态发布 ZIP，并生成 SHA-256。 |
-| `npm run build` | 干净地生成生产版本。 |
-| `npm run verify` | 依次运行自动测试和完整生产构建。 |
-| `npm run preview` | 本地预览 `dist/`。 |
-| `npm run audit:layout` | 审计全部工具的桌面布局、控件和加载状态。 |
-| `npm run audit:contact-sheet` | 将审计截图整理为联系表。 |
+| `npm run dev` | 启动开发服务器 |
+| `npm test` | 运行测试 |
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npm run build` | 构建 `dist/` |
+| `npm run verify` | 测试并构建 |
+| `npm run preview` | 预览 `dist/` |
+| `npm run audit:layout` | 检查全部工具的桌面布局和文件加载状态 |
+| `npm run release:package` | 生成静态 ZIP 和校验文件 |
 
-## 项目结构
+## 目录
 
 ```text
-ForensicsPP/
-├── .github/                     # CI、Pages、Issue 与 PR 模板
-├── docs/RELEASE.md              # 正式发布清单
-├── docs/releases/               # GitHub Release 中英文说明
-├── public/                      # 法律页面、图标、PWA、CyberChef 静态资源
-├── scripts/                     # 构建清理与全站布局审计
-├── src/
-│   ├── components/              # 通用界面组件
-│   ├── config/                  # 工具目录、版本与开源依赖
-│   ├── features/                # 解析器和领域逻辑
-│   ├── tools/                   # 各工具 React 页面
-│   ├── utils/                   # 哈希、下载、持久化等通用能力
-│   ├── App.tsx                  # 应用框架、路由、侧栏和设置
-│   └── main.tsx                 # React 入口
-├── index.html                   # HTML 入口、SEO 与分享元数据
-├── package.json                 # 依赖和 npm 命令
-├── tests/                       # 核心解析器与转换逻辑测试
-├── vite.config.ts               # Vite 构建配置
-├── vitest.config.ts             # Vitest 测试配置
-├── CHANGELOG.md                 # 版本变更记录
-├── CONTRIBUTING.md              # 贡献指南
-├── SECURITY.md                  # 安全策略
-└── LICENSE                      # MIT License
+src/components/   通用界面组件
+src/config/       工具列表、版本、开源依赖
+src/features/     解析器和业务逻辑
+src/tools/        工具页面
+src/utils/        下载、存储等通用代码
+tests/            自动测试
+scripts/          构建、打包和布局审计
+public/           图标、法律页面、CyberChef 等静态文件
+docs/releases/    GitHub Release 文案
 ```
-
-## 架构
-
-```mermaid
-flowchart LR
-  A[用户选择文件或输入文本] --> B[React 工具页面]
-  B --> C[浏览器端解析器]
-  C --> D[Web Crypto / WebAssembly / Worker]
-  D --> E[结果预览、复制与本地导出]
-  C -. 默认不经过 .-> F[Forensics++ 后端]
-```
-
-工具路由采用 URL Hash，例如 `/#hash`、`/#sqlite`、`/#email`，因此可以部署在不支持 SPA Rewrite 的静态托管平台上。
-
-## 验证
-
-提交或发布前至少运行：
-
-```bash
-npm run verify
-```
-
-修改布局、主题或工具页面后运行：
-
-```bash
-npm run dev -- --port 5174
-npm run audit:layout
-```
-
-布局审计会检查全部工具入口、预填状态和文件加载状态，包括横向溢出、面板重叠、异常表格文字、未命名控件和旧式原生控件。
-
-解析器修改还应使用可公开的合成样本复核具体字段，不要把真实检材提交到仓库。
 
 ## 部署
 
-### GitHub Pages
+仓库已包含 GitHub Pages Workflow。Pages 的 Source 选择 **GitHub Actions**，推送到 `main` 后会自动测试、构建并部署。
 
-仓库已经包含 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml)。推送到 `main` 后，Actions 会安装锁定依赖、执行生产构建、检查构建文件并部署 `dist/`。
-
-首次切换到源码部署时，在 GitHub 仓库中打开：
-
-`Settings → Pages → Build and deployment → Source → GitHub Actions`
-
-自定义域名仍需在 Pages 设置中确认。仓库中的 [`public/CNAME`](./public/CNAME) 会在构建时复制到 `dist/`。
-
-### 其他静态托管
-
-构建命令：
-
-```bash
-npm ci && npm run build
-```
-
-发布目录：
+其他平台使用：
 
 ```text
-dist
+Build command: npm ci && npm run build
+Publish directory: dist
 ```
 
-不要把项目根目录或 `.git` 目录作为网站根目录发布。
+不要把仓库根目录、`.git` 或 `node_modules` 作为网站目录。
 
-## 开源依赖
+## 其他
 
-主要运行时依赖包括 React、Ant Design、CryptoJS、sm-crypto、bcrypt.js、sql.js、postal-mime、exifr、jsQR、fflate 和 sql-formatter。CyberChef 以静态资源形式内置，Vitest 用于核心逻辑自动测试。
-
-完整版本、用途、许可证和仓库地址记录在 [`src/config/openSource.ts`](./src/config/openSource.ts)。应用设置中的“开源项目”页面提供项目仓库入口，第三方代码遵循各自许可证。
-
-## 参与贡献
-
-欢迎提交可复核、范围清晰的 Issue 和 Pull Request。请先阅读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
-
-维护者发布新版本时应遵循 [`docs/RELEASE.md`](./docs/RELEASE.md)，版本变化记录在 [`CHANGELOG.md`](./CHANGELOG.md)。
-
-安全问题请按照 [`SECURITY.md`](./SECURITY.md) 私下报告，不要在公开 Issue 中附带真实检材、凭据或可直接利用的细节。
-
-一般反馈邮箱：[`i@digiforensics.cn`](mailto:i@digiforensics.cn)。
-
-## License
-
-Forensics++ / ForensicsPP 的项目源码使用 [MIT License](./LICENSE) 发布。
-
-第三方组件、内置 CyberChef 及其资源继续遵循各自许可证和 Notice 文件。
-
-<div align="center">
-  <sub>Forensics++ · DyNooob · <a href="https://www.forensicspp.com/">forensicspp.com</a></sub>
-</div>
+- 开源依赖及仓库地址见 [`src/config/openSource.ts`](./src/config/openSource.ts)。
+- 发布步骤见 [`docs/RELEASE.md`](./docs/RELEASE.md)。
+- 安全问题请按 [`SECURITY.md`](./SECURITY.md) 中的方式联系，不要在公开 Issue 上传真实检材或凭据。
+- 项目许可证见 [`LICENSE`](./LICENSE)。

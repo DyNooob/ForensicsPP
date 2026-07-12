@@ -19,13 +19,10 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import pdfWorkerUrl from "./pdfjs.worker.ts?worker&url";
 import type { DocumentAnalysis, DocumentFinding, DocumentExtract } from "./analyzer";
 
-GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
-function ensureModernUint8Array() {
+function ensurePdfCompatibility() {
   const promiseConstructor = Promise as unknown as {
     try?: (callback: (...args: unknown[]) => unknown, ...args: unknown[]) => Promise<unknown>;
   };
@@ -52,6 +49,19 @@ function ensureModernUint8Array() {
     this.set(key, value);
     return value;
   };
+}
+
+let pdfJsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
+
+function loadPdfJs() {
+  ensurePdfCompatibility();
+  pdfJsPromise ??= import("pdfjs-dist").then((pdfjs) => {
+    pdfjs.GlobalWorkerOptions.workerSrc = typeof window === "undefined"
+      ? new URL(["..", "..", "..", "node_modules", "pdfjs-dist", "build", "pdf.worker.mjs"].join("/"), import.meta.url).href
+      : pdfWorkerUrl;
+    return pdfjs;
+  });
+  return pdfJsPromise;
 }
 
 async function rawSignals(bytes: Uint8Array) {
@@ -86,7 +96,7 @@ async function rawSignals(bytes: Uint8Array) {
 }
 
 export async function analyzePdf(bytes: Uint8Array, name: string): Promise<DocumentAnalysis> {
-  ensureModernUint8Array();
+  const { getDocument } = await loadPdfJs();
   const structural = await rawSignals(bytes);
   const loading = getDocument({ data: bytes.slice(), useWorkerFetch: false, useWasm: false, verbosity: 0 });
   const pdf = await loading.promise;

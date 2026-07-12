@@ -652,8 +652,7 @@ pre.result-box {
   box-shadow: none !important;
 }
 
-.workbench-shell .home-hero-main,
-.workbench-shell.consent-active .home-hero-main {
+.workbench-shell .home-hero-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: auto auto !important;
@@ -674,9 +673,7 @@ pre.result-box {
 }
 
 .workbench-shell .home-hero-copy h1,
-.workbench-shell .home-hero-copy h2,
-.workbench-shell.consent-active .home-hero-copy h1,
-.workbench-shell.consent-active .home-hero-copy h2 {
+.workbench-shell .home-hero-copy h2 {
   max-width: none;
   margin-top: 2px;
   font-size: 32px;
@@ -700,8 +697,7 @@ pre.result-box {
   font-weight: 680;
 }
 
-.home-hero-main > .project-meta,
-.workbench-shell.consent-active .home-hero-main > .project-meta {
+.home-hero-main > .project-meta {
   display: grid;
   grid-column: 1 !important;
   grid-row: 2 !important;
@@ -721,15 +717,6 @@ pre.result-box {
   border-color: var(--app-line);
   background: var(--app-surface);
   box-shadow: var(--app-shadow-soft);
-}
-
-.workbench-shell.consent-active .home-quick-panel {
-  min-height: 0;
-  padding: 16px;
-}
-
-.workbench-shell.consent-active .home-quick-list > :nth-child(n + 3) {
-  display: grid;
 }
 
 .home-quick-list .directory-item,
@@ -761,16 +748,7 @@ pre.result-box {
   min-height: 0;
 }
 
-.workbench-shell.consent-active .home-directory {
-  overflow: hidden;
-}
-
-.workbench-shell.consent-active .home-directory .home-launcher-list.expanded {
-  max-height: min(170px, calc(100vh - var(--topbar-height) - 410px));
-}
-
-.home-launcher-list.compact,
-.workbench-shell.consent-active .home-launcher-list.compact {
+.home-launcher-list.compact {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -1261,6 +1239,104 @@ pre.result-box {
   border: 1px solid var(--app-line);
   border-radius: 6px;
   padding: 16px;
+}
+
+.settings-storage-page {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-section-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-section-heading .ant-typography {
+  margin: 0;
+  font-size: 13px;
+}
+
+.settings-storage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  background: var(--app-surface);
+}
+
+.settings-storage-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.settings-storage-summary > div + div {
+  border-inline-start: 1px solid var(--app-line);
+}
+
+.settings-storage-summary span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.settings-storage-summary strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-storage-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--app-line);
+}
+
+.settings-storage-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--app-primary);
+}
+
+.settings-session-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.settings-session-list {
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  background: var(--app-surface);
+}
+
+.settings-session-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 32px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 8px 5px 14px;
+}
+
+.settings-session-item + .settings-session-item {
+  border-top: 1px solid var(--app-line);
+}
+
+.settings-session-active {
+  color: var(--app-primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.settings-session-empty {
+  display: block;
+  padding: 14px;
+  font-size: 13px;
 }
 
 .settings-dependency-table {
@@ -2260,6 +2336,15 @@ pre.result-box {
   .settings-dependency-table {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .settings-storage-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-storage-summary > div + div {
+    border-inline-start: 0;
+    border-top: 1px solid var(--app-line);
+  }
 }
 
 .png-core-overview {
@@ -2985,20 +3070,6 @@ details[open] > summary::after {
     padding: 14px;
   }
 
-  .consent-inline-panel {
-    left: 50%;
-    right: auto;
-    bottom: 8px;
-    width: min(720px, calc(100vw - 24px));
-    max-width: min(720px, calc(100vw - 24px));
-    grid-template-columns: minmax(0, 1fr) auto;
-    transform: translateX(-50%);
-  }
-
-  .workbench-shell.overlay-open .consent-inline-panel {
-    transform: translateX(-50%) translateY(8px);
-  }
-
   .tool-grid,
   .tool-grid[class*="has-"],
   .sqlite-browser-grid.has-sqlite,
@@ -3169,22 +3240,6 @@ details[open] > summary::after {
     max-height: calc(100vh - 24px);
   }
 
-  .tool-body > .consent-inline-panel,
-  .sidebar-collapsed .tool-body > .consent-inline-panel {
-    left: 12px;
-    right: 10px;
-    bottom: 10px;
-    width: auto;
-    max-width: none;
-    margin-inline: 0;
-    justify-self: stretch;
-    grid-template-columns: minmax(0, 1fr) auto;
-    transform: none;
-  }
-
-  .workbench-shell.overlay-open .consent-inline-panel {
-    transform: translateY(8px);
-  }
 }
 /* Canonical desktop tool flow: direct workspace sections always read top to bottom. */
 @media (min-width: 1121px) {
@@ -3213,13 +3268,6 @@ details[open] > summary::after {
 }
 
 @media (max-width: 1120px) {
-}
-
-@media (max-width: 520px) {
-
-  .consent-inline-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* Ant Design alignment: shared controls stay flat, predictable, and restrained. */
@@ -3584,9 +3632,53 @@ textarea {
 .sqlite-edit-mode {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 32px;
+  padding: 3px 7px 3px 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
   margin-left: auto;
+  background: var(--app-surface-soft);
   color: var(--app-muted);
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.sqlite-edit-mode > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sqlite-edit-mode.active {
+  border-color: color-mix(in srgb, var(--app-primary) 45%, var(--app-line));
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+}
+
+.tool-panel .sqlite-edit-mode button.ant-switch {
+  width: 36px;
+  min-width: 36px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--app-faint);
+  box-shadow: none;
+}
+
+.tool-panel .sqlite-edit-mode button.ant-switch:hover,
+.tool-panel .sqlite-edit-mode button.ant-switch:focus-visible {
+  border: 0;
+  background: var(--app-faint);
+}
+
+.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked,
+.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked:hover,
+.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked:focus-visible {
+  background: var(--app-primary);
 }
 .android-xml-details {
   margin: 12px 0;

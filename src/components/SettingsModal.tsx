@@ -23,6 +23,7 @@ import React from "react";
 import {
   BgColorsOutlined,
   CodeOutlined,
+  CloseOutlined,
   DatabaseOutlined,
   DesktopOutlined,
   GithubOutlined,
@@ -34,6 +35,7 @@ import {
 } from "@ant-design/icons";
 import { Button, ColorPicker, Menu, Modal, Segmented, Typography } from "antd";
 import type { ThemeMode } from "../models";
+import type { ToolId } from "../config/app";
 import {
   appVersion,
   lastUpdated,
@@ -58,7 +60,25 @@ type SettingsModalProps = {
   onThemeColorChange: (color: string) => void;
   onResetAppearance: () => void;
   onClearWorkspace: () => void;
+  openTools: Array<{ id: ToolId; title: string; active: boolean }>;
+  onCloseTool: (id: ToolId) => void;
+  onCloseAllTools: () => void;
 };
+
+function formatStorageMb(bytes: number) {
+  return `${(Math.max(0, bytes) / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function localStorageBytes() {
+  try {
+    return Object.keys(window.localStorage).reduce((total, key) => {
+      const value = window.localStorage.getItem(key) ?? "";
+      return total + (key.length + value.length) * 2;
+    }, 0);
+  } catch {
+    return 0;
+  }
+}
 
 export function SettingsModal({
   open,
@@ -71,9 +91,24 @@ export function SettingsModal({
   onThemeModeChange,
   onThemeColorChange,
   onResetAppearance,
-  onClearWorkspace
+  onClearWorkspace,
+  openTools,
+  onCloseTool,
+  onCloseAllTools
 }: SettingsModalProps) {
   const [page, setPage] = React.useState<SettingsPage>("appearance");
+  const [storage, setStorage] = React.useState({ local: 0, usage: 0, quota: 0 });
+
+  React.useEffect(() => {
+    if (!open || page !== "storage") return;
+    let active = true;
+    void (async () => {
+      const local = localStorageBytes();
+      const estimate = await navigator.storage?.estimate?.().catch(() => null);
+      if (active) setStorage({ local, usage: Math.max(local, estimate?.usage ?? 0), quota: estimate?.quota ?? 0 });
+    })();
+    return () => { active = false; };
+  }, [open, page]);
 
   const labels = lang === "zh" ? {
     appearance: "外观",
@@ -87,6 +122,17 @@ export function SettingsModal({
     reset: "恢复默认",
     clearTitle: "清除本地工作区",
     clearDesc: "删除界面偏好、最近使用、收藏和工具保存的输入。",
+    siteUsage: "本站占用",
+    localStorageUsage: "localStorage",
+    availableQuota: "浏览器配额",
+    persistentTitle: "浏览器存储",
+    persistentDesc: "这里显示可跨刷新保留的数据，不包含当前打开文件占用的内存。",
+    sessionTitle: "当前会话",
+    sessionDesc: "关闭工具会释放该工具当前打开的文件和分析结果。",
+    closeTool: "关闭工具",
+    closeAll: "全部关闭",
+    noOpenTools: "当前没有打开的工具",
+    activeTool: "正在使用",
     dependenciesTitle: "开源项目",
     dependenciesDesc: `Forensics++ 使用了以下 ${openSourceProjects.length} 个开源项目。`,
     openRepo: "打开仓库"
@@ -102,6 +148,17 @@ export function SettingsModal({
     reset: "Reset",
     clearTitle: "Clear local workspace",
     clearDesc: "Remove interface preferences, recent tools, favorites, and saved tool inputs.",
+    siteUsage: "Site usage",
+    localStorageUsage: "localStorage",
+    availableQuota: "Browser quota",
+    persistentTitle: "Browser storage",
+    persistentDesc: "Data retained across reloads. This does not include memory used by currently open files.",
+    sessionTitle: "Current session",
+    sessionDesc: "Closing a tool releases its open files and analysis results from this tab.",
+    closeTool: "Close tool",
+    closeAll: "Close all",
+    noOpenTools: "No tools are currently open",
+    activeTool: "Active",
     dependenciesTitle: "Open-source projects",
     dependenciesDesc: `Forensics++ uses the following ${openSourceProjects.length} open-source projects.`,
     openRepo: "Open Repository"
@@ -227,14 +284,51 @@ export function SettingsModal({
           )}
 
           {page === "storage" && (
-            <div className="settings-action-line settings-danger-line">
-              <div>
-                <strong>{labels.clearTitle}</strong>
-                <Typography.Text type="secondary">{labels.clearDesc}</Typography.Text>
+            <div className="settings-storage-page">
+              <div className="settings-section-heading">
+                <strong>{labels.persistentTitle}</strong>
+                <Typography.Text type="secondary">{labels.persistentDesc}</Typography.Text>
               </div>
-              <Button danger={cacheClearArmed} type={cacheClearArmed ? "primary" : "default"} onClick={onClearWorkspace}>
-                {cacheClearArmed ? t.confirmClearCache : t.clearLocalCache}
-              </Button>
+              <div className="settings-storage-summary">
+                <div><span>{labels.siteUsage}</span><strong>{formatStorageMb(storage.usage)}</strong></div>
+                <div><span>{labels.localStorageUsage}</span><strong>{formatStorageMb(storage.local)}</strong></div>
+                <div><span>{labels.availableQuota}</span><strong>{storage.quota ? formatStorageMb(storage.quota) : "--"}</strong></div>
+              </div>
+              <div className="settings-storage-meter" aria-hidden="true"><span style={{ width: `${storage.quota ? Math.max(1, Math.min(100, storage.usage / storage.quota * 100)) : 0}%` }} /></div>
+              <div className="settings-session-header">
+                <div className="settings-section-heading">
+                  <strong>{labels.sessionTitle}</strong>
+                  <Typography.Text type="secondary">{labels.sessionDesc}</Typography.Text>
+                </div>
+                {openTools.length > 0 && <Button size="small" onClick={onCloseAllTools}>{labels.closeAll}</Button>}
+              </div>
+              <div className="settings-session-list">
+                {openTools.length === 0 ? (
+                  <Typography.Text className="settings-session-empty" type="secondary">{labels.noOpenTools}</Typography.Text>
+                ) : openTools.map((tool) => (
+                  <div className="settings-session-item" key={tool.id}>
+                    <span>{tool.title}</span>
+                    {tool.active && <span className="settings-session-active">{labels.activeTool}</span>}
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CloseOutlined />}
+                      aria-label={`${labels.closeTool}: ${tool.title}`}
+                      title={labels.closeTool}
+                      onClick={() => onCloseTool(tool.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="settings-action-line settings-danger-line">
+                <div>
+                  <strong>{labels.clearTitle}</strong>
+                  <Typography.Text type="secondary">{labels.clearDesc}</Typography.Text>
+                </div>
+                <Button danger={cacheClearArmed} type={cacheClearArmed ? "primary" : "default"} onClick={onClearWorkspace}>
+                  {cacheClearArmed ? t.confirmClearCache : t.clearLocalCache}
+                </Button>
+              </div>
             </div>
           )}
 

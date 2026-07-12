@@ -29,6 +29,8 @@ const toolDefinitions = [
   { id: "password", category: "analysis", name: "password", desc: "passwordDesc" },
   { id: "sql", category: "analysis", name: "sql", desc: "sqlDesc" },
   { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc" },
+  { id: "registry", category: "analysis", name: "registry", desc: "registryDesc" },
+  { id: "plist", category: "analysis", name: "plist", desc: "plistDesc" },
   { id: "browserartifacts", category: "analysis", name: "browserartifacts", desc: "browserartifactsDesc" },
   { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc" },
   { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc" },
@@ -81,11 +83,11 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "0.6.0";
+export const appVersion = "0.7.0";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
 export const lastUpdated = "2026-07-12";
-export const legalVersion = "2026-07-09";
+export const legalVersion = "2026-07-12";
 export const feedbackEmail = "i@digiforensics.cn";
 
 export const themePresets: ReadonlyArray<{
@@ -93,11 +95,15 @@ export const themePresets: ReadonlyArray<{
   hex: string;
   name: { zh: string; en: string };
 }> = [
-  { id: "forensic", hex: "#245F73", name: { zh: "工作台青灰", en: "Workbench Teal" } },
   { id: "indigo", hex: "#4457A6", name: { zh: "案卷靛", en: "Case Indigo" } },
+  { id: "forensic", hex: "#245F73", name: { zh: "工作台青灰", en: "Workbench Teal" } },
   { id: "signal", hex: "#1E6B4B", name: { zh: "信号绿", en: "Signal Green" } },
   { id: "amber", hex: "#8A5A00", name: { zh: "警戒金", en: "Alert Amber" } },
-  { id: "rose", hex: "#8F4A51", name: { zh: "证据红", en: "Evidence Red" } }
+  { id: "rose", hex: "#8F4A51", name: { zh: "证据红", en: "Evidence Red" } },
+  { id: "blue", hex: "#1769AA", name: { zh: "蓝色", en: "Blue" } },
+  { id: "violet", hex: "#7252A3", name: { zh: "紫色", en: "Violet" } },
+  { id: "magenta", hex: "#A13F6F", name: { zh: "洋红", en: "Magenta" } },
+  { id: "graphite", hex: "#52606D", name: { zh: "石墨", en: "Graphite" } }
 ];
 
 export function normalizeToolHash(value: string) {

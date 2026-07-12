@@ -37,7 +37,7 @@ const height = Number(process.env.AUDIT_HEIGHT || 900);
 const saveScreenshots = process.env.AUDIT_SCREENSHOTS === "1";
 const defaultThemeMode = process.env.AUDIT_THEME === "dark" ? "dark" : "light";
 const screenshotDir = process.env.AUDIT_SCREENSHOT_DIR || "layout-audit-screenshots";
-const legalVersion = "2026-07-09";
+const legalVersion = "2026-07-12";
 
 const tools = [
   "home",
@@ -49,6 +49,8 @@ const tools = [
   "password",
   "sql",
   "sqlite",
+  "registry",
+  "plist",
   "browserartifacts",
   "evtx",
   "documentforensics",
@@ -734,36 +736,19 @@ async function auditConsentBar(client) {
   await loadToolState(client, "home", { cleanHome: true, legalAccepted: false });
   const result = await client.send("Runtime.evaluate", {
     expression: `(() => {
-      const panel = document.querySelector(".consent-inline-panel");
-      const directory = document.querySelector(".home-directory");
-      const directoryItems = [...document.querySelectorAll(".home-directory .directory-item")];
+      const panel = document.querySelector(".legal-consent-modal .ant-modal-content");
+      const mask = document.querySelector(".ant-modal-mask");
       const panelRect = panel?.getBoundingClientRect();
-      const directoryRect = directory?.getBoundingClientRect();
-      const clipsDirectory = directory && ["hidden", "clip"].includes(getComputedStyle(directory).overflow);
-      const overlapArea = panelRect
-        ? directoryItems.reduce((total, item) => {
-            const r = item.getBoundingClientRect();
-            const visible = clipsDirectory && directoryRect ? {
-              left: Math.max(r.left, directoryRect.left),
-              right: Math.min(r.right, directoryRect.right),
-              top: Math.max(r.top, directoryRect.top),
-              bottom: Math.min(r.bottom, directoryRect.bottom)
-            } : r;
-            return total
-              + Math.max(0, Math.min(panelRect.right, visible.right) - Math.max(panelRect.left, visible.left))
-              * Math.max(0, Math.min(panelRect.bottom, visible.bottom) - Math.max(panelRect.top, visible.top));
-          }, 0)
-        : 0;
-      const area = panelRect ? panelRect.width * panelRect.height : 0;
-      const overlapRatio = area ? overlapArea / area : 1;
-      const compact = innerWidth <= 520;
+      const actions = [...document.querySelectorAll(".legal-consent-actions a, .legal-consent-actions button")];
       const ok = Boolean(panelRect)
-        && panelRect.height <= (compact ? 112 : 72)
-        && panelRect.width >= (compact ? innerWidth - 40 : Math.min(520, innerWidth - 32))
-        && panelRect.width <= (innerWidth <= 720 ? innerWidth - 16 : Math.min(780, innerWidth - 24))
+        && Boolean(mask && getComputedStyle(mask).display !== "none")
+        && panelRect.width <= Math.min(540, innerWidth - 24)
+        && panelRect.left >= 8
+        && panelRect.right <= innerWidth - 8
+        && panelRect.top >= 8
         && panelRect.bottom <= innerHeight - 8
-        && panelRect.bottom >= innerHeight - 36
-        && overlapRatio < 0.08;
+        && actions.length === 2
+        && !document.querySelector(".legal-consent-modal .ant-modal-close");
       return {
         id: "home-consent",
         ok,
@@ -773,7 +758,8 @@ async function auditConsentBar(client) {
           w: Math.round(panelRect.width),
           h: Math.round(panelRect.height)
         } : null,
-        overlapRatio: Number(overlapRatio.toFixed(3)),
+        maskVisible: Boolean(mask && getComputedStyle(mask).display !== "none"),
+        actionCount: actions.length,
         text: panel?.textContent?.trim().slice(0, 160) || ""
       };
     })()`,
@@ -1054,24 +1040,25 @@ async function auditLoadedSqlite(client) {
       10000
     );
     await client.send("Runtime.evaluate", {
+      expression: `document.querySelector('.sqlite-browse-table tbody tr')?.querySelectorAll('td')?.[4]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
+      awaitPromise: true
+    });
+    const editModePrompted = await waitForRuntimeValue(client, "document.body.textContent.includes('请先开启编辑模式')", 3000);
+    await client.send("Runtime.evaluate", {
       expression: `document.querySelector('.sqlite-edit-mode .ant-switch')?.click()`,
       awaitPromise: true
     });
     await waitForRuntimeValue(client, "document.querySelector('.sqlite-edit-mode .ant-switch')?.getAttribute('aria-checked') === 'true'", 3000);
     await client.send("Runtime.evaluate", {
-      expression: `document.querySelector('.sqlite-browse-table tbody tr')?.querySelectorAll('td')?.[4]?.click()`,
+      expression: `document.querySelector('.sqlite-browse-table tbody tr')?.querySelectorAll('td')?.[4]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
       awaitPromise: true
     });
     const cellSelected = await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-simple-cell-panel'))", 5000);
-    await client.send("Runtime.evaluate", {
-      expression: `[...document.querySelectorAll('.sqlite-simple-cell-panel button')].find((button) => (button.textContent || '').includes('编辑单元格'))?.click()`,
-      awaitPromise: true
-    });
-    const cellEditorReady = await waitForRuntimeValue(client, "document.querySelector('.sqlite-simple-cell-panel .sqlite-cell-value')?.readOnly === false", 5000);
+    const cellEditorReady = await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-inline-cell-editor'))", 5000);
     await client.send("Runtime.evaluate", {
       expression: `(() => {
-        const input = document.querySelector('.sqlite-simple-cell-panel .sqlite-cell-value');
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        const input = document.querySelector('.sqlite-inline-cell-editor');
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
         if (input && setter) {
           setter.call(input, '已更新名称');
           input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1079,12 +1066,25 @@ async function auditLoadedSqlite(client) {
       })()`,
       awaitPromise: true
     });
-    await waitForRuntimeValue(client, "document.querySelector('.sqlite-simple-cell-panel .sqlite-cell-value')?.value === '已更新名称'", 5000);
+    await waitForRuntimeValue(client, "document.querySelector('.sqlite-inline-cell-editor')?.value === '已更新名称'", 5000);
     await client.send("Runtime.evaluate", {
-      expression: `[...document.querySelectorAll('.sqlite-simple-cell-panel button')].find((button) => (button.textContent || '').includes('保存修改'))?.click()`,
+      expression: `document.querySelector('.sqlite-inline-cell-editor')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`,
       awaitPromise: true
     });
     const cellEditSaved = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称')", 5000);
+    await client.send("Runtime.evaluate", { expression: `location.hash = 'hash'`, awaitPromise: true });
+    await waitForRuntimeValue(client, "document.querySelector('.page-title')?.textContent.includes('哈希')", 5000);
+    await client.send("Runtime.evaluate", { expression: `location.hash = 'sqlite'`, awaitPromise: true });
+    const toolStateRetained = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称')", 5000);
+    const resizeBefore = await client.send("Runtime.evaluate", {
+      expression: `Math.round(document.querySelectorAll('.sqlite-browse-table thead th')[2]?.getBoundingClientRect().width || 0)`,
+      returnByValue: true
+    });
+    await client.send("Runtime.evaluate", {
+      expression: `document.querySelectorAll('.sqlite-column-resizer')[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`,
+      awaitPromise: true
+    });
+    const columnResizePassed = await waitForRuntimeValue(client, `Math.round(document.querySelectorAll('.sqlite-browse-table thead th')[2]?.getBoundingClientRect().width || 0) >= ${Number(resizeBefore.result.value) + 10}`, 3000);
     await client.send("Runtime.evaluate", {
       expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === 'SQL')?.click()`,
       awaitPromise: true
@@ -1142,8 +1142,11 @@ async function auditLoadedSqlite(client) {
           id: "sqlite-loaded",
           ok: Boolean(containerRect && tableRect && scrollRect)
             && ${JSON.stringify(cellSelected)}
+            && ${JSON.stringify(editModePrompted)}
             && ${JSON.stringify(cellEditorReady)}
             && ${JSON.stringify(cellEditSaved)}
+            && ${JSON.stringify(toolStateRetained)}
+            && ${JSON.stringify(columnResizePassed)}
             && ${JSON.stringify(sqlPageReady)}
             && ${JSON.stringify(sqlQueryPassed)}
             && ${JSON.stringify(changeRecorded)}
@@ -1157,8 +1160,11 @@ async function auditLoadedSqlite(client) {
           badWritingCount: badWriting.length,
           pinchedCount: pinched.length,
           cellSelected: ${JSON.stringify(cellSelected)},
+          editModePrompted: ${JSON.stringify(editModePrompted)},
           cellEditorReady: ${JSON.stringify(cellEditorReady)},
           cellEditSaved: ${JSON.stringify(cellEditSaved)},
+          toolStateRetained: ${JSON.stringify(toolStateRetained)},
+          columnResizePassed: ${JSON.stringify(columnResizePassed)},
           sqlPageReady: ${JSON.stringify(sqlPageReady)},
           sqlQueryPassed: ${JSON.stringify(sqlQueryPassed)},
           changeRecorded: ${JSON.stringify(changeRecorded)},

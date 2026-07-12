@@ -561,67 +561,6 @@ textarea {
   );
 }
 
-.workbench-shell.consent-active .home-hero {
-  gap: 12px;
-}
-
-.workbench-shell.consent-active .home-hero-main {
-  grid-template-columns: minmax(0, 1fr) minmax(226px, 270px);
-  grid-template-rows: auto;
-  min-height: 214px;
-  padding: 18px 20px;
-  gap: 14px 16px;
-}
-
-.workbench-shell.consent-active .home-quick-panel {
-  min-height: 214px;
-  padding: 16px;
-}
-
-.workbench-shell.consent-active .home-hero-copy {
-  gap: 10px;
-}
-
-.workbench-shell.consent-active .home-hero-copy h1,
-.workbench-shell.consent-active .home-hero-copy h2 {
-  font-size: 30px;
-  line-height: 1.06;
-  max-width: 560px;
-}
-
-.workbench-shell.consent-active .home-hero p {
-  font-size: 14px;
-  line-height: 1.56;
-}
-
-.workbench-shell.consent-active .home-hero-main > .project-meta {
-  display: none;
-}
-
-.workbench-shell.consent-active .home-quick-list > :nth-child(n + 3),
-.workbench-shell.consent-active .home-start-panel,
-.workbench-shell.consent-active .local-processing-note {
-  display: none;
-}
-
-.workbench-shell.consent-active .home-directory {
-  max-height: min(304px, calc(100vh - var(--topbar-height) - 364px));
-}
-
-.workbench-shell.consent-active .home-launcher-list.compact,
-.workbench-shell.consent-active .home-launcher-list.expanded {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.workbench-shell.consent-active .home-directory .directory-item {
-  min-height: 68px;
-  padding: 10px 11px;
-}
-
-.workbench-shell.consent-active .home-directory .directory-item em {
-  display: none;
-}
-
 .tool-topbar {
   position: sticky;
   top: 0;
@@ -1071,8 +1010,28 @@ input[type="radio"] {
   margin-inline: auto;
 }
 
-.workbench-shell.consent-active .tool-body {
-  padding-bottom: 112px;
+.tool-body > .tool-retained-view {
+  display: grid;
+  width: min(100%, var(--workbench-max));
+  max-width: var(--workbench-max);
+  min-width: 0;
+  justify-self: center;
+}
+
+.tool-body > .tool-retained-view[hidden] {
+  display: none;
+}
+
+.tool-retained-view > .tool-page-shell {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tool-retained-view > :is(.home-grid, .tool-page-shell) {
+  width: 100%;
+  max-width: 100%;
 }
 
 .tool-body > .tool-page-shell {
