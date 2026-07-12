@@ -1,0 +1,88 @@
+/**
+ * Forensics++ (ForensicsPP.com)
+ * Local-first browser forensics workbench
+ *
+ * Copyright (c) 2026 DyNooob. All rights reserved.
+ * Author: DyNooob
+ * Website: https://www.loken.cn
+ * Platform: DigiForensics.cn
+ * Project: https://github.com/DyNooob/ForensicsPP
+ *
+ * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+ * lightweight forensic triage, encoding/decoding, metadata inspection,
+ * hashes, archive parsing, and local analysis.
+ *
+ * Do not use this project for unauthorized access, intrusion,
+ * privacy infringement, or unlawful activity.
+ *
+ * Released under the MIT License.
+ * Full source code: https://github.com/DyNooob/ForensicsPP
+ */
+
+import { describe, expect, it } from "vitest";
+import { analyzeIocs } from "../src/features/ioc/analyzer";
+import { parseSqlDump } from "../src/features/sql/analyzer";
+import { coerceSqliteEditValue, quoteSqlIdentifier, quoteSqlLiteral, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
+import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
+
+describe("forensic timestamp identifiers", () => {
+  it("decodes a known ULID timestamp", () => {
+    expect(parseUlidTimestamp("01ARZ3NDEKTSV4RRFFQ69G5FAV")).toBe(1469922850259);
+  });
+
+  it("decodes the timestamp prefix of a MongoDB ObjectId", () => {
+    expect(parseMongoObjectIdTimestamp("507f1f77bcf86cd799439011")).toBe(1350508407000);
+  });
+
+  it("decodes a FAT packed timestamp", () => {
+    const packed = ((2026 - 1980) << 25) | (7 << 21) | (12 << 16) | (14 << 11) | (35 << 5) | 14;
+    expect(parseFatPackedDateTime(packed)).toBe(Date.UTC(2026, 6, 12, 14, 35, 28));
+  });
+});
+
+describe("SQL dump parsing", () => {
+  it("preserves columns, escaped strings, NULL and row order", () => {
+    const sql = `
+      CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, note TEXT);
+      INSERT INTO users (id, name, note) VALUES
+        (1, 'Alice', 'first'),
+        (2, 'Bob', NULL),
+        (3, 'O''Brien', 'line\\nvalue');
+    `;
+    const result = parseSqlDump(sql, "fixture.sql", sql.length);
+    expect(result.tables).toHaveLength(1);
+    expect(result.tables[0].columns.map((column) => column.name)).toEqual(["id", "name", "note"]);
+    expect(result.tables[0].rows).toEqual([
+      { id: "1", name: "Alice", note: "first" },
+      { id: "2", name: "Bob", note: "NULL" },
+      { id: "3", name: "O'Brien", note: "line\nvalue" }
+    ]);
+  });
+});
+
+describe("SQLite value helpers", () => {
+  it("quotes identifiers and literals safely", () => {
+    expect(quoteSqlIdentifier('event"name')).toBe('"event""name"');
+    expect(quoteSqlLiteral("O'Brien")).toBe("'O''Brien'");
+  });
+
+  it("preserves numeric and blob value types while editing", () => {
+    expect(coerceSqliteEditValue(10, "42")).toBe(42);
+    expect(coerceSqliteEditValue(new Uint8Array([0]), "00ff")).toEqual(new Uint8Array([0, 255]));
+    expect(coerceSqliteEditValue("value", "NULL")).toBeNull();
+  });
+
+  it("escapes exported CSV values", () => {
+    expect(sqliteRowsToCsv(["id", "note"], [[1, "a,b"], [2, "line\nvalue"]])).toBe('id,note\n1,"a,b"\n2,"line\nvalue"');
+  });
+});
+
+describe("IOC extraction", () => {
+  it("refangs, deduplicates and records sightings", () => {
+    const result = analyzeIocs("hxxps://example[.]com/a\nexample.com\nexample.com\nCVE-2026-12345", "fixture");
+    const domain = result.records.find((record) => record.type === "Domain" && record.normalized === "example.com");
+    expect(domain).toBeDefined();
+    expect(domain?.count).toBeGreaterThanOrEqual(2);
+    expect(result.records.some((record) => record.type === "CVE" && record.normalized === "cve-2026-12345")).toBe(true);
+  });
+});

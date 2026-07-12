@@ -1,0 +1,18 @@
+{
+  "name": "Forensics++",
+  "short_name": "F++",
+  "description": "Open-source browser-local DFIR workbench for evidence triage, hashing, metadata inspection, IOC extraction, SQLite browsing, email review, and timestamp conversion.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1624",
+  "theme_color": "#245F73",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

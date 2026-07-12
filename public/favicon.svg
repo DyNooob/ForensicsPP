@@ -1,0 +1,25 @@
+<!--
+  Forensics++ (ForensicsPP.com)
+  Local-first browser forensics workbench
+
+  Copyright (c) 2026 DyNooob. All rights reserved.
+  Author: DyNooob
+  Website: https://www.loken.cn
+  Platform: DigiForensics.cn
+  Project: https://github.com/DyNooob/ForensicsPP
+
+  Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+  lightweight forensic triage, encoding/decoding, metadata inspection,
+  hashes, archive parsing, and local analysis.
+
+  Do not use this project for unauthorized access, intrusion,
+  privacy infringement, or unlawful activity.
+
+  Released under the MIT License.
+  Full source code: https://github.com/DyNooob/ForensicsPP
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Forensics++">
+  <rect width="64" height="64" rx="14" fill="#0b1624"/>
+  <path d="M14 18h25v7H22v8h15v7H22v16h-8V18Zm31 8h6v9h9v6h-9v9h-6v-9h-9v-6h9v-9Z" fill="#9bcaff"/>
+  <path d="M36 12h14v5H36v-5Z" fill="#f59e0b"/>
+</svg>

@@ -1,0 +1,53 @@
+# Forensics++ (ForensicsPP.com)
+# Local-first browser forensics workbench
+#
+# Copyright (c) 2026 DyNooob. All rights reserved.
+# Author: DyNooob
+# Website: https://www.loken.cn
+# Platform: DigiForensics.cn
+# Project: https://github.com/DyNooob/ForensicsPP
+#
+# Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+# lightweight forensic triage, encoding/decoding, metadata inspection,
+# hashes, archive parsing, and local analysis.
+#
+# Do not use this project for unauthorized access, intrusion,
+# privacy infringement, or unlawful activity.
+#
+# Released under the MIT License.
+# Full source code: https://github.com/DyNooob/ForensicsPP
+
+name: Verify source
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run release checks
+        run: npm run verify
+
+      - name: Verify clean artifact boundary
+        shell: bash
+        run: |
+          test -f dist/index.html
+          test ! -e dist/.git
+          test -z "$(find dist -type d -name .git -print -quit)"

@@ -1,34 +1,96 @@
 <!doctype html>
 <!--
-  ============================================================
   Forensics++ (ForensicsPP.com)
   Local-first browser forensics workbench
 
-  Author:   DyNooob
-  Website:  https://www.loken.cn
+  Copyright (c) 2026 DyNooob. All rights reserved.
+  Author: DyNooob
+  Website: https://www.loken.cn
   Platform: DigiForensics.cn
-  Project:  https://github.com/DyNooob/ForensicsPP
+  Project: https://github.com/DyNooob/ForensicsPP
 
-  Forensics++ is a static, browser-side toolkit for CTF/MISC,
-  lightweight forensic triage, encoding/decoding, metadata
-  inspection, hashes, archive parsing, and local analysis.
+  Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+  lightweight forensic triage, encoding/decoding, metadata inspection,
+  hashes, archive parsing, and local analysis.
 
-  Files and text are processed locally in the browser by default.
   Do not use this project for unauthorized access, intrusion,
   privacy infringement, or unlawful activity.
 
-  Copyright (c) 2026 DyNooob. All rights reserved.
-  ============================================================
+  Released under the MIT License.
+  Full source code: https://github.com/DyNooob/ForensicsPP
 -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#245F73" />
+    <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="Forensics++ / ForensicsPP online DFIR workbench for file, document, log, memory, and network evidence triage."
+      content="Forensics++ Workbench is an open-source DFIR toolkit for evidence triage, hashing, metadata inspection, IOC extraction, and forensic timestamp conversion."
     />
-    <title>Forensics++ Workbench</title>
+    <meta
+      name="keywords"
+      content="Forensics++, ForensicsPP, DFIR, digital forensics, evidence triage, open source forensics, hash calculator, EXIF, IOC extraction, forensic timestamp"
+    />
+    <meta name="author" content="DyNooob" />
+    <meta name="license" content="MIT" />
+    <meta name="repository" content="https://github.com/DyNooob/ForensicsPP" />
+    <meta name="application-name" content="Forensics++" />
+    <meta name="version" content="0.5" />
+    <meta name="date" content="2026-07-12" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Forensics++" />
+    <meta property="og:title" content="Forensics++ Workbench" />
+    <meta
+      property="og:description"
+      content="Open-source DFIR tools for evidence triage, hashing, metadata inspection, IOC extraction, and timestamp conversion."
+    />
+    <meta property="og:url" content="https://www.forensicspp.com/" />
+    <meta property="og:image" content="https://www.forensicspp.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
+    <meta property="og:updated_time" content="2026-07-12T00:00:00+08:00" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Forensics++ Workbench" />
+    <meta
+      name="twitter:description"
+      content="Open-source DFIR tools for evidence triage, hashing, metadata inspection, IOC extraction, and forensic timestamp conversion."
+    />
+    <meta name="twitter:image" content="https://www.forensicspp.com/og-image.png" />
+    <meta name="twitter:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
+    <link rel="canonical" href="https://www.forensicspp.com/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <title>Forensics++ Workbench | Open-source DFIR tools</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Forensics++ Workbench",
+        "alternateName": "ForensicsPP",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Any modern browser",
+        "softwareVersion": "0.5",
+        "dateModified": "2026-07-12",
+        "license": "https://github.com/DyNooob/ForensicsPP/blob/main/LICENSE",
+        "codeRepository": "https://github.com/DyNooob/ForensicsPP",
+        "url": "https://www.forensicspp.com/",
+        "author": {
+          "@type": "Person",
+          "name": "DyNooob",
+          "url": "https://www.loken.cn"
+        },
+        "description": "Open-source DFIR tools for evidence triage, hashing, metadata inspection, IOC extraction, and timestamp conversion.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
     <script>
       (() => {
         const key = "__forensicspp_console_brand__";
@@ -47,16 +109,24 @@
         console.log("%cWebsite   %chttps://www.loken.cn", label, value);
         console.log("%cPlatform  %cDigiForensics.cn", label, value);
         console.log("%cGitHub    %chttps://github.com/DyNooob/ForensicsPP", label, value);
-        console.log("%cMode      %cStatic browser-side workbench. Files are processed locally by default.", label, muted);
+        console.log("%cProject   %cOpen-source DFIR workbench.", label, muted);
         console.log("%cNotice    %cUse only in lawful and authorized scenarios.", label, warn);
-        console.log("%cCopyright %cCopyright (c) 2026 DyNooob. All rights reserved.", label, muted);
+        console.log("%cLicense   %cMIT. Full source code: https://github.com/DyNooob/ForensicsPP", label, muted);
         console.groupEnd();
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-B31x7O_N.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CTLd75CT.css">
   </head>
   <body>
+    <noscript>
+      <main class="noscript-fallback">
+        <strong>F++</strong>
+        <h1>Forensics++ requires JavaScript</h1>
+        <p>
+          This static browser workbench runs entirely in your browser. Enable JavaScript to use the local tools.
+        </p>
+      </main>
+    </noscript>
     <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

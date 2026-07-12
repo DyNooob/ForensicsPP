@@ -1,0 +1,16 @@
+node_modules
+.vite
+dist
+.DS_Store
+*.log
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+layout-audit-report.json
+layout-audit-screenshots/
+layout-*-screenshots*/
+layout-*-review/
+tmp/
+.env
+.env.*
+!.env.example

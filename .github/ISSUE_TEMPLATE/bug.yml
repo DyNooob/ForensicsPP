@@ -1,0 +1,65 @@
+# Forensics++ (ForensicsPP.com)
+# Local-first browser forensics workbench
+#
+# Copyright (c) 2026 DyNooob. All rights reserved.
+# Author: DyNooob
+# Website: https://www.loken.cn
+# Platform: DigiForensics.cn
+# Project: https://github.com/DyNooob/ForensicsPP
+#
+# Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+# lightweight forensic triage, encoding/decoding, metadata inspection,
+# hashes, archive parsing, and local analysis.
+#
+# Do not use this project for unauthorized access, intrusion,
+# privacy infringement, or unlawful activity.
+#
+# Released under the MIT License.
+# Full source code: https://github.com/DyNooob/ForensicsPP
+
+name: Bug report
+description: Report a reproducible defect in a Forensics++ tool or interface.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach real evidence, credentials, private email or sensitive case data. Use a synthetic or public sample.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. Open...\n2. Select...\n3. Observe..."
+    validations:
+      required: true
+  - type: input
+    id: route
+    attributes:
+      label: Tool route
+      placeholder: "Example: /#sqlite"
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: "Example: Chrome 140, macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Safe sample details
+      description: Describe or link to a synthetic/public sample. Do not upload sensitive evidence.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: I confirm this report contains no private evidence, credentials or sensitive case data.
+          required: true
