@@ -31,11 +31,11 @@
     "audit:contact-sheet": "python3 scripts/make-contact-sheet.py"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.6.1",
+    "@ant-design/icons": "^6.3.2",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@ts-evtx/core": "^1.2.0",
-    "@vitejs/plugin-react": "^5.1.1",
-    "antd": "^5.29.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "antd": "^6.5.1",
     "bcryptjs": "^3.0.3",
     "cfb": "^1.2.2",
     "crypto-js": "^4.2.0",
@@ -49,8 +49,8 @@
     "sm-crypto": "^0.4.0",
     "sql-formatter": "^15.8.2",
     "sql.js": "^1.14.1",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
