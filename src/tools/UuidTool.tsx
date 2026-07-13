@@ -25,7 +25,6 @@ import type { Translation } from "../i18n";
 import type { UuidAnalysis } from "../models";
 import { downloadTextFile } from "../utils/files";
 import { isUsableDate } from "../utils/forensics";
-import { useStoredState } from "../utils/storage";
 
 function uuidVersionName(version: string) {
   return ({
@@ -127,7 +126,7 @@ function uuidAnalysesToCsv(items: UuidAnalysis[]) {
 }
 
 export function UuidTool({ t }: { t: Translation }) {
-  const [value, setValue] = useStoredState("uuid.value", "");
+  const [value, setValue] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [sortMode, setSortMode] = React.useState<"input" | "time" | "version">("input");
   const [timeOnly, setTimeOnly] = React.useState(false);

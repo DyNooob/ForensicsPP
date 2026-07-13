@@ -30,7 +30,7 @@ import { ToolHost } from "./components/ToolHost";
 import { getToolTitle as resolveToolTitle, legalVersion, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
 import type { ToolId } from "./config/app";
 import { copy } from "./i18n";
-import { clearForensicsStorage, useStoredState } from "./utils/storage";
+import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
 import type { Lang, ThemeMode, AppCommand } from "./models";
 
 function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
@@ -142,7 +142,12 @@ export function App() {
   );
   const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? storedActiveTool : "home");
   const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
+  const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
+  const [pendingToolClose, setPendingToolClose] = React.useState<ToolId[] | null>(null);
   const retainedTools = mountedTools.includes(activeTool) ? mountedTools : [...mountedTools, activeTool];
+  React.useEffect(() => {
+    clearLegacyEvidenceStorage();
+  }, []);
   React.useEffect(() => {
     setMountedTools((current) => current.includes(activeTool) ? current : [...current, activeTool]);
   }, [activeTool]);
@@ -157,15 +162,42 @@ export function App() {
     writeToolHash(tool, options?.replaceHash);
     if (isNarrowShell) setSidebarCollapsed(true);
   };
+  const setToolDirty = React.useCallback((tool: ToolId, dirty: boolean) => {
+    setDirtyTools((current) => dirty
+      ? current.includes(tool) ? current : [...current, tool]
+      : current.filter((item) => item !== tool));
+  }, []);
+  const closeToolsNow = (closing: ToolId[]) => {
+    if (!closing.length) return;
+    if (closing.includes(activeTool)) setActiveTool("home");
+    setMountedTools((current) => current.filter((item) => !closing.includes(item)));
+    setDirtyTools((current) => current.filter((item) => !closing.includes(item)));
+  };
   const closeMountedTool = (tool: ToolId) => {
     if (tool === "home") return;
-    if (activeTool === tool) setActiveTool("home");
-    setMountedTools((current) => current.filter((item) => item !== tool));
+    if (dirtyTools.includes(tool)) {
+      setPendingToolClose([tool]);
+      return;
+    }
+    closeToolsNow([tool]);
   };
   const closeAllMountedTools = () => {
-    if (activeTool !== "home") setActiveTool("home");
-    setMountedTools((current) => current.filter((tool) => tool === "home"));
+    const closing = retainedTools.filter((tool) => tool !== "home");
+    if (closing.some((tool) => dirtyTools.includes(tool))) {
+      setPendingToolClose(closing);
+      return;
+    }
+    closeToolsNow(closing);
   };
+  React.useEffect(() => {
+    if (!dirtyTools.length) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirtyTools.length]);
   const active = tools.find((tool) => tool.id === activeTool) ?? tools[0];
   const favoriteIds = new Set(favoriteTools.filter((id) => id !== "home" && tools.some((tool) => tool.id === id)));
   const activeIsFavorite = favoriteIds.has(activeTool);
@@ -298,8 +330,8 @@ export function App() {
   }, [toolLinkMessage]);
 
   React.useEffect(() => {
-    if (window.location.protocol === "https:" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    if (window.isSecureContext && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register(new URL("./sw.js", document.baseURI).href).catch(() => undefined);
     }
   }, []);
 
@@ -703,7 +735,7 @@ export function App() {
 
         <section className={detailsExpanded || activeTool === "home" ? "tool-body" : "tool-body compact-results"}>
           {retainedTools.map((mountedTool) => (
-            <ToolHost key={mountedTool} toolId={mountedTool} active={mountedTool === activeTool} t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} />
+            <ToolHost key={mountedTool} toolId={mountedTool} active={mountedTool === activeTool} t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} setToolDirty={setToolDirty} />
           ))}
         </section>
       </main>
@@ -719,17 +751,35 @@ export function App() {
         keyboard={false}
         footer={(
           <div className="legal-consent-actions">
-            <AButton href="/legal.html" target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
+            <AButton href="./legal.html" target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
             <AButton variant="filled" onClick={() => setAcceptedLegalVersion(legalVersion)}>{t.acceptTerms}</AButton>
           </div>
         )}
       >
         <p className="legal-consent-body">{t.legalNoticeBody}</p>
         <ul className="legal-consent-list">
-          {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview].map((item) => (
+          {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview, t.legalDataCare].map((item) => (
             <li key={item}><CheckCircleFilled aria-hidden="true" /><span>{item}</span></li>
           ))}
         </ul>
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingToolClose)}
+        centered
+        width={440}
+        title={lang === "zh" ? "有修改尚未导出" : "Changes have not been exported"}
+        okText={lang === "zh" ? "仍然关闭" : "Close anyway"}
+        cancelText={t.cancelEdit}
+        okButtonProps={{ danger: true }}
+        onCancel={() => setPendingToolClose(null)}
+        onOk={() => {
+          const closing = pendingToolClose ?? [];
+          setPendingToolClose(null);
+          closeToolsNow(closing);
+        }}
+      >
+        <p>{lang === "zh" ? "SQLite 中的修改只保存在当前标签页。关闭后将无法恢复。" : "SQLite changes exist only in this tab and cannot be recovered after closing."}</p>
       </Modal>
 
       <SettingsModal

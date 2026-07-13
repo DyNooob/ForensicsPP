@@ -77,6 +77,17 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
     if (!file) return;
     setDropActive(false);
     setError("");
+    requestRef.current += 1;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setPcap(null);
+    setSelectedPacketNo(null);
+    setPacketFilter("");
+    setConversationFilter("");
+    setNetworkFilter("");
+    setPacketPage(0);
+    setView("overview");
+    setLoading(false);
     if (file.size > MAX_PCAP_BYTES) {
       setError(english ? "The capture exceeds the 128 MiB limit." : "流量包超过 128 MiB 限制。");
       return;
@@ -85,9 +96,6 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
       setError(english ? "The capture file is empty." : "流量包为空。");
       return;
     }
-    requestRef.current += 1;
-    workerRef.current?.terminate();
-    workerRef.current = null;
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -179,7 +187,7 @@ export function PcapTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className={`tool-grid pcap-workbench ${pcap ? "has-pcap" : "empty-pcap"}`}>
       <section className="tool-panel wide-panel pcap-source-panel">
         <ToolPanelHeader title={english ? "Open packet capture" : "选择流量包"} actions={<AButton variant="text" disabled={!pcap && !error} onClick={clear}>{t.clear}</AButton>} />
-        <input className="hidden-file-input" ref={inputRef} type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" aria-hidden="true" tabIndex={-1} onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}

@@ -4,6 +4,30 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-13
+
+### Changed
+
+- Kept evidence inputs and analysis results in the current browser tab instead of persistent local storage, while preserving tool state during navigation.
+- Reworked file and text tool empty states around one clear primary action and added practical file-size checks before expensive parsing.
+- Expanded the legal notice with authorization, evidence preservation, data handling, security, result, third-party and liability boundaries.
+- Refined About and Local Data settings, including a compact current-session list and clearer project links.
+- Changed production asset, legal-page and CyberChef paths to support static hosting from a subdirectory.
+
+### Fixed
+
+- Added incremental large-file hashing, byte-level progress, cancellation and a clear SM3 size limit instead of reading every selected file into memory at once.
+- Warned before closing or replacing a modified SQLite database and stopped persisting SQL query history.
+- Removed legacy evidence values left in localStorage by older versions without repeatedly clearing current settings.
+- Corrected stale SEO version metadata, service-worker cache naming and the cached social-image path.
+- Updated the layout audit to exercise current-session inputs instead of relying on removed persistent evidence state.
+
+### Verification
+
+- 48 automated tests across eight test files.
+- Layout audit covers 36 routes, 17 populated states and 12 file-loaded states at 1366 × 900.
+- Production build, copyright headers, static-package checks and a real subdirectory deployment were verified.
+
 ## [0.8.0] - 2026-07-13
 
 ### Changed
@@ -122,7 +146,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0

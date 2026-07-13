@@ -19,18 +19,18 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-const CACHE_VERSION = "forensicspp-v0.6-2026-07-12";
+const CACHE_VERSION = "forensicspp-v0.8.1-2026-07-13";
 const CORE_ASSETS = [
-  "/",
-  "/index.html",
-  "/legal.html",
-  "/404.html",
-  "/favicon.svg",
-  "/og-image.svg",
-  "/site.webmanifest",
-  "/robots.txt",
-  "/sitemap.xml",
-  "/cyberchef/CyberChef_v10.19.4.html"
+  "./",
+  "./index.html",
+  "./legal.html",
+  "./404.html",
+  "./favicon.svg",
+  "./og-image.png",
+  "./site.webmanifest",
+  "./robots.txt",
+  "./sitemap.xml",
+  "./cyberchef/CyberChef_v10.19.4.html"
 ];
 
 self.addEventListener("install", (event) => {
@@ -59,7 +59,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/index.html")));
+    event.respondWith(fetch(request).catch(() => caches.match(new URL("./index.html", self.registration.scope).href)));
     return;
   }
 

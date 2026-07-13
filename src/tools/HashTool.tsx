@@ -24,7 +24,7 @@ import { AButton, ACheckbox, ASegmentedButton, ASegmentedGroup, InfoTable, ToolP
 import { copy } from "../i18n";
 import type { BatchHashRow } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
-import { formatHashCase, hashSelectedBytes } from "../utils/hash";
+import { formatHashCase, hashSelectedBytes, hashSelectedFile, SM3_FILE_SIZE_LIMIT } from "../utils/hash";
 import { useStoredState } from "../utils/storage";
 
 type ExpectedHashTarget = { hash: string; label: string };
@@ -67,11 +67,11 @@ function rowsToCsv(rows: BatchHashRow[], algorithms: string[], hashCase: "lower"
 export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: HashToolServices }) {
   const { annotateBatchHashMatches, parseExpectedHashSet } = services;
   const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("hash.text", "");
-  const [mode, setMode] = React.useState<"file" | "text">(() => text ? "text" : "file");
+  const [text, setText] = React.useState("");
+  const [mode, setMode] = React.useState<"file" | "text">("file");
   const [hashCase, setHashCase] = useStoredState<"lower" | "upper">("hash.case", "lower");
   const [selectedAlgorithms, setSelectedAlgorithms] = useStoredState<string[]>("hash.algorithms", ["sha256"]);
-  const [expectedHash, setExpectedHash] = useStoredState("hash.expectedHash", "");
+  const [expectedHash, setExpectedHash] = React.useState("");
   const [batchRows, setBatchRows] = React.useState<BatchHashRow[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [textHashes, setTextHashes] = React.useState<Record<string, string> | null>(null);
@@ -85,6 +85,8 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const directoryInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastFilesRef = React.useRef<File[]>([]);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const textRunRef = React.useRef(0);
   const directoryInputProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
   const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ["sha256"];
   const expectedTargets = React.useMemo(() => parseExpectedHashSet(expectedHash), [expectedHash, parseExpectedHashSet]);
@@ -115,9 +117,13 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
     if (page >= pageCount) setPage(pageCount - 1);
   }, [page, pageCount]);
 
+  React.useEffect(() => () => abortRef.current?.abort(), []);
+
   const queueFiles = (files: FileList | File[] | null | undefined) => {
     const fileArray = Array.from(files ?? []);
     if (!fileArray.length) return;
+    abortRef.current?.abort();
+    textRunRef.current += 1;
     lastFilesRef.current = fileArray;
     setSelectedFiles(fileArray);
     setMode("file");
@@ -131,19 +137,29 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   const hashFiles = async (files: File[] = lastFilesRef.current, selected = algorithms) => {
     const fileArray = Array.from(files);
     if (!fileArray.length) return;
+    abortRef.current?.abort();
+    textRunRef.current += 1;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setIsHashing(true);
     setError("");
     setBatchRows([]);
     setFilter("");
     setPage(0);
-    setProgress({ done: 0, total: fileArray.length, name: fileArray[0]?.name ?? "" });
+    const totalBytes = fileArray.reduce((total, file) => total + file.size, 0);
+    setProgress({ done: 0, total: totalBytes, name: fileArray[0]?.name ?? "" });
     const rows: BatchHashRow[] = [];
+    let completedBytes = 0;
     try {
       for (const [index, file] of fileArray.entries()) {
         const name = file.webkitRelativePath || file.name;
-        setProgress({ done: index, total: fileArray.length, name });
+        if (controller.signal.aborted) throw new DOMException("Hash calculation cancelled", "AbortError");
+        setProgress({ done: completedBytes, total: totalBytes, name });
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        const digests = await hashSelectedBytes(new Uint8Array(await file.arrayBuffer()), selected);
+        const digests = await hashSelectedFile(file, selected, {
+          signal: controller.signal,
+          onProgress: ({ loaded }) => setProgress({ done: completedBytes + loaded, total: totalBytes, name })
+        });
         rows.push({
           index: index + 1,
           name,
@@ -151,31 +167,53 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
           lastModified: Number.isFinite(file.lastModified) ? new Date(file.lastModified).toISOString() : "",
           ...digests
         });
+        completedBytes += file.size;
       }
       setBatchRows(rows);
       setResultAlgorithms(selected);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (caught instanceof RangeError && caught.message.startsWith("SM3_FILE_TOO_LARGE:")) {
+        setError(english
+          ? `SM3 is limited to files up to ${formatBytes(SM3_FILE_SIZE_LIMIT)}. Deselect SM3 to hash larger files.`
+          : `SM3 仅支持不超过 ${formatBytes(SM3_FILE_SIZE_LIMIT)} 的文件。取消勾选 SM3 后可计算更大的文件。`);
+      } else {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
       setBatchRows(rows);
     } finally {
-      setIsHashing(false);
-      setProgress({ done: fileArray.length, total: fileArray.length, name: "" });
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setIsHashing(false);
+        setProgress({ done: completedBytes, total: totalBytes, name: "" });
+      }
     }
   };
 
   const hashText = async () => {
     if (!text) return;
+    abortRef.current?.abort();
+    const runId = ++textRunRef.current;
     setError("");
     setIsHashing(true);
     try {
       const values = await hashSelectedBytes(new TextEncoder().encode(text), algorithms);
+      if (runId !== textRunRef.current) return;
       setTextHashes(Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]))));
       setResultAlgorithms(algorithms);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (runId === textRunRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setIsHashing(false);
+      if (runId === textRunRef.current) setIsHashing(false);
     }
+  };
+
+  const cancelHashing = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    textRunRef.current += 1;
+    setIsHashing(false);
+    setProgress({ done: 0, total: 0, name: "" });
   };
 
   const toggleAlgorithm = (algorithm: string) => {
@@ -187,6 +225,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   };
 
   const clear = () => {
+    cancelHashing();
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (directoryInputRef.current) directoryInputRef.current.value = "";
     lastFilesRef.current = [];
@@ -218,8 +257,8 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => queueFiles(event.target.files)} />
-        <input className="hidden-file-input" ref={directoryInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} {...directoryInputProps} onChange={(event) => queueFiles(event.target.files)} />
+        <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
+        <input className="hidden-file-input" ref={directoryInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} {...directoryInputProps} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
 
         {mode === "file" ? (
           <>
@@ -286,8 +325,9 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
         <div className="button-row">
           {mode === "text" && <AButton variant="filled" disabled={!text || isHashing} onClick={() => void hashText()}>{english ? "Calculate" : "计算哈希"}</AButton>}
           {mode === "file" && <AButton variant="filled" disabled={!selectedFiles.length || isHashing} onClick={() => void hashFiles()}>{english ? "Calculate hashes" : "计算哈希"}</AButton>}
+          {isHashing && <AButton variant="outlined" onClick={cancelHashing}>{english ? "Cancel" : "取消"}</AButton>}
         </div>
-        {isHashing && <div className="hash-simple-progress"><progress max={Math.max(1, progress.total)} value={progress.done} /><span>{progress.name || (english ? "Calculating..." : "正在计算...")}</span></div>}
+        {isHashing && <div className="hash-simple-progress"><progress max={Math.max(1, progress.total)} value={progress.done} /><span>{progress.name || (english ? "Calculating..." : "正在计算...")}{progress.total > 0 ? ` · ${formatBytes(progress.done)} / ${formatBytes(progress.total)}` : ""}</span></div>}
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
 

@@ -27,6 +27,7 @@ import { downloadBlob, formatBytes } from "../utils/files";
 
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
+const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024;
 
 function formatExifValue(value: unknown) {
   if (value == null) return "--";
@@ -99,14 +100,19 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
 
   const handleImage = async (file: File | undefined) => {
     if (!file) return;
-    if (file.size > 128 * 1024 * 1024) {
-      setImageInfo(null);
-      setError(isEnglish ? "This image exceeds the 128 MiB browser analysis limit." : "图片超过 128 MiB，无法在浏览器中直接分析。");
+    analysisIdRef.current += 1;
+    services.revokeImageObjectUrls();
+    sourceRef.current = null;
+    setImageInfo(null);
+    setAdvancedTask("");
+    setImagePage("overview");
+    setLoading(false);
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      setError(isEnglish ? "This image exceeds the 64 MiB browser analysis limit." : "图片超过 64 MiB，无法在浏览器中直接分析。");
       return;
     }
     const analysisId = analysisIdRef.current + 1;
     analysisIdRef.current = analysisId;
-    services.revokeImageObjectUrls();
     setLoading(true);
     setError("");
     try {
@@ -172,6 +178,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     } catch (caught) {
       if (analysisId !== analysisIdRef.current) return;
       services.revokeImageObjectUrls();
+      sourceRef.current = null;
       setImageInfo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -316,14 +323,14 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         onDrop={handleImageDrop}
       >
         <PanelTitle title={t.uploadImage} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => void handleImage(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleImage(file); }} />
         <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}>
           <strong>{imageInfo?.name || t.dropFileTitle}</strong>
           <span>{imageInfo ? `${imageInfo.type} · ${formatBytes(imageInfo.size)}` : (isEnglish ? "PNG, JPEG, GIF, WebP, BMP, TIFF, HEIC, or image-like data" : "支持 PNG、JPEG、GIF、WebP、BMP、TIFF、HEIC 和疑似图片数据")}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="text" disabled={!imageInfo && !error} onClick={clearImage}>{t.clear}</AButton>
+          <AButton variant="text" disabled={!imageInfo && !error && !loading} onClick={clearImage}>{t.clear}</AButton>
         </div>
         {(loading || advancedTask) && <ALinearProgress />}
         {error && <div className="empty-state error-state">{error}</div>}

@@ -135,7 +135,7 @@ export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className={`tool-grid fileid-workbench ${result ? "has-fileid" : "empty-fileid"}`}>
       <div className="tool-panel wide-panel fileid-source-panel">
         <PanelTitle title={english ? "Open file" : "选择文件"} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"

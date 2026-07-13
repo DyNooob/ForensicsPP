@@ -40,7 +40,7 @@ export type YaraToolServices = {
 export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: YaraToolServices }) {
   const english = t.waiting === "Waiting";
   const [rules, setRules] = useStoredState("yara.rules.v2", "");
-  const [sample, setSample] = useStoredState("yara.sample.v2", "");
+  const [sample, setSample] = React.useState("");
   const [sampleName, setSampleName] = React.useState("text sample");
   const [sampleBytes, setSampleBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(sample));
   const [result, setResult] = React.useState<YaraScanResult | null>(null);
@@ -166,7 +166,7 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
 
         <div className="yara-simple-divider" />
         <div className="yara-simple-section-heading"><strong>{t.yaraSample}</strong></div>
-        <input ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFiles(event.target.files)} />
+        <input ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { void handleFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
         <div
           className={`desktop-drop-zone yara-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

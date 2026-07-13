@@ -46,11 +46,11 @@ git push origin main
 After the deployed build is verified:
 
 ```bash
-git tag -a v0.7.1 -m "Forensics++ v0.7.1"
-git push origin v0.7.1
+git tag -a v0.8.1 -m "Forensics++ v0.8.1"
+git push origin v0.8.1
 ```
 
-The release workflow verifies the source, builds `dist/`, creates `ForensicsPP-v0.7.1-static.zip`, writes `SHA256SUMS.txt`, and publishes both files with `docs/releases/v0.7.1.md` as the bilingual GitHub Release body.
+The release workflow verifies the source, builds `dist/`, creates `ForensicsPP-v0.8.1-static.zip`, writes `SHA256SUMS.txt`, and publishes both files with `docs/releases/v0.8.1.md` as the bilingual GitHub Release body.
 
 发布工作流会重新验证源码、构建 `dist/`、生成静态 ZIP 与 SHA-256 校验文件，并使用对应的中英文 Release Notes 创建 GitHub Release。`dist/` 和 `release/` 都不提交到 `main`。
 

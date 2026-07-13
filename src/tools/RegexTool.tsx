@@ -103,15 +103,19 @@ function matchesToCsv(matches: RegexMatch[]) {
   ].join("\n");
 }
 
+const MAX_REGEX_FILE_BYTES = 16 * 1024 * 1024;
+
 export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolProps) {
   const [pattern, setPattern] = useStoredState("regex.pattern", "");
   const [flags, setFlags] = useStoredState("regex.flags", "gi");
-  const [source, setSource] = useStoredState("regex.text.v2", "");
+  const [source, setSource] = React.useState("");
   const [replacement, setReplacement] = useStoredState("regex.replacement", "[REDACTED]");
   const [filter, setFilter] = React.useState("");
   const [selectedKey, setSelectedKey] = React.useState("");
   const [preset, setPreset] = React.useState("");
+  const [fileError, setFileError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
   const english = t.waiting === "Waiting";
   const result = React.useMemo(() => analyze(pattern, flags, source, replacement), [flags, pattern, replacement, source]);
   const hasInput = Boolean(pattern.trim() || source.trim());
@@ -126,9 +130,21 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
 
   const loadFile = async (file?: File) => {
     if (!file) return;
-    setSource(await file.text());
+    const requestId = ++requestRef.current;
+    setSource("");
+    setFileError("");
     setSelectedKey("");
     setFilter("");
+    if (file.size > MAX_REGEX_FILE_BYTES) {
+      setFileError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      return;
+    }
+    try {
+      const value = await file.text();
+      if (requestId === requestRef.current) setSource(value);
+    } catch (caught) {
+      if (requestId === requestRef.current) setFileError(caught instanceof Error ? caught.message : String(caught));
+    }
   };
   const applyPreset = (value: string) => {
     setPreset(value);
@@ -139,11 +155,13 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
     setSelectedKey("");
   };
   const clear = () => {
+    requestRef.current += 1;
     setPattern("");
     setSource("");
     setFilter("");
     setSelectedKey("");
     setPreset("");
+    setFileError("");
   };
 
   return (
@@ -156,13 +174,14 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,.html,text/*,application/json" onChange={(event) => void loadFile(event.currentTarget.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,.html,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="regex-simple-controls">
           <label className="stack-label regex-pattern-field">{t.pattern}<input className="text-input full-input" value={pattern} onChange={(event) => { setPattern(event.currentTarget.value); setSelectedKey(""); }} placeholder={english ? "Regular expression" : "输入正则表达式"} /></label>
           <label className="stack-label">{t.flags}<input className="text-input full-input" value={flags} onChange={(event) => setFlags(event.currentTarget.value)} placeholder="gim" /></label>
           <label className="stack-label">{t.regexExamples}<ASelect aria-label={t.regexExamples} value={preset} onChange={(value) => applyPreset(String(value))} options={[{ value: "", label: english ? "Choose preset" : "选择常用表达式" }, ...presets.map((item) => ({ value: item.label, label: item.label }))]} /></label>
         </div>
-        <label className="stack-label">{english ? "Source text" : "源文本"}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { setSource(event.currentTarget.value); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
+        <label className="stack-label">{english ? "Source text" : "源文本"}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
+        {fileError && <div className="empty-state error-state">{fileError}</div>}
         {result.error && <div className="empty-state error-state">{result.error}</div>}
       </div>
 

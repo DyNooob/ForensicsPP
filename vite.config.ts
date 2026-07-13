@@ -45,6 +45,7 @@ function copyrightCssPlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: "./",
   plugins: [react(), copyrightCssPlugin()],
   build: {
     target: "es2022",

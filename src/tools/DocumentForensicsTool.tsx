@@ -81,16 +81,22 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const choose = (next?: File) => {
     if (!next) return;
-    if (next.size <= 0 || next.size > MAX_FILE_BYTES) {
-      setError(english ? "The document is empty or exceeds 128 MiB." : "文档为空或超过 128 MiB。" );
-      return;
-    }
-    setFile(next);
+    abortRef.current?.abort();
+    abortRef.current = null;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setLoading(false);
+    setFile(null);
     setAnalysis(null);
     setView("summary");
     setFilter("");
     setFindingCategory("all");
     setStructureKind("all");
+    if (next.size <= 0 || next.size > MAX_FILE_BYTES) {
+      setError(english ? "The document is empty or exceeds 128 MiB." : "文档为空或超过 128 MiB。" );
+      return;
+    }
+    setFile(next);
     setError("");
   };
 
@@ -172,7 +178,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   return <div className="tool-grid document-forensics-workbench">
     <section className="tool-panel wide-panel">
       <ToolPanelHeader title={english ? "Office / PDF source" : "Office / PDF 文档"} actions={<AButton variant="text" disabled={!file && !analysis && !error} onClick={clear}>{t.clear}</AButton>} />
-      <input className="hidden-file-input" ref={inputRef} type="file" accept=".pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm,.dotm,.xlam" aria-hidden="true" tabIndex={-1} onChange={(event) => choose(event.target.files?.[0])} />
+      <input className="hidden-file-input" ref={inputRef} type="file" accept=".pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm,.dotm,.xlam" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; choose(file); }} />
       <div className={`desktop-drop-zone ${dragActive ? "active" : ""}`} role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); choose(event.dataTransfer.files?.[0]); }}>
         <strong>{file?.name || (english ? "Select an Office or PDF document" : "选择 Office 或 PDF 文档")}</strong>
         <span>{file ? formatBytes(file.size) : "PDF · DOC/XLS/PPT · DOCX/XLSX/PPTX"}</span>

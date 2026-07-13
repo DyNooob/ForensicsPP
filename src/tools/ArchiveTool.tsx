@@ -122,6 +122,8 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const archiveBytesRef = React.useRef<Uint8Array | null>(null);
+  const requestRef = React.useRef(0);
+  React.useEffect(() => () => { requestRef.current += 1; archiveBytesRef.current = null; }, []);
 
   const entries = archive?.entries ?? [];
   const visibleEntries = React.useMemo(() => {
@@ -148,8 +150,17 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const loadFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
     setError("");
+    archiveBytesRef.current = null;
+    setArchive(null);
+    setSelectedName("");
+    setQuery("");
+    setEntryType("all");
+    setSortBy("path");
+    setLoadingEntry("");
+    setLoading(false);
     if (file.size > MAX_ARCHIVE_BYTES) {
       setError(english ? "The archive exceeds the 256 MiB limit." : "压缩包超过 256 MiB 限制。");
       return;
@@ -157,6 +168,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (requestId !== requestRef.current) return;
       const parsed = parseArchiveEntries(bytes);
       if (!parsed.entries.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
       archiveBytesRef.current = bytes;
@@ -168,14 +180,18 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
       setEntryType("all");
       setSortBy("path");
     } catch (caught) {
-      setArchive(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setArchive(null);
+        archiveBytesRef.current = null;
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
     archiveBytesRef.current = null;
     setArchive(null);
     setSelectedName("");
@@ -232,7 +248,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className={`tool-grid archive-workbench ${archive ? "has-archive" : "empty-archive"}`}>
       <div className="tool-panel wide-panel archive-source-panel">
         <PanelTitle title={t.archive} />
-        <input className="hidden-file-input" ref={inputRef} type="file" tabIndex={-1} aria-hidden="true" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" tabIndex={-1} aria-hidden="true" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}

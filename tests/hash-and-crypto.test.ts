@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from "vitest";
 import { atbash, caesar, morseDecode, morseEncode, railFence, railFenceDecode, vigenere } from "../src/features/crypto/algorithms";
-import { detectHashType, formatHashCase, hashBytes } from "../src/utils/hash";
+import { detectHashType, formatHashCase, hashBytes, hashSelectedFile, SM3_FILE_SIZE_LIMIT } from "../src/utils/hash";
 
 describe("standard digest vectors", () => {
   const input = new TextEncoder().encode("abc");
@@ -43,6 +43,37 @@ describe("standard digest vectors", () => {
     expect(detectHashType(hashes.md5)).toBe("MD5-like");
     expect(detectHashType(hashes.sha256)).toBe("SHA256-like");
     expect(detectHashType(`*${hashes.sha1.toUpperCase()}`)).toBe("MySQL native password");
+  });
+});
+
+describe("streamed file hashing", () => {
+  it("matches in-memory hashes across small chunks", async () => {
+    const bytes = new TextEncoder().encode("abc".repeat(5000));
+    const expected = hashBytes(bytes);
+    const progress: number[] = [];
+    const actual = await hashSelectedFile(new Blob([bytes]), ["md5", "sha1", "sha256", "sha512", "sha3", "sm3"], {
+      chunkSize: 1024,
+      onProgress: ({ loaded }) => progress.push(loaded)
+    });
+    expect(actual).toEqual(expected);
+    expect(progress.at(-1)).toBe(bytes.length);
+  });
+
+  it("supports cancellation between chunks", async () => {
+    const controller = new AbortController();
+    const hashing = hashSelectedFile(new Blob([new Uint8Array(256 * 1024)]), ["sha256"], {
+      chunkSize: 64 * 1024,
+      signal: controller.signal,
+      onProgress: ({ loaded }) => {
+        if (loaded >= 64 * 1024) controller.abort();
+      }
+    });
+    await expect(hashing).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("rejects oversized SM3 files before reading them", async () => {
+    const oversized = { size: SM3_FILE_SIZE_LIMIT + 1, slice: () => new Blob() } as Blob;
+    await expect(hashSelectedFile(oversized, ["sm3"])).rejects.toThrow("SM3_FILE_TOO_LARGE");
   });
 });
 

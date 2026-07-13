@@ -24,7 +24,7 @@ import { AButton } from "../components/ui";
 import type { Translation } from "../i18n";
 
 export function CyberChefTool({ t }: { t: Translation }) {
-  const cyberChefUrl = "/cyberchef/CyberChef_v10.19.4.html";
+  const cyberChefUrl = "./cyberchef/CyberChef_v10.19.4.html";
   const [loaded, setLoaded] = React.useState(false);
   const [showFallback, setShowFallback] = React.useState(false);
   const [frameKey, setFrameKey] = React.useState(0);

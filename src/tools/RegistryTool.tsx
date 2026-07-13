@@ -28,12 +28,22 @@ import { downloadTextFile, formatBytes } from "../utils/files";
 
 const LIMIT = 256 * 1024 * 1024;
 
-function parseInWorker(buffer: ArrayBuffer, workerRef: React.MutableRefObject<Worker | null>) {
+function parseInWorker(buffer: ArrayBuffer, workerRef: React.MutableRefObject<Worker | null>, signal: AbortSignal) {
   return new Promise<RegistryHive>((resolve, reject) => {
     const worker = new Worker(new URL("../features/registry/registry.worker.ts", import.meta.url), { type: "module" });
     workerRef.current = worker;
-    worker.onmessage = (event: MessageEvent<{ ok: boolean; hive?: RegistryHive; error?: string }>) => { worker.terminate(); workerRef.current = null; event.data.ok && event.data.hive ? resolve(event.data.hive) : reject(new Error(event.data.error || "Hive parsing failed.")); };
-    worker.onerror = (event) => { worker.terminate(); workerRef.current = null; reject(new Error(event.message)); };
+    const finish = () => {
+      signal.removeEventListener("abort", abort);
+      worker.terminate();
+      if (workerRef.current === worker) workerRef.current = null;
+    };
+    const abort = () => {
+      finish();
+      reject(new DOMException("Registry parsing cancelled", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; hive?: RegistryHive; error?: string }>) => { finish(); event.data.ok && event.data.hive ? resolve(event.data.hive) : reject(new Error(event.data.error || "Hive parsing failed.")); };
+    worker.onerror = (event) => { finish(); reject(new Error(event.message)); };
     worker.postMessage(buffer, [buffer]);
   });
 }
@@ -42,6 +52,7 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const workerRef = React.useRef<Worker | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [hive, setHive] = React.useState<RegistryHive | null>(null);
   const [selectedId, setSelectedId] = React.useState(0);
@@ -49,7 +60,7 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const [valueFilter, setValueFilter] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => { abortRef.current?.abort(); workerRef.current?.terminate(); }, []);
   const selected = hive?.keys[selectedId] ?? null;
   const children = React.useMemo(() => selected && hive ? selected.children.map((id) => hive.keys[id]).filter(Boolean) : [], [hive, selected]);
   const searchResults = React.useMemo(() => { const needle = query.trim().toLowerCase(); if (!needle || !hive) return []; return hive.keys.filter((key) => key.path.toLowerCase().includes(needle) || key.values.some((value) => `${value.name} ${value.value}`.toLowerCase().includes(needle))).slice(0, 300); }, [hive, query]);
@@ -59,13 +70,25 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   }, [selected, valueFilter]);
   const open = async (next: File | undefined) => {
     if (!next) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setFile(next);
+    setHive(null);
+    setSelectedId(0);
+    setQuery("");
+    setValueFilter("");
+    setLoading(false);
     if (next.size > LIMIT) { setError(english ? "Hive exceeds the 256 MiB limit." : "Hive 超过 256 MiB 解析上限。"); return; }
-    setLoading(true); setFile(next); setError(""); setHive(null);
-    try { const result = await parseInWorker(await next.arrayBuffer(), workerRef); setHive(result); setSelectedId(result.rootId); setQuery(""); setValueFilter(""); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); }
-    finally { setLoading(false); }
+    setLoading(true); setError("");
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try { const bytes = await next.arrayBuffer(); if (controller.signal.aborted) return; const result = await parseInWorker(bytes, workerRef, controller.signal); if (controller.signal.aborted) return; setHive(result); setSelectedId(result.rootId); setQuery(""); setValueFilter(""); }
+    catch (caught) { if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught)); }
+    finally { if (abortRef.current === controller) { abortRef.current = null; setLoading(false); } }
   };
-  const clear = () => { workerRef.current?.terminate(); workerRef.current = null; setFile(null); setHive(null); setSelectedId(0); setQuery(""); setValueFilter(""); setLoading(false); setError(""); if (inputRef.current) inputRef.current.value = ""; };
+  const clear = () => { abortRef.current?.abort(); abortRef.current = null; workerRef.current?.terminate(); workerRef.current = null; setFile(null); setHive(null); setSelectedId(0); setQuery(""); setValueFilter(""); setLoading(false); setError(""); if (inputRef.current) inputRef.current.value = ""; };
   const selectKey = (id: number) => { setSelectedId(id); setQuery(""); setValueFilter(""); };
   const exportCurrentKey = () => {
     if (!selected) return;
@@ -75,7 +98,7 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   return <div className="tool-grid browser-tool-workbench registry-browser-workbench">
     <section className="tool-panel wide-panel browser-source-panel">
       <div className="panel-heading-row"><PanelTitle title={english ? "Registry Hive browser" : "注册表 Hive 浏览器"} />{hive && <span className="status-pill">{hive.keys.length} {english ? "keys" : "个键"} · {formatBytes(file?.size ?? 0)}</span>}</div>
-      <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void open(event.target.files?.[0])} />
+      <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
       {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{english ? "Open a Registry Hive" : "打开 Registry Hive"}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
       <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="text" disabled={!file && !hive} onClick={clear}>{t.clear}</AButton></div>
       {loading && <ALinearProgress />}

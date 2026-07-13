@@ -37,7 +37,8 @@ const height = Number(process.env.AUDIT_HEIGHT || 900);
 const saveScreenshots = process.env.AUDIT_SCREENSHOTS === "1";
 const defaultThemeMode = process.env.AUDIT_THEME === "dark" ? "dark" : "light";
 const screenshotDir = process.env.AUDIT_SCREENSHOT_DIR || "layout-audit-screenshots";
-const legalVersion = "2026-07-12";
+const legalVersion = "2026-07-13-v2";
+const legacyEvidenceCleanupVersion = "2026-07-13-v1";
 
 const tools = [
   "home",
@@ -723,6 +724,7 @@ async function loadToolState(client, tool, options = {}) {
       } else {
         localStorage.removeItem("forensicspp:legal.acceptedVersion");
       }
+      localStorage.setItem("forensicspp:storage.legacyEvidenceCleanupVersion", JSON.stringify(${JSON.stringify(legacyEvidenceCleanupVersion)}));
       if (${JSON.stringify(cleanHome)}) {
         localStorage.setItem("forensicspp:app.recentTools", JSON.stringify([]));
         localStorage.setItem("forensicspp:app.favoriteTools", JSON.stringify([]));
@@ -1457,31 +1459,20 @@ const seededToolStates = [
   {
     tool: "codec",
     readyClass: ".codec-workbench.has-codec",
-    values: {
-      "codec.input": "%7B%22case%22%3A%22FPP-001%22%2C%22status%22%3A%22review%22%7D",
-      "codec.output": "{\"case\":\"FPP-001\",\"status\":\"review\"}",
-      "codec.operation": "urld",
-      "codec.selectedFormat": "url"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.codec-simple-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'%7B%22case%22%3A%22FPP-001%22%7D'); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   },
   {
     tool: "hash",
     readyClass: ".hash-workbench.has-hash",
-    values: {
-      "hash.text": "Forensics++ evidence sample\ncase=FPP-001\nsource=browser-local",
-      "hash.hmacKey": "case-key",
-      "hash.expectedHash": ""
-    }
+    afterLoad: `(() => { [...document.querySelectorAll('button')].find((node)=>(node.textContent||'').trim()==='文本')?.click(); setTimeout(()=>{ const input=document.querySelector('.hash-simple-text-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'Forensics++ evidence sample\\ncase=FPP-001'); input.dispatchEvent(new Event('input',{bubbles:true}));} },50); })()`,
+    values: {}
   },
   {
     tool: "crypto",
     readyClass: ".crypto-simple-workbench.has-crypto .crypto-simple-result-panel",
-    values: {
-      "crypto.input": "KHOOR ZRUOG",
-      "crypto.output": "HELLO WORLD",
-      "crypto.operation": "caesar",
-      "crypto.shift": 3
-    }
+    afterLoad: `(() => { const input=document.querySelector('.crypto-simple-text-field textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'KHOOR ZRUOG'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>(node.textContent||'').trim()==='执行')?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "jwt",
@@ -1511,34 +1502,26 @@ const seededToolStates = [
   {
     tool: "urltool",
     readyClass: ".url-workbench.has-url",
-    values: {
-      "url.input.v3": "https://case.example.org/login?next=%2Freports%2F42&utm_source=mail#summary"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.url-source-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'https://case.example.org/login?next=%2Freports%2F42&utm_source=mail#summary'); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   },
   {
     tool: "timestamp",
     readyClass: ".timestamp-workbench.has-timestamp",
-    values: {
-      "timestamp.input": "1719795600",
-      "timestamp.batchInput.v2": "1719795600 login\n133638048000000000 FILETIME\n2026-07-08T09:12:33Z alert"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.timestamp-simple-input-panel .text-input.full-input'); const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'1719795600'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('.timestamp-simple-input-panel button')].find((node)=>(node.textContent||'').trim()==='转换')?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "timeline",
     readyClass: ".timeline-simple-workbench.has-timeline .timeline-simple-results-panel",
-    values: {
-      "timeline.input.v2": "2026-07-08T09:12:33Z login success user=analyst ip=10.0.0.5\n1719795600000 browser history opened https://case.example.org/login\n2026-07-08 09:15:07 attachment saved invoice.pdf",
-      "timeline.source": "case-001.log"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.timeline-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'2026-07-08T09:12:33Z login success\\n1719795600000 browser history opened'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>/构建|Build/i.test(node.textContent||''))?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "yara",
     readyClass: ".yara-simple-workbench.has-yara .yara-simple-results-panel",
-    afterLoad: `[...document.querySelectorAll('.yara-simple-input-panel button')].find((node) => (node.textContent || '').trim() === '执行')?.click()`,
-    values: {
-      "yara.rules.v2": "rule EvidenceMarker { strings: $case = \"FPP-001\" ascii nocase $url = /https?:\\/\\/case\\.example\\.org/ condition: any of them }",
-      "yara.sample.v2": "Case FPP-001 opened https://case.example.org/review for local triage."
-    }
+    afterLoad: `(() => { const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; const rules=document.querySelector('.yara-simple-editor'); const sample=document.querySelector('.yara-simple-sample'); if(rules&&sample&&setter){setter.call(rules,'rule EvidenceMarker { strings: $case = \"FPP-001\" ascii nocase condition: any of them }'); rules.dispatchEvent(new Event('input',{bubbles:true})); setter.call(sample,'Case FPP-001 opened for local triage.'); sample.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('.yara-simple-input-panel button')].find((node)=>(node.textContent||'').trim()==='执行')?.click(),50); })()`,
+    values: {}
   },
   {
     tool: "json",
@@ -1559,9 +1542,8 @@ const seededToolStates = [
   {
     tool: "http",
     readyClass: ".http-workbench.has-http",
-    values: {
-      "http.text.v3": "POST /api/cases/FPP-001 HTTP/1.1\nHost: case.example.org\nContent-Type: application/json\nAuthorization: Bearer review-token\nX-Forwarded-For: 203.0.113.42\n\n{\"status\":\"review\",\"artifact\":\"invoice.pdf\"}"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.http-source-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'POST /api/cases/FPP-001 HTTP/1.1\\nHost: case.example.org\\nContent-Type: application/json\\n\\n{\"status\":\"review\"}'); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   },
   {
     tool: "strings",
@@ -1572,25 +1554,20 @@ const seededToolStates = [
   {
     tool: "entropy",
     readyClass: ".entropy-workbench.has-entropy",
-    values: {
-      "entropy.text.v2": "ForensicsPP evidence sample 00112233445566778899abcdef".repeat(32),
-      "entropy.blockSize": 128
-    }
+    afterLoad: `(() => { const input=document.querySelector('.entropy-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'ForensicsPP evidence sample 00112233445566778899abcdef'.repeat(32)); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   },
   {
     tool: "baseconvert",
     readyClass: ".baseconvert-workbench.has-baseconvert",
-    values: {
-      "baseconvert.value.v2": "464f52454e534943532b2b",
-      "baseconvert.base": 16
-    }
+    afterLoad: `(() => { const input=document.querySelector('.baseconvert-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'464f52454e534943532b2b'); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   },
   {
     tool: "uuid",
     readyClass: ".uuid-workbench.has-uuid",
-    values: {
-      "uuid.value": "550e8400-e29b-41d4-a716-446655440000"
-    }
+    afterLoad: `(() => { const input=document.querySelector('.uuid-simple-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'550e8400-e29b-41d4-a716-446655440000'); input.dispatchEvent(new Event('input',{bubbles:true}));} })()`,
+    values: {}
   }
 ];
 
@@ -1612,6 +1589,7 @@ async function auditSeededToolStates(client) {
         for (const [key, value] of Object.entries(values)) {
           localStorage.setItem("forensicspp:" + key, JSON.stringify(value));
         }
+        localStorage.setItem("forensicspp:storage.legacyEvidenceCleanupVersion", JSON.stringify(${JSON.stringify(legacyEvidenceCleanupVersion)}));
       `,
       awaitPromise: true
     });

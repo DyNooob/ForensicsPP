@@ -123,7 +123,7 @@ export function SettingsModal({
     system: "跟随系统",
     reset: "恢复默认",
     clearTitle: "清除本地工作区",
-    clearDesc: "删除界面偏好、最近使用、收藏和工具保存的输入。",
+    clearDesc: "删除界面偏好、最近使用和收藏。",
     siteUsage: "本站占用",
     localStorageUsage: "localStorage",
     availableQuota: "浏览器配额",
@@ -135,7 +135,11 @@ export function SettingsModal({
     closeAll: "全部关闭",
     noOpenTools: "当前没有打开的工具",
     activeTool: "正在使用",
+    moreOpenTools: "个其他工具已打开",
     relatedLinks: "相关链接",
+    projectAccess: "项目入口",
+    contact: "联系",
+    friendLinks: "友情链接",
     dependenciesTitle: "开源项目",
     dependenciesDesc: `Forensics++ 使用了以下 ${openSourceProjects.length} 个开源项目。`,
     openRepo: "打开仓库"
@@ -150,7 +154,7 @@ export function SettingsModal({
     system: "System",
     reset: "Reset",
     clearTitle: "Clear local workspace",
-    clearDesc: "Remove interface preferences, recent tools, favorites, and saved tool inputs.",
+    clearDesc: "Remove interface preferences, recent tools, and favorites.",
     siteUsage: "Site usage",
     localStorageUsage: "localStorage",
     availableQuota: "Browser quota",
@@ -162,7 +166,11 @@ export function SettingsModal({
     closeAll: "Close all",
     noOpenTools: "No tools are currently open",
     activeTool: "Active",
+    moreOpenTools: "other tools open",
     relatedLinks: "Links",
+    projectAccess: "Project",
+    contact: "Contact",
+    friendLinks: "Friends",
     dependenciesTitle: "Open-source projects",
     dependenciesDesc: `Forensics++ uses the following ${openSourceProjects.length} open-source projects.`,
     openRepo: "Open Repository"
@@ -171,10 +179,16 @@ export function SettingsModal({
   const pageHeading = page === "appearance"
     ? [labels.appearance, labels.appearanceDesc]
     : page === "project"
-      ? [t.aboutProject, t.aboutProjectDesc]
+      ? [t.aboutProject, ""]
       : page === "storage"
         ? [labels.storage, t.localCacheDesc]
         : [labels.dependenciesTitle, labels.dependenciesDesc];
+  const activeOpenTool = openTools.find((tool) => tool.active);
+  const visibleOpenTools = openTools.slice(0, 8);
+  if (activeOpenTool && !visibleOpenTools.some((tool) => tool.id === activeOpenTool.id)) {
+    visibleOpenTools[visibleOpenTools.length - 1] = activeOpenTool;
+  }
+  const hiddenOpenToolCount = openTools.length - visibleOpenTools.length;
 
   return (
     <Modal
@@ -209,7 +223,7 @@ export function SettingsModal({
         <section className="settings-main">
           <header className="settings-heading">
             <Typography.Title level={4}>{pageHeading[0]}</Typography.Title>
-            <Typography.Text type="secondary">{pageHeading[1]}</Typography.Text>
+            {pageHeading[1] && <Typography.Text type="secondary">{pageHeading[1]}</Typography.Text>}
           </header>
 
           {page === "appearance" && (
@@ -261,7 +275,10 @@ export function SettingsModal({
             <div className="settings-project">
               <div className="settings-project-hero">
                 <div className="settings-project-mark">F++</div>
-                <div><strong>Forensics++</strong><Typography.Text type="secondary">ForensicsPP.com</Typography.Text></div>
+                <div className="settings-project-identity">
+                  <div><strong>Forensics++</strong><span>Workbench</span></div>
+                  <Typography.Text type="secondary">{t.aboutProjectDesc}</Typography.Text>
+                </div>
                 <Button type="primary" href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{labels.openRepo}</Button>
               </div>
               <div className="settings-project-meta">
@@ -270,11 +287,22 @@ export function SettingsModal({
                 <div><span>{t.lastUpdated}</span><strong>{lastUpdated}</strong></div>
                 <div><span>{t.githubRepo}</span><a href={projectLinks.repo} target="_blank" rel="noreferrer">{projectRepoName}</a></div>
               </div>
-              <div className="settings-project-links">
-                <strong>{labels.relatedLinks}</strong>
-                <div>
-                  <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
+              <div className="settings-project-resources">
+                <section>
+                  <strong>{labels.projectAccess}</strong>
+                  <div>
+                    <Button href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>GitHub</Button>
+                    <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
+                  </div>
+                </section>
+                <section>
+                  <strong>{labels.contact}</strong>
                   <a href={`mailto:${feedbackEmail}`}><MailOutlined aria-hidden="true" />{feedbackEmail}</a>
+                </section>
+              </div>
+              <div className="settings-project-links">
+                <strong>{labels.friendLinks}</strong>
+                <div>
                   <a href="https://www.电子取证.com" target="_blank" rel="noreferrer">电子取证.com</a>
                   <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>
@@ -300,7 +328,7 @@ export function SettingsModal({
               <div className="settings-session-list">
                 {openTools.length === 0 ? (
                   <Typography.Text className="settings-session-empty" type="secondary">{labels.noOpenTools}</Typography.Text>
-                ) : openTools.map((tool) => (
+                ) : visibleOpenTools.map((tool) => (
                   <div className="settings-session-item" key={tool.id}>
                     <span>{tool.title}</span>
                     {tool.active && <span className="settings-session-active">{labels.activeTool}</span>}
@@ -314,6 +342,7 @@ export function SettingsModal({
                     />
                   </div>
                 ))}
+                {hiddenOpenToolCount > 0 && <Typography.Text className="settings-session-more" type="secondary">+{hiddenOpenToolCount} {labels.moreOpenTools}</Typography.Text>}
               </div>
               <div className="settings-action-line settings-danger-line">
                 <div>

@@ -114,6 +114,14 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     if (!file) return;
     setDropActive(false);
     setError("");
+    requestRef.current += 1;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setParsing(false);
+    setManifestText("");
+    setSourceName(file.name);
+    setInfo(null);
+    resetReview();
     if (file.size > MAX_ARCHIVE_SIZE) {
       setError(english ? "Files larger than 256 MiB are not opened in the browser." : "浏览器内不打开超过 256 MiB 的文件。");
       return;
@@ -121,7 +129,6 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     setParsing(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      workerRef.current?.terminate();
       const requestId = ++requestRef.current;
       const worker = new Worker(new URL("../workers/android.worker.ts", import.meta.url), { type: "module" });
       workerRef.current = worker;
@@ -155,6 +162,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
       };
       worker.postMessage({ id: requestId, bytes, name: file.name, size: file.size }, [bytes.buffer]);
     } catch (caught) {
+      setParsing(false);
       setInfo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -193,7 +201,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
           ref={inputRef}
           type="file"
           accept=".apk,.apks,.xapk,.xml,.axml,text/xml,application/xml,application/vnd.android.package-archive"
-          onChange={(event) => void handleFile(event.target.files?.[0])}
+          onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />
         <div
           className={`desktop-drop-zone manifest-drop-zone ${dropActive ? "active" : ""}`}

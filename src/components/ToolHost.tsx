@@ -104,9 +104,11 @@ type ToolHostProps = {
   lang: Lang;
   recentTools: ToolId[];
   setActiveTool: (tool: ToolId, options?: { replaceHash?: boolean }) => void;
+  setToolDirty: (tool: ToolId, dirty: boolean) => void;
 };
 
-export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool }: ToolHostProps) {
+export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, setToolDirty }: ToolHostProps) {
+  const handleDirtyChange = React.useCallback((dirty: boolean) => setToolDirty(toolId, dirty), [setToolDirty, toolId]);
   return (
     <div className="tool-retained-view" hidden={!active}>
       {toolId === "home" ? (
@@ -121,7 +123,7 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool }
             {toolId === "jwt" && <JwtTool t={t} services={services.jwt} />}
             {toolId === "password" && <PasswordTool t={t} services={services.password} />}
             {toolId === "sql" && <SqlTool t={t} />}
-            {toolId === "sqlite" && <SqliteTool t={t} />}
+            {toolId === "sqlite" && <SqliteTool t={t} onDirtyChange={handleDirtyChange} />}
             {toolId === "registry" && <RegistryTool t={t} />}
             {toolId === "plist" && <PlistTool t={t} />}
             {toolId === "browserartifacts" && <BrowserArtifactTool t={t} />}

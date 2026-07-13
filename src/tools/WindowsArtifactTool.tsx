@@ -41,11 +41,17 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
   const [view, setView] = React.useState<ResultView>("overview");
   const [pathFilter, setPathFilter] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
+  React.useEffect(() => () => { requestRef.current += 1; }, []);
 
   const loadFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
     setError("");
+    setAnalysis(null);
+    setView("overview");
+    setPathFilter("");
     if (file.size > MAX_FILE_BYTES) {
       setError(english ? "The file exceeds the 64 MiB limit." : "文件超过 64 MiB 限制。");
       return;
@@ -53,18 +59,20 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (requestId !== requestRef.current) return;
       setAnalysis(services.analyzeWindowsArtifact(bytes, file.name));
-      setView("overview");
-      setPathFilter("");
     } catch (caught) {
-      setAnalysis(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setAnalysis(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
     setAnalysis(null);
     setError("");
     setLoading(false);
@@ -92,7 +100,7 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
     <div className={`tool-grid windows-artifact-workbench ${analysis ? "has-windows" : "empty-windows"}`}>
       <div className="tool-panel wide-panel windows-source-panel">
         <PanelTitle title={english ? "Windows file" : "选择 Windows 文件"} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

@@ -39,13 +39,12 @@ import {
 import { copy } from "../i18n";
 import { downloadTextFile } from "../utils/files";
 import { FILETIME_EPOCH_OFFSET_MS } from "../utils/forensics";
-import { useStoredState } from "../utils/storage";
 
 type TimestampPage = "single" | "batch";
 
 export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
-  const [input, setInput] = useStoredState("timestamp.input", "");
-  const [batchInput, setBatchInput] = useStoredState("timestamp.batchInput.v2", "");
+  const [input, setInput] = React.useState("");
+  const [batchInput, setBatchInput] = React.useState("");
   const [submittedInput, setSubmittedInput] = React.useState("");
   const [submittedBatchInput, setSubmittedBatchInput] = React.useState("");
   const [page, setPage] = React.useState<TimestampPage>(() => input.trim() ? "single" : batchInput.trim() ? "batch" : "single");

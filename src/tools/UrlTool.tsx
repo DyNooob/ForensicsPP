@@ -22,7 +22,6 @@
 import React from "react";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
-import { useStoredState } from "../utils/storage";
 
 function refang(value: string) {
   return value.trim()
@@ -42,7 +41,7 @@ function safeDecode(value: string) {
 
 export function UrlTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = useStoredState("url.input.v3", "");
+  const [input, setInput] = React.useState("");
   const parsed = React.useMemo(() => {
     const raw = refang(input);
     if (!raw) return { url: null as URL | null, normalized: "", error: "" };

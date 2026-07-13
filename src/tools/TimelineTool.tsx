@@ -25,9 +25,9 @@ import { formatTimelineDuration, parseTimestampCandidates, timelineToCsv } from 
 import { copy } from "../i18n";
 import type { TimelineEvent } from "../models";
 import { downloadTextFile } from "../utils/files";
-import { useStoredState } from "../utils/storage";
 
 const PAGE_SIZE = 100;
+const MAX_TIMELINE_FILE_BYTES = 16 * 1024 * 1024;
 
 function timelineJson(source: string, events: TimelineEvent[]) {
   return JSON.stringify({ source, exportedAt: new Date().toISOString(), events }, null, 2);
@@ -35,15 +35,17 @@ function timelineJson(source: string, events: TimelineEvent[]) {
 
 export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = useStoredState("timeline.input.v2", "");
-  const [source, setSource] = useStoredState("timeline.source", english ? "Pasted text" : "粘贴文本");
+  const [input, setInput] = React.useState("");
+  const [source, setSource] = React.useState(english ? "Pasted text" : "粘贴文本");
   const [query, setQuery] = React.useState("");
   const [format, setFormat] = React.useState("");
   const [sortMode, setSortMode] = React.useState<"time" | "line">("time");
   const [selectedId, setSelectedId] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [dragActive, setDragActive] = React.useState(false);
+  const [error, setError] = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
   const deferredInput = React.useDeferredValue(input);
   const hasInput = Boolean(input.trim());
   const sourceLabel = /^(?:pasted text|粘贴文本)$/i.test(source) ? (english ? "Pasted text" : "粘贴文本") : source;
@@ -88,17 +90,31 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clear = () => {
+    requestRef.current += 1;
     setInput("");
     setSource(english ? "Pasted text" : "粘贴文本");
+    setError("");
     resetReview();
   };
 
   const loadFile = async (file: File | undefined) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDragActive(false);
     setSource(file.name);
-    setInput(await file.text());
+    setInput("");
+    setError("");
     resetReview();
+    if (file.size > MAX_TIMELINE_FILE_BYTES) {
+      setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      return;
+    }
+    try {
+      const value = await file.text();
+      if (requestId === requestRef.current) setInput(value);
+    } catch (caught) {
+      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+    }
   };
 
   const exportEvents = filteredEvents.length ? filteredEvents : events;
@@ -116,7 +132,7 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={fileInputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={fileInputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div
           className={`desktop-drop-zone timeline-simple-drop-zone ${dragActive ? "active" : ""}`}
           role="button"
@@ -147,12 +163,15 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             className="single-textarea timeline-simple-input"
             value={input}
             onChange={(event) => {
+              requestRef.current += 1;
               setInput(event.currentTarget.value);
+              setError("");
               if (!event.currentTarget.value) setSelectedId("");
             }}
             placeholder={english ? "Paste logs or tabular text containing timestamps" : "粘贴包含时间字段的日志或表格文本"}
           />
         </label>
+        {error && <div className="empty-state error-state">{error}</div>}
       </div>
 
       {hasInput && (

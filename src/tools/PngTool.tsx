@@ -39,6 +39,8 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
   const [error, setError] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
+  React.useEffect(() => () => { requestRef.current += 1; }, []);
 
   React.useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -46,8 +48,13 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
 
   const loadFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
     setError("");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+    setAnalysis(null);
+    setLoading(false);
     if (file.size > MAX_PNG_BYTES) {
       setError(english ? "The PNG exceeds the 128 MiB limit." : "PNG 文件超过 128 MiB 限制。");
       return;
@@ -55,19 +62,22 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (requestId !== requestRef.current) return;
       const next = services.analyzePngEvidence(bytes, file.name);
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(file));
       setAnalysis(next);
     } catch (caught) {
-      setAnalysis(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setAnalysis(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
     setAnalysis(null);
@@ -91,7 +101,7 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
     <div className={`tool-grid png-workbench ${analysis ? "has-png" : "empty-png"}`}>
       <div className="tool-panel wide-panel png-source-panel">
         <PanelTitle title="PNG" />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/png,.png" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/png,.png" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

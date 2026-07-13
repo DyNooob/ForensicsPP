@@ -77,12 +77,24 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
       );
     });
     if (!next.length) {
+      setSelectedFiles([]);
+      setAnalysis(null);
+      setView("overview");
+      setFilter("");
+      setPage(0);
+      setSelectedRecordId("");
       setError(english ? "No supported browser data file was selected." : "没有选择支持的浏览器数据文件。");
       return;
     }
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (tooLarge || total > MAX_TOTAL_BYTES) {
+      setSelectedFiles([]);
+      setAnalysis(null);
+      setView("overview");
+      setFilter("");
+      setPage(0);
+      setSelectedRecordId("");
       setError(tooLarge
         ? (english ? `${tooLarge.name} exceeds the 128 MiB per-file limit.` : `${tooLarge.name} 超过单文件 128 MiB 限制。`)
         : (english ? "The selected files exceed the 256 MiB total limit." : "所选文件总大小超过 256 MiB。"));
@@ -198,8 +210,8 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
           title={english ? "Browser data" : "选择浏览器数据"}
           actions={<AButton variant="text" disabled={!selectedFiles.length && !analysis && !error} onClick={clear}>{t.clear}</AButton>}
         />
-        <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => queueFiles(event.target.files)} />
-        <input className="hidden-file-input" ref={folderInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} {...directoryProps} onChange={(event) => queueFiles(event.target.files)} />
+        <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
+        <input className="hidden-file-input" ref={folderInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} {...directoryProps} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
         <div
           className={`desktop-drop-zone ${dragActive ? "active" : ""}`}
           role="button"

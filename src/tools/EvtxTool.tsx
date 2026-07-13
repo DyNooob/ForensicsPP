@@ -28,6 +28,7 @@ import { downloadTextFile, formatBytes } from "../utils/files";
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+const MAX_SIGMA_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_RECORDS_PER_FILE = 50_000;
 const PAGE_SIZE = 250;
 
@@ -80,6 +81,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   const workerRef = React.useRef<Worker | null>(null);
   const sigmaWorkerRef = React.useRef<Worker | null>(null);
   const runRef = React.useRef(0);
+  const sigmaFileRef = React.useRef(0);
 
   const analyses = parsedFiles.filter(isAnalysis);
   const events = React.useMemo(() => analyses.flatMap((file) => file.events).sort((left, right) => left.timestamp.localeCompare(right.timestamp)), [parsedFiles]);
@@ -109,12 +111,26 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   const queueFiles = (files?: FileList | null) => {
     const next = Array.from(files ?? []).filter((file) => file.size > 0 && /\.evtx$/i.test(file.name));
     if (!next.length) {
+      cancel();
+      setSelectedFiles([]);
+      setParsedFiles([]);
+      setSelectedEventId("");
+      setSigmaMatches([]);
+      setSigmaErrors([]);
+      setView("overview");
       setError(english ? "Select one or more .evtx files." : "请选择一个或多个 .evtx 文件。");
       return;
     }
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (tooLarge || total > MAX_TOTAL_BYTES) {
+      cancel();
+      setSelectedFiles([]);
+      setParsedFiles([]);
+      setSelectedEventId("");
+      setSigmaMatches([]);
+      setSigmaErrors([]);
+      setView("overview");
       setError(tooLarge
         ? (english ? `${tooLarge.name} exceeds 256 MiB.` : `${tooLarge.name} 超过 256 MiB。`)
         : (english ? "Selected files exceed 512 MiB in total." : "所选文件总大小超过 512 MiB。"));
@@ -187,6 +203,26 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     setSigmaMatches([]);
   };
 
+  const openSigmaFile = async (file: File | undefined) => {
+    if (!file) return;
+    const requestId = ++sigmaFileRef.current;
+    setSigmaRules([]);
+    setSigmaMatches([]);
+    if (file.size > MAX_SIGMA_FILE_BYTES) {
+      setSigmaText("");
+      setSigmaErrors([english ? "Sigma rule file exceeds 2 MiB." : "Sigma 规则文件超过 2 MiB。"]);
+      return;
+    }
+    try {
+      const value = await file.text();
+      if (requestId !== sigmaFileRef.current) return;
+      setSigmaText(value);
+      setSigmaErrors([]);
+    } catch (caught) {
+      if (requestId === sigmaFileRef.current) setSigmaErrors([caught instanceof Error ? caught.message : String(caught)]);
+    }
+  };
+
   const runSigma = () => {
     const parsed = parseSigmaRules(sigmaText);
     setSigmaRules(parsed.rules);
@@ -223,7 +259,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className="tool-grid evtx-workbench">
       <section className="tool-panel wide-panel">
         <ToolPanelHeader title={english ? "Windows event logs" : "Windows 事件日志"} actions={<AButton variant="text" disabled={!selectedFiles.length && !parsedFiles.length} onClick={clear}>{t.clear}</AButton>} />
-        <input className="hidden-file-input" ref={inputRef} type="file" accept=".evtx" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => queueFiles(event.target.files)} />
+        <input className="hidden-file-input" ref={inputRef} type="file" accept=".evtx" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
         <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); queueFiles(event.dataTransfer.files); }}>
           <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} EVTX file(s)` : `已选择 ${selectedFiles.length} 个 EVTX 文件`) : (english ? "Select EVTX files" : "选择 EVTX 文件")}</strong>
           <span>{selectedFiles.length ? formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0)) : ".evtx"}</span>
@@ -266,10 +302,10 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
         </>}
 
         {view === "sigma" && <div className="evtx-sigma-workspace">
-          <input className="hidden-file-input" ref={sigmaInputRef} type="file" accept=".yml,.yaml,text/yaml" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(setSigmaText); }} />
+          <input className="hidden-file-input" ref={sigmaInputRef} type="file" accept=".yml,.yaml,text/yaml" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openSigmaFile(file); }} />
           <ToolPanelHeader title={english ? "Local Sigma matcher" : "本地 Sigma 匹配"} subtitle={sigmaRules.length ? `${sigmaRules.length} ${english ? "rule(s) loaded" : "条规则"}` : undefined} actions={<><AButton variant="outlined" onClick={() => sigmaInputRef.current?.click()}>{english ? "Open rules" : "打开规则"}</AButton><AButton variant="outlined" disabled={!sigmaText.trim() || sigmaLoading} onClick={loadSigma}>{english ? "Validate" : "校验"}</AButton><AButton variant="filled" disabled={!sigmaText.trim() || !events.length || sigmaLoading} onClick={runSigma}>{sigmaLoading ? (english ? "Running..." : "正在运行...") : (english ? "Run rules" : "运行规则")}</AButton></>} />
           {sigmaLoading && <ALinearProgress />}
-          <textarea className="single-textarea mono-textarea evtx-sigma-editor" value={sigmaText} onChange={(event) => setSigmaText(event.currentTarget.value)} placeholder={english ? "Paste one or more Sigma YAML rules" : "粘贴一条或多条 Sigma YAML 规则"} />
+          <textarea className="single-textarea mono-textarea evtx-sigma-editor" value={sigmaText} onChange={(event) => { sigmaFileRef.current += 1; setSigmaText(event.currentTarget.value); }} placeholder={english ? "Paste one or more Sigma YAML rules" : "粘贴一条或多条 Sigma YAML 规则"} />
           {sigmaErrors.length > 0 && <div className="empty-state error-state">{sigmaErrors.join("\n")}</div>}
           {sigmaMatches.length > 0 ? <div className="table-scroll evtx-sigma-matches"><table className="data-table"><thead><tr><th>{english ? "Rule" : "规则"}</th><th>{english ? "Level" : "级别"}</th><th>{english ? "Time" : "时间"}</th><th>Event ID</th><th>{english ? "Provider" : "提供程序"}</th><th>{english ? "Summary" : "摘要"}</th></tr></thead><tbody>{sigmaMatches.slice(0, 10_000).map((match, index) => <tr key={`${match.ruleId}:${match.event.id}:${index}`}><td>{match.ruleTitle}</td><td>{match.level || "--"}</td><td>{match.event.timestamp}</td><td>{match.event.eventId ?? "--"}</td><td>{match.event.provider}</td><td>{match.event.message || "--"}</td></tr>)}</tbody></table></div> : sigmaRules.length > 0 && <div className="empty-state">{english ? "No rule matches." : "没有规则匹配。"}</div>}
         </div>}

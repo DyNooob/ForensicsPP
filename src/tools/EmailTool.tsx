@@ -68,6 +68,8 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const [bodyMode, setBodyMode] = React.useState<"text" | "html">("text");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
+  React.useEffect(() => () => { requestRef.current += 1; }, []);
   const english = t.waiting === "Waiting";
 
   React.useEffect(() => {
@@ -77,21 +79,33 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const parseSource = async (source = input) => {
     if (!source.trim()) return;
+    const requestId = ++requestRef.current;
     setLoading(true);
     try {
-      setParsed(await parseEmail(source));
+      const next = await parseEmail(source);
+      if (requestId !== requestRef.current) return;
+      setParsed(next);
       setError("");
     } catch (caught) {
-      setParsed(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setParsed(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
+    setLoading(false);
+    setInput("");
+    setSourceBytes(null);
+    setSourceFormat("eml");
+    setParsed(null);
+    setBodyMode("text");
     if (file.size > EMAIL_FILE_LIMIT) {
       setError(english ? "Email exceeds the 64 MiB browser parsing limit." : "邮件超过 64 MiB 浏览器解析上限。");
       return;
@@ -99,9 +113,11 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     try {
       setError("");
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (requestId !== requestRef.current) return;
       if (isMsgFile(file, bytes)) {
         setLoading(true);
         const result = await parseMsg(bytes);
+        if (requestId !== requestRef.current) return;
         setInput(result.source);
         setSourceBytes(bytes);
         setSourceFormat("msg");
@@ -116,14 +132,17 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         await parseSource(source);
       }
     } catch (caught) {
-      setLoading(false);
-      setParsed(null);
-      setSourceBytes(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setLoading(false);
+        setParsed(null);
+        setSourceBytes(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     }
   };
 
   const clearEmail = () => {
+    requestRef.current += 1;
     setInput("");
     setSourceFormat("eml");
     setSourceBytes(null);
@@ -186,7 +205,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           aria-hidden="true"
           tabIndex={-1}
           accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
-          onChange={(event) => void handleFile(event.target.files?.[0])}
+          onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}

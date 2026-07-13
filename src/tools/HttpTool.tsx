@@ -22,7 +22,6 @@
 import React from "react";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
-import { useStoredState } from "../utils/storage";
 import { formatBytes } from "../utils/files";
 
 type HeaderRow = { name: string; value: string };
@@ -161,9 +160,10 @@ function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
 
 export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("http.text.v3", "");
+  const [text, setText] = React.useState("");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
   const parsed = React.useMemo(() => parseHttpMessage(text), [text]);
   const hasInput = Boolean(text.trim());
 
@@ -174,15 +174,18 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const loadFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setError("");
+    setText("");
     if (file.size > MAX_HTTP_TEXT_BYTES) {
       setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
       return;
     }
     try {
-      setText(await file.text());
+      const value = await file.text();
+      if (requestId === requestRef.current) setText(value);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
 
@@ -219,7 +222,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
           placeholder={english ? "Paste a raw HTTP request or response" : "粘贴原始 HTTP 请求或响应"}
           onChange={(event) => setText(event.currentTarget.value)}
         />
-        <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{english ? "Open file" : "打开文件"}</AButton>
           <AButton variant="outlined" disabled={!text} onClick={() => void navigator.clipboard.writeText(text)}>{t.copy}</AButton>

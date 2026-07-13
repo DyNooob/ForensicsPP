@@ -35,7 +35,7 @@ import {
   RightOutlined,
   SearchOutlined
 } from "@ant-design/icons";
-import { message, Popconfirm, Switch } from "antd";
+import { message, Modal, Popconfirm, Switch } from "antd";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type {
@@ -80,7 +80,6 @@ import {
 import { previewText } from "../utils/binary";
 import { applySqliteWal, type SqliteWalInfo } from "../features/sqlite/wal";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
-import { useStoredState } from "../utils/storage";
 
 function sqliteColumnPreferredWidth(column: string) {
   const normalized = column.toLowerCase();
@@ -104,8 +103,9 @@ function chooseSqliteDefaultTable(tables: SqliteTableInfo[], preferred = "") {
   return [...tables].sort((left, right) => score(right) - score(left))[0]?.name ?? "";
 }
 
-export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
+export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDirtyChange?: (dirty: boolean) => void }) {
   const [messageApi, messageContextHolder] = message.useMessage();
+  const [modalApi, modalContextHolder] = Modal.useModal();
   const sqlRef = React.useRef<SqlJsStatic | null>(null);
   const dbRef = React.useRef<Database | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -137,7 +137,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   const [editing, setEditing] = React.useState<{ rowIndex: number; rowid: number; values: Record<string, string> } | null>(null);
   const [creating, setCreating] = React.useState<Record<string, string> | null>(null);
   const [changeLog, setChangeLog] = React.useState<SqliteChangeLog[]>([]);
-  const [queryHistory, setQueryHistory] = useStoredState<SqliteQueryHistoryEntry[]>("sqlite.queryHistory", []);
+  const [queryHistory, setQueryHistory] = React.useState<SqliteQueryHistoryEntry[]>([]);
   const [dirty, setDirty] = React.useState(false);
   const [editingEnabled, setEditingEnabled] = React.useState(false);
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
@@ -161,6 +161,12 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   const hasSqliteDb = Boolean(fileName && dbRef.current);
   const sqliteColumnKey = React.useCallback((column: string) => `${selectedTable}\u0000${column}`, [selectedTable]);
   const queryMutating = React.useMemo(() => sqliteSqlIsMutating(sql.trim()), [sql]);
+
+  React.useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  React.useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const refreshTables = React.useCallback((nextSelectedTable?: string) => {
     const db = dbRef.current;
@@ -316,6 +322,21 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
     resetSqliteViewState();
   }, [resetSqliteViewState, setQueryHistory]);
 
+  const confirmDiscardBefore = React.useCallback((action: () => void) => {
+    if (!dirty) {
+      action();
+      return;
+    }
+    modalApi.confirm({
+      title: english ? "Discard unexported changes?" : "放弃尚未导出的修改？",
+      content: english ? "The current SQLite changes cannot be recovered after continuing." : "继续后，当前 SQLite 修改将无法恢复。",
+      okText: english ? "Continue" : "继续",
+      cancelText: t.cancelEdit,
+      okButtonProps: { danger: true },
+      onOk: action
+    });
+  }, [dirty, english, modalApi, t.cancelEdit]);
+
   const handleFiles = async (files: File[]) => {
     if (!files.length) return;
     const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
@@ -378,6 +399,11 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
       setDirty(false);
       resetSqliteViewState();
     }
+  };
+
+  const requestFiles = (files: File[]) => {
+    if (inputRef.current) inputRef.current.value = "";
+    confirmDiscardBefore(() => void handleFiles(files));
   };
 
   const discardSqliteChanges = async () => {
@@ -708,21 +734,22 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   return (
     <div className={`tool-grid sqlite-browser-grid sqlite-browser-simple ${hasSqliteDb ? "has-sqlite" : "empty-sqlite"}`}>
       {messageContextHolder}
+      {modalContextHolder}
       <div className="tool-panel wide-panel sqlite-source-panel">
         <PanelTitle title={english ? "SQLite database" : "SQLite 数据库"} />
-        <input className="hidden-file-input" ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFiles(Array.from(event.target.files ?? []))} />
+        <input className="hidden-file-input" ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; requestFiles(files); }} />
         <div className={`desktop-drop-zone ${isSqliteDropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(event) => { event.preventDefault(); setSqliteDropActive(true); }} onDragLeave={() => setSqliteDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); void handleFiles(Array.from(event.dataTransfer.files ?? [])); }}>
+          onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); requestFiles(Array.from(event.dataTransfer.files ?? [])); }}>
           <strong>{fileName || t.dropFileTitle}</strong>
           <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${english ? "checksum verified" : "校验通过"}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${english ? "SHM detected (not used for recovery)" : "已检测 SHM（恢复不使用）"}` : ""}` : (english ? "Select the database and optional -wal/-shm files together" : "可同时选择数据库及对应的 -wal/-shm 文件")}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
-          <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={clearSqliteWorkspace}>{t.clear}</AButton>
+          <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={() => confirmDiscardBefore(clearSqliteWorkspace)}>{t.clear}</AButton>
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
@@ -827,7 +854,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
         </div>}
 
         {sqlitePage === "changes" && <div className="tool-panel wide-panel sqlite-simple-changes-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><AButton variant="outlined" disabled={!dirty || !originalBytes} onClick={() => void discardSqliteChanges()}>{t.sqliteDiscardChanges}</AButton><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={english ? "Discard all changes since the last export?" : "放弃上次导出后的全部修改？"} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
           {changeLog.length ? <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{sqliteLabels.time}</th><th>{sqliteLabels.action}</th><th>{sqliteLabels.table}</th><th>{sqliteLabels.row}</th><th>{sqliteLabels.column}</th><th>{sqliteLabels.detail}</th></tr></thead><tbody>{changeLog.slice().reverse().map((entry) => <tr key={entry.id}><td>{entry.at}</td><td>{entry.action}</td><td>{entry.table || "--"}</td><td>{entry.rowid ?? "--"}</td><td>{entry.column ?? "--"}</td><td>{entry.detail}</td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No local changes." : "暂无本地修改。"}</div>}
         </div>}
         </div>

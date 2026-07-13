@@ -27,17 +27,20 @@ import type { SqlParseResult } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
 
+const MAX_SQL_FILE_BYTES = 32 * 1024 * 1024;
+
 export function SqlTool({ t }: { t: Translation }) {
   const english = t.waiting === "Waiting";
   const [result, setResult] = React.useState<SqlParseResult | null>(null);
   const [selectedTable, setSelectedTable] = React.useState("");
   const [tableFilter, setTableFilter] = React.useState("");
   const [error, setError] = React.useState("");
-  const [formatInput, setFormatInput] = useStoredState("sql.formatInput", "");
-  const [formatOutput, setFormatOutput] = useStoredState("sql.formatOutput", "");
+  const [formatInput, setFormatInput] = React.useState("");
+  const [formatOutput, setFormatOutput] = React.useState("");
   const [dialect, setDialect] = useStoredState("sql.dialect", "mysql");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
 
   const labels = React.useMemo(() => ({
     statements: english ? "Statements" : "语句数",
@@ -74,11 +77,22 @@ export function SqlTool({ t }: { t: Translation }) {
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
+    setResult(null);
+    setFormatInput("");
+    setFormatOutput("");
+    setError("");
+    if (file.size > MAX_SQL_FILE_BYTES) {
+      setError(english ? "The SQL file exceeds the 32 MiB limit." : "SQL 文件超过 32 MiB 限制。");
+      return;
+    }
     try {
       const text = await file.text();
+      if (requestId !== requestRef.current) return;
       applyResult(text, file.name, file.size);
     } catch (caught) {
+      if (requestId !== requestRef.current) return;
       setResult(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -109,6 +123,7 @@ export function SqlTool({ t }: { t: Translation }) {
   };
 
   const clear = () => {
+    requestRef.current += 1;
     setResult(null);
     setSelectedTable("");
     setTableFilter("");
@@ -139,7 +154,7 @@ export function SqlTool({ t }: { t: Translation }) {
     <div className={`sql-workbench ${result ? "has-sql" : "empty-sql"}`}>
       <div className="tool-panel upload-zone sql-upload">
         <PanelTitle title={labels.source} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".sql,.txt,text/plain,application/sql" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".sql,.txt,text/plain,application/sql" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <p>{t.physicalMysqlHint}</p>
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}

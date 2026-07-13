@@ -111,7 +111,7 @@ function rowsToCsv(items: BaseConvertRow[]) {
 }
 
 export function BaseConvertTool({ t }: { t: Translation }) {
-  const [value, setValue] = useStoredState("baseconvert.value.v2", "");
+  const [value, setValue] = React.useState("");
   const [base, setBase] = useStoredState("baseconvert.base", 16);
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(value.trim());

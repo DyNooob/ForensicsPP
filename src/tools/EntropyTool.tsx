@@ -38,7 +38,7 @@ const PAGE_SIZE = 200;
 
 export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services: EntropyToolServices }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("entropy.text.v2", "");
+  const [text, setText] = React.useState("");
   const [sourceName, setSourceName] = React.useState("text input");
   const [bytes, setBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(text));
   const [sourceSize, setSourceSize] = React.useState(() => new TextEncoder().encode(text).length);
@@ -175,7 +175,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
           title={english ? "File or text" : "输入文件或文本"}
           actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
         />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
           className={`desktop-drop-zone text-tool-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

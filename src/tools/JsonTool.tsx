@@ -133,6 +133,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
   const [selectedPath, setSelectedPath] = React.useState("");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
   const english = t.waiting === "Waiting";
   const mode = (["format", "minify", "jsonl", "escape", "unescape"] as JsonMode[]).includes(storedMode as JsonMode) ? storedMode as JsonMode : "format";
   const parsed = React.useMemo(() => parseJson(analyzedInput), [analyzedInput]);
@@ -165,18 +166,27 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
 
   const openFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
+    setInput("");
+    setAnalyzedInput("");
+    setFilter("");
+    setTypeFilter("");
+    setSelectedPath("");
     if (file.size > 16 * 1024 * 1024) {
       setError(english ? "JSON file exceeds the 16 MiB processing limit." : "JSON 文件超过 16 MiB 处理上限。");
       return;
     }
-    setInput(await file.text());
-    setAnalyzedInput("");
-    setError("");
-    setFilter("");
-    setTypeFilter("");
-    setSelectedPath("");
+    try {
+      const value = await file.text();
+      if (requestId !== requestRef.current) return;
+      setInput(value);
+      setError("");
+    } catch (caught) {
+      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+    }
   };
   const clear = () => {
+    requestRef.current += 1;
     setInput("");
     setAnalyzedInput("");
     setFilter("");
@@ -208,7 +218,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
             <AButton variant="text" disabled={!input && !hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openFile(file); }} />
         {error && <div className="empty-state error-state">{error}</div>}
         <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={english ? "JSON operation" : "JSON 操作"}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>
@@ -219,7 +229,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void navigator.clipboard.writeText(input)}>{t.copyInput}</AButton></div>
-          <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
+          <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
         <div className="text-panel json-simple-text-panel">

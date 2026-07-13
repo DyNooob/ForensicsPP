@@ -900,8 +900,8 @@ pre.result-box {
 }
 
 .settings-modal.settings-page-project .ant-modal-body {
-  height: min(430px, calc(100vh - 96px));
-  min-height: 380px;
+  height: min(500px, calc(100vh - 96px));
+  min-height: 440px;
 }
 
 .settings-modal.settings-page-storage .ant-modal-body {
@@ -969,8 +969,16 @@ pre.result-box {
   scrollbar-gutter: auto;
 }
 
+.settings-page-storage .settings-main {
+  padding-block: 20px;
+}
+
 .settings-heading {
   margin-bottom: 18px;
+}
+
+.settings-page-project .settings-heading {
+  margin-bottom: 14px;
 }
 
 .settings-heading .ant-typography {
@@ -1143,32 +1151,52 @@ pre.result-box {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   border: 1px solid var(--app-line);
   border-radius: 7px;
   background: var(--app-surface-soft);
-  padding: 14px 16px;
+  padding: 16px;
 }
 
 .settings-project-mark {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
   place-items: center;
   border-radius: 7px;
   background: var(--app-primary);
   color: #fff;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
 }
 
-.settings-project-hero > div:nth-child(2) {
+.settings-project-identity {
   display: grid;
-  gap: 3px;
+  min-width: 0;
+  gap: 5px;
 }
 
-.settings-project-hero > div:nth-child(2) > strong {
-  font-size: 17px;
+.settings-project-identity > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.settings-project-identity strong {
+  font-size: 19px;
+  line-height: 24px;
+}
+
+.settings-project-identity > div span {
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings-project-identity .ant-typography {
+  max-width: 500px;
+  margin: 0;
+  line-height: 1.55;
 }
 
 .settings-project-meta {
@@ -1200,13 +1228,53 @@ pre.result-box {
   font-weight: 650;
 }
 
+.settings-project-resources {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 10px;
+}
+
+.settings-project-resources section {
+  display: grid;
+  align-content: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  padding: 11px 12px;
+}
+
+.settings-project-resources section > strong,
+.settings-project-links > strong {
+  font-size: 13px;
+}
+
+.settings-project-resources section > div {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-project-resources section > a {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--app-primary);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-project-links {
   display: flex;
   align-items: center;
   gap: 14px;
   border: 1px solid var(--app-line);
   border-radius: 7px;
-  padding: 10px 12px;
+  min-height: 52px;
+  padding: 9px 12px;
 }
 
 .settings-project-links > div {
@@ -1219,17 +1287,13 @@ pre.result-box {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  border: 1px solid var(--app-line);
-  border-radius: 5px;
-  background: var(--app-surface);
-  padding: 5px 9px;
+  padding: 3px 2px;
   color: var(--app-primary);
   font-weight: 650;
 }
 
 .settings-project-links a:not(.ant-btn):hover {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
+  text-decoration: underline;
 }
 
 .settings-action-line {
@@ -1325,8 +1389,8 @@ pre.result-box {
 
 .settings-session-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .settings-session-item {
@@ -1334,11 +1398,17 @@ pre.result-box {
   grid-template-columns: minmax(0, 1fr) auto 32px;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 36px;
   border: 1px solid var(--app-line);
   border-radius: 6px;
   background: var(--app-surface);
   padding: 3px 6px 3px 11px;
+}
+
+.settings-session-item > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-session-active {
@@ -1354,6 +1424,16 @@ pre.result-box {
   border-radius: 6px;
   padding: 11px 12px;
   font-size: 13px;
+}
+
+.settings-session-more {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  border: 1px dashed var(--app-line);
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: 12px;
 }
 
 .settings-dependency-table {
@@ -2368,6 +2448,10 @@ pre.result-box {
 
   .settings-project-hero,
   .settings-project-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-project-resources {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -45,13 +45,21 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
   const [error, setError] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
+  React.useEffect(() => () => { requestRef.current += 1; }, []);
   const offset = React.useMemo(() => parseByteOffset(offsetInput, Math.max(0, bytes.length - 1), 0), [bytes.length, offsetInput, parseByteOffset]);
   const hexRows = React.useMemo(() => binaryHexDumpRows(bytes, offset, viewLength), [binaryHexDumpRows, bytes, offset, viewLength]);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
     setError("");
+    setAnalysis(null);
+    setBytes(new Uint8Array());
+    setFileName("");
+    setOffsetInput("0");
+    setLoading(false);
     if (file.size > 128 * 1024 * 1024) {
       setError(english ? "File exceeds the 128 MiB browser analysis limit." : "文件超过 128 MiB 浏览器分析上限。");
       return;
@@ -60,6 +68,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const nextBytes = new Uint8Array(await file.arrayBuffer());
+      if (requestId !== requestRef.current) return;
       const nextAnalysis = analyzeFileBytes(nextBytes, file.name, file.size, {
         includeHash: false,
         includeSideEvidence: false,
@@ -70,15 +79,18 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
       setOffsetInput("0");
       setAnalysis(nextAnalysis);
     } catch (caught) {
-      setAnalysis(null);
-      setBytes(new Uint8Array());
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setAnalysis(null);
+        setBytes(new Uint8Array());
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
     setAnalysis(null);
     setBytes(new Uint8Array());
     setFileName("");
@@ -126,7 +138,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
     <div className={`tool-grid binary-workbench ${analysis ? "has-binary" : "empty-binary"}`}>
       <div className="tool-panel wide-panel binary-source-panel">
         <PanelTitle title={english ? "Binary source" : "二进制文件"} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"

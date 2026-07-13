@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(projectRoot, "dist");
 const copyrightMarker = "Forensics++ (ForensicsPP.com)";
+const packageJson = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
 
 const requiredFiles = [
   "index.html",
@@ -80,6 +81,15 @@ try {
   files = await walk(distRoot);
 } catch {
   errors.push("dist/ does not exist or cannot be read");
+}
+
+try {
+  const indexHtml = await readFile(join(distRoot, "index.html"), "utf8");
+  if (!indexHtml.includes(`<meta name="version" content="${packageJson.version}"`)) errors.push("index.html version metadata does not match package.json");
+  if (!indexHtml.includes(`"softwareVersion": "${packageJson.version}"`)) errors.push("index.html structured-data version does not match package.json");
+  if (/\b(?:src|href)="\/assets\//.test(indexHtml)) errors.push("index.html contains root-absolute build asset paths");
+} catch {
+  // The required-file check above reports a missing index.html.
 }
 
 let totalBytes = 0;

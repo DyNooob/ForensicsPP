@@ -39,18 +39,21 @@ type DirectOperation = {
   group: "detect" | "charset" | "text";
 };
 
+const MAX_CODEC_FILE_BYTES = 16 * 1024 * 1024;
+
 export type CodecToolServices = {
   transformText: (operation: string, input: string) => string;
 };
 
 export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: CodecToolServices }) {
-  const [input, setInput] = useStoredState("codec.input", "");
-  const [output, setOutput] = useStoredState("codec.output", "");
+  const [input, setInput] = React.useState("");
+  const [output, setOutput] = React.useState("");
   const [operation, setOperation] = useStoredState("codec.operation", "urle");
   const [selectedFormat, setSelectedFormat] = useStoredState("codec.selectedFormat", "url");
   const [directOperation, setDirectOperation] = useStoredState("codec.directOperation", "autocodec");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
   const english = t.waiting === "Waiting";
 
   const formats: CodecFormat[] = [
@@ -102,11 +105,24 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
   };
   const openFile = async (file?: File) => {
     if (!file) return;
-    setInput(await file.text());
+    const requestId = ++requestRef.current;
+    setInput("");
     setOutput("");
     setError("");
+    if (file.size > MAX_CODEC_FILE_BYTES) {
+      setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      return;
+    }
+    try {
+      const value = await file.text();
+      if (requestId !== requestRef.current) return;
+      setInput(value);
+    } catch (caught) {
+      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+    }
   };
   const clear = () => {
+    requestRef.current += 1;
     setInput("");
     setOutput("");
     setError("");
@@ -135,7 +151,7 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
             <AButton variant="text" disabled={!hasContent} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".txt,.log,.csv,.json,.xml,.html,.eml,text/*,message/rfc822,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".txt,.log,.csv,.json,.xml,.html,.eml,text/*,message/rfc822,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openFile(file); }} />
 
         <div className="codec-simple-controls">
           <section className="codec-simple-operation-row">
@@ -174,7 +190,7 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
 
         <div className="text-panel codec-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void navigator.clipboard.writeText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton></div></div>
-          <textarea className="codec-simple-textarea" aria-label={english ? "Input text" : "输入文本"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
+          <textarea className="codec-simple-textarea" aria-label={english ? "Input text" : "输入文本"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
         <div className="text-panel codec-simple-text-panel">

@@ -63,11 +63,11 @@ const operations: Operation[] = [
 
 export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: CryptoToolServices }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = useStoredState("crypto.input", "");
-  const [output, setOutput] = useStoredState("crypto.output", "");
+  const [input, setInput] = React.useState("");
+  const [output, setOutput] = React.useState("");
   const [operation, setOperation] = useStoredState("crypto.operation", "caesar");
   const [shift, setShift] = useStoredState("crypto.shift", 3);
-  const [key, setKey] = useStoredState("crypto.key", "KEY");
+  const [key, setKey] = React.useState("KEY");
   const [rails, setRails] = useStoredState("crypto.rails", 3);
   const [affineA, setAffineA] = useStoredState("crypto.affineA", 5);
   const [affineB, setAffineB] = useStoredState("crypto.affineB", 8);
