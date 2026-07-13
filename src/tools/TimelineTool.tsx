@@ -116,7 +116,7 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={fileInputRef} type="file" accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={fileInputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone timeline-simple-drop-zone ${dragActive ? "active" : ""}`}
           role="button"

@@ -1216,6 +1216,9 @@ pre.result-box {
 }
 
 .settings-project-links a:not(.ant-btn) {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
   border: 1px solid var(--app-line);
   border-radius: 5px;
   background: var(--app-surface);
@@ -2181,7 +2184,31 @@ pre.result-box {
   gap: 16px;
 }
 
+.pcap-list-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pcap-list-filter .text-input {
+  width: min(520px, 100%);
+}
+
+.pcap-list-filter span {
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pcap-simple-network > .pcap-list-filter {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
 .pcap-simple-network tbody tr,
+.pcap-conversation-scroll tbody tr,
 .pcap-packet-scroll tbody tr {
   cursor: pointer;
 }
@@ -2437,6 +2464,17 @@ pre.result-box {
   overflow: auto;
   border: 1px solid var(--app-line);
   border-radius: 6px;
+}
+
+.archive-list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(110px, 150px) minmax(100px, 130px);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.archive-list-toolbar + .archive-file-list {
+  margin-top: 8px;
 }
 
 .archive-file-list > button {
@@ -2794,6 +2832,14 @@ pre.result-box {
   min-width: 92px;
 }
 
+.sqlite-workspace-tabs-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .sqlite-admin-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -2909,6 +2955,16 @@ pre.result-box {
   margin-bottom: 10px;
 }
 
+.sqlite-filter-control {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
+.sqlite-filter-control .text-input {
+  min-width: 120px;
+}
+
 .sqlite-page-size-control {
   display: grid;
   grid-template-columns: auto 76px;
@@ -2927,6 +2983,46 @@ pre.result-box {
   align-items: center;
   justify-content: center;
   margin-top: 10px;
+}
+
+.sqlite-pagination-row > span {
+  min-width: 150px;
+  color: var(--app-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.sqlite-pagination-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.sqlite-pagination-buttons .app-button.ant-btn {
+  width: 32px;
+  min-width: 32px;
+  padding-inline: 0;
+}
+
+.sqlite-column-sort {
+  display: flex;
+  min-width: 0;
+  width: calc(100% - 8px);
+  height: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sqlite-column-sort:hover,
+.sqlite-data-table th.is-sorted {
+  color: var(--app-primary);
 }
 
 .sqlite-simple-cell-panel,
@@ -3020,6 +3116,10 @@ details[open] > summary::after {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .archive-list-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(110px, 1fr));
+  }
+
   .pcap-stat-grid,
   .pcap-extract-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -3058,6 +3158,10 @@ details[open] > summary::after {
 }
 
 @media (max-width: 600px) {
+  .archive-list-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .image-exif-table thead {
     display: none;
   }
@@ -3110,6 +3214,15 @@ details[open] > summary::after {
   width: min(640px, 100%);
 }
 
+.document-forensics-filter .app-select {
+  width: min(260px, 100%);
+}
+
+.document-structure-filter {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 220px auto;
+}
+
 .document-forensics-filter span {
   color: var(--app-muted);
   white-space: nowrap;
@@ -3136,6 +3249,14 @@ details[open] > summary::after {
   .image-repair-preview-grid,
   .image-signal-list > div {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .document-structure-filter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .document-forensics-filter .app-select {
+    width: 100%;
   }
 
 }
@@ -3613,7 +3734,7 @@ textarea {
 }
 
 .browser-artifact-table {
-  min-width: 1120px;
+  min-width: 980px;
   table-layout: fixed;
 }
 
@@ -3622,12 +3743,25 @@ textarea {
 .browser-artifact-table th:nth-child(3) { width: 220px; }
 .browser-artifact-table th:nth-child(4) { width: 150px; }
 .browser-artifact-table th:nth-child(5) { width: 220px; }
-.browser-artifact-table th:nth-child(6) { width: 360px; }
 
 .browser-artifact-table td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.browser-artifact-table tbody tr {
+  cursor: pointer;
+}
+
+.browser-artifact-table .selected-row td {
+  background: var(--app-primary-soft);
+}
+
+.browser-artifact-detail {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--app-line);
 }
 
 @media (max-width: 760px) {
@@ -3737,6 +3871,18 @@ textarea {
   margin-top: 12px;
 }
 
+.evtx-xml-details {
+  margin-top: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
+  background: var(--app-surface-soft);
+  padding: 0 12px 12px;
+}
+
+.evtx-xml-details > summary {
+  padding: 11px 0;
+}
+
 .evtx-sigma-editor {
   min-height: 320px;
 }
@@ -3798,7 +3944,7 @@ textarea {
   color: var(--app-primary);
 }
 
-.tool-panel .sqlite-edit-mode button.ant-switch {
+.sqlite-edit-mode button.ant-switch {
   width: 36px;
   min-width: 36px;
   height: 20px;
@@ -3810,15 +3956,15 @@ textarea {
   box-shadow: none;
 }
 
-.tool-panel .sqlite-edit-mode button.ant-switch:hover,
-.tool-panel .sqlite-edit-mode button.ant-switch:focus-visible {
+.sqlite-edit-mode button.ant-switch:hover,
+.sqlite-edit-mode button.ant-switch:focus-visible {
   border: 0;
   background: var(--app-faint);
 }
 
-.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked,
-.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked:hover,
-.tool-panel .sqlite-edit-mode button.ant-switch.ant-switch-checked:focus-visible {
+.sqlite-edit-mode button.ant-switch.ant-switch-checked,
+.sqlite-edit-mode button.ant-switch.ant-switch-checked:hover,
+.sqlite-edit-mode button.ant-switch.ant-switch-checked:focus-visible {
   background: var(--app-primary);
 }
 .android-xml-details {

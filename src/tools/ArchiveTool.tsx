@@ -21,7 +21,7 @@
 
 import React from "react";
 import { unzip } from "fflate";
-import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
+import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { hexPreview, previewText } from "../utils/binary";
@@ -48,36 +48,38 @@ type ArchiveState = {
 
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
-const MAX_EXTRACTED_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRIES = 2000;
 
-function parseLocalEntries(bytes: Uint8Array): EntryMeta[] {
+function decodeEntryName(nameBytes: Uint8Array, utf8: boolean) {
+  if (utf8) return new TextDecoder().decode(nameBytes);
+  try { return new TextDecoder("windows-1252").decode(nameBytes); } catch { return new TextDecoder().decode(nameBytes); }
+}
+
+export function parseArchiveEntries(bytes: Uint8Array): { entries: EntryMeta[]; skipped: number } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const entries: EntryMeta[] = [];
-  let offset = 0;
-  while (offset + 30 <= bytes.length && entries.length < MAX_ENTRIES) {
-    if (view.getUint32(offset, true) !== 0x04034b50) {
-      offset += 1;
-      continue;
-    }
-    const flags = view.getUint16(offset + 6, true);
-    const method = view.getUint16(offset + 8, true);
-    const compressed = view.getUint32(offset + 18, true);
-    const uncompressed = view.getUint32(offset + 22, true);
-    const nameLength = view.getUint16(offset + 26, true);
-    const extraLength = view.getUint16(offset + 28, true);
-    const nameOffset = offset + 30;
-    if (nameOffset + nameLength > bytes.length) break;
-    const nameBytes = bytes.subarray(nameOffset, nameOffset + nameLength);
-    let name = new TextDecoder().decode(nameBytes);
-    if (!(flags & 0x800)) {
-      try { name = new TextDecoder("windows-1252").decode(nameBytes); } catch { /* UTF-8 fallback is already available. */ }
-    }
-    entries.push({ name, method, compressed, uncompressed, encrypted: Boolean(flags & 1) });
-    const next = nameOffset + nameLength + extraLength + compressed;
-    offset = next > offset ? next : offset + 1;
+  let eocdOffset = -1;
+  for (let offset = Math.max(0, bytes.length - 65_557); offset + 22 <= bytes.length; offset += 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) eocdOffset = offset;
   }
-  return entries;
+  if (eocdOffset < 0) return { entries, skipped: 0 };
+  const declaredEntries = view.getUint16(eocdOffset + 10, true);
+  let offset = view.getUint32(eocdOffset + 16, true);
+  while (offset + 46 <= bytes.length && entries.length < MAX_ENTRIES && view.getUint32(offset, true) === 0x02014b50) {
+    const flags = view.getUint16(offset + 8, true);
+    const method = view.getUint16(offset + 10, true);
+    const compressed = view.getUint32(offset + 20, true);
+    const uncompressed = view.getUint32(offset + 24, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const nameOffset = offset + 46;
+    if (nameOffset + nameLength > bytes.length) break;
+    const name = decodeEntryName(bytes.subarray(nameOffset, nameOffset + nameLength), Boolean(flags & 0x800));
+    entries.push({ name, method, compressed, uncompressed, encrypted: Boolean(flags & 1) });
+    offset = nameOffset + nameLength + extraLength + commentLength;
+  }
+  return { entries, skipped: Math.max(0, declaredEntries - entries.length) };
 }
 
 function inferKind(name: string, entries: EntryMeta[]) {
@@ -112,6 +114,8 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const [archive, setArchive] = React.useState<ArchiveState | null>(null);
   const [selectedName, setSelectedName] = React.useState("");
   const [query, setQuery] = React.useState("");
+  const [entryType, setEntryType] = React.useState<"all" | "files" | "directories" | "encrypted">("all");
+  const [sortBy, setSortBy] = React.useState<"path" | "size">("path");
   const [loading, setLoading] = React.useState(false);
   const [loadingEntry, setLoadingEntry] = React.useState("");
   const [error, setError] = React.useState("");
@@ -122,8 +126,16 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const entries = archive?.entries ?? [];
   const visibleEntries = React.useMemo(() => {
     const value = query.trim().toLowerCase();
-    return entries.filter((entry) => !value || entry.name.toLowerCase().includes(value));
-  }, [entries, query]);
+    return entries
+      .filter((entry) => {
+        if (value && !entry.name.toLowerCase().includes(value)) return false;
+        if (entryType === "files" && entry.name.endsWith("/")) return false;
+        if (entryType === "directories" && !entry.name.endsWith("/")) return false;
+        if (entryType === "encrypted" && !entry.encrypted) return false;
+        return true;
+      })
+      .sort((left, right) => sortBy === "size" ? right.uncompressed - left.uncompressed || left.name.localeCompare(right.name) : left.name.localeCompare(right.name));
+  }, [entries, entryType, query, sortBy]);
   const selected = entries.find((entry) => entry.name === selectedName) ?? null;
   const imageUrl = React.useMemo(() => {
     if (!selected?.data || !isImage(selected.name)) return "";
@@ -145,14 +157,16 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const metadata = parseLocalEntries(bytes);
-      if (!metadata.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
+      const parsed = parseArchiveEntries(bytes);
+      if (!parsed.entries.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
       archiveBytesRef.current = bytes;
-      const nextEntries = metadata.map((entry) => ({ ...entry, data: undefined }));
+      const nextEntries = parsed.entries.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
-      setArchive({ name: file.name, size: file.size, kind: inferKind(file.name, metadata), entries: nextEntries, skipped: 0 });
+      setArchive({ name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries), entries: nextEntries, skipped: parsed.skipped });
       setSelectedName(firstFile?.name ?? "");
       setQuery("");
+      setEntryType("all");
+      setSortBy("path");
     } catch (caught) {
       setArchive(null);
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -166,6 +180,8 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     setArchive(null);
     setSelectedName("");
     setQuery("");
+    setEntryType("all");
+    setSortBy("path");
     setError("");
     setLoadingEntry("");
     if (inputRef.current) inputRef.current.value = "";
@@ -173,11 +189,12 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const loadEntry = async (entry: ArchiveEntry) => {
     const bytes = archiveBytesRef.current;
-    if (!bytes || entry.name.endsWith("/") || entry.encrypted || entry.data || loadingEntry) return;
+    if (entry.data) return entry.data;
+    if (!bytes || entry.name.endsWith("/") || entry.encrypted || loadingEntry) return null;
     const ratio = entry.compressed > 0 ? entry.uncompressed / entry.compressed : 0;
     if (entry.uncompressed > MAX_ENTRY_BYTES || (ratio > 500 && entry.uncompressed > 16 * 1024 * 1024)) {
       setError(english ? "This entry is too large or expands too aggressively for browser preview." : "该条目过大或解压倍率过高，无法在浏览器中预览。");
-      return;
+      return null;
     }
     setLoadingEntry(entry.name);
     setError("");
@@ -188,15 +205,19 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
       const data = extracted[entry.name];
       if (!data) throw new Error(english ? "Entry could not be extracted." : "无法提取该条目。");
       setArchive((current) => current ? { ...current, entries: current.entries.map((item) => item.name === entry.name ? { ...item, data } : item) } : current);
+      return data;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+      return null;
     } finally { setLoadingEntry(""); }
   };
 
-  const downloadEntry = () => {
-    if (!selected?.data) return;
-    const bytes = new Uint8Array(selected.data.length);
-    bytes.set(selected.data);
+  const downloadEntry = async () => {
+    if (!selected) return;
+    const data = selected.data ?? await loadEntry(selected);
+    if (!data) return;
+    const bytes = new Uint8Array(data.length);
+    bytes.set(data);
     downloadBlob(selected.name.split("/").pop() || "entry.bin", new Blob([bytes], { type: "application/octet-stream" }));
   };
 
@@ -211,7 +232,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className={`tool-grid archive-workbench ${archive ? "has-archive" : "empty-archive"}`}>
       <div className="tool-panel wide-panel archive-source-panel">
         <PanelTitle title={t.archive} />
-        <input ref={inputRef} type="file" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" tabIndex={-1} aria-hidden="true" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
@@ -238,7 +259,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
             [english ? "Directories" : "目录", String(directoryCount)],
             [english ? "Uncompressed size" : "解压后大小", formatBytes(totalUncompressed)],
             [english ? "Encrypted entries" : "加密条目", String(encryptedCount)],
-            [english ? "Not previewed" : "未预览条目", String(archive.skipped)]
+            ...(archive.skipped ? [[english ? "Not listed" : "未列出条目", String(archive.skipped)] as [string, string]] : [])
           ]} />
         </div>
 
@@ -248,10 +269,22 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
               <PanelTitle title={english ? "Files" : "文件"} />
               <span className="status-pill">{visibleEntries.length}/{entries.length}</span>
             </div>
-            <input className="text-input" aria-label={english ? "Search archive paths" : "搜索压缩包路径"} value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={english ? "Search path" : "搜索路径"} />
+            <div className="archive-list-toolbar">
+              <input className="text-input" aria-label={english ? "Search archive paths" : "搜索压缩包路径"} value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={english ? "Search path" : "搜索路径"} />
+              <ASelect aria-label={english ? "Entry type" : "条目类型"} value={entryType} onChange={(value) => setEntryType(value as typeof entryType)} options={[
+                { value: "all", label: english ? "All" : "全部" },
+                { value: "files", label: english ? "Files" : "文件" },
+                { value: "directories", label: english ? "Directories" : "目录" },
+                { value: "encrypted", label: english ? "Encrypted" : "加密" }
+              ]} />
+              <ASelect aria-label={english ? "Sort entries" : "条目排序"} value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} options={[
+                { value: "path", label: english ? "Path" : "路径" },
+                { value: "size", label: english ? "Size" : "大小" }
+              ]} />
+            </div>
             <div className="archive-file-list">
               {visibleEntries.map((entry) => (
-                <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); void loadEntry(entry); }}>
+                <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => setSelectedName(entry.name)}>
                   <span>{entry.name}</span>
                   <small>{entry.name.endsWith("/") ? (english ? "Directory" : "目录") : formatBytes(entry.uncompressed)}</small>
                 </button>
@@ -263,7 +296,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="tool-panel archive-preview-panel">
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Preview" : "预览"} />
-              <div className="button-row compact-buttons"><AButton variant="filled" disabled={!selected || Boolean(selected.data) || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => selected && void loadEntry(selected)}>{loadingEntry ? (english ? "Loading..." : "正在提取...") : (english ? "Load preview" : "加载预览")}</AButton><AButton variant="outlined" disabled={!selected?.data} onClick={downloadEntry}>{english ? "Save entry" : "保存条目"}</AButton></div>
+              <div className="button-row compact-buttons"><AButton variant="filled" disabled={!selected || Boolean(selected.data) || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => selected && void loadEntry(selected)}>{loadingEntry ? (english ? "Loading..." : "正在提取...") : (english ? "Load preview" : "加载预览")}</AButton><AButton variant="outlined" disabled={!selected || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => void downloadEntry()}>{english ? "Save entry" : "保存条目"}</AButton></div>
             </div>
             {selected ? <>
               <InfoTable rows={[

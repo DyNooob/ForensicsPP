@@ -20,10 +20,12 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { zipSync } from "fflate";
 import { analyzeIocs } from "../src/features/ioc/analyzer";
 import { parseSqlDump } from "../src/features/sql/analyzer";
 import { coerceSqliteEditValue, quoteSqlIdentifier, quoteSqlLiteral, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
 import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
+import { parseArchiveEntries } from "../src/tools/ArchiveTool";
 
 describe("forensic timestamp identifiers", () => {
   it("decodes a known ULID timestamp", () => {
@@ -37,6 +39,19 @@ describe("forensic timestamp identifiers", () => {
   it("decodes a FAT packed timestamp", () => {
     const packed = ((2026 - 1980) << 25) | (7 << 21) | (12 << 16) | (14 << 11) | (35 << 5) | 14;
     expect(parseFatPackedDateTime(packed)).toBe(Date.UTC(2026, 6, 12, 14, 35, 28));
+  });
+});
+
+describe("archive directory parsing", () => {
+  it("reads names and sizes from the ZIP central directory", () => {
+    const archive = zipSync({
+      "folder/readme.txt": new TextEncoder().encode("hello"),
+      "empty.bin": new Uint8Array()
+    });
+    const result = parseArchiveEntries(archive);
+    expect(result.skipped).toBe(0);
+    expect(result.entries.map((entry) => entry.name)).toEqual(["folder/readme.txt", "empty.bin"]);
+    expect(result.entries[0].uncompressed).toBe(5);
   });
 });
 

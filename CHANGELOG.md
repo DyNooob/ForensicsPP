@@ -4,6 +4,28 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-13
+
+### Changed
+
+- Refined the main evidence tools around explicit actions, compact controls, predictable result areas, and less duplicated output.
+- Reworked SQLite browsing with resizable columns, in-place editing, clearer edit-mode behavior, and simpler navigation.
+- Simplified image analysis to focus on preview, metadata, channel inspection, structure checks, and practical recovery output.
+- Improved archive, document, packet capture, email, timestamp, Windows artifact, Registry, Plist, browser artifact, and EVTX workflows.
+- Reduced large-file limits and deferred expensive filtering in tools that could otherwise stall the browser.
+- Shortened legal and consent text and updated the product contact address to `toolab@digiforensics.cn`.
+
+### Fixed
+
+- Removed empty or never-calculated SHA-256 fields from several analysis results.
+- Fixed HTML email handling, MSG body decoding, invalid-file state retention, table overflow, and inconsistent result selection.
+- Added packet-capture parser coverage and expanded parser regression tests.
+
+### Verification
+
+- 45 automated tests across eight test files.
+- TypeScript checks, copyright-header checks, production build, and static release-package verification.
+
 ## [0.7.1] - 2026-07-13
 
 ### Changed
@@ -100,7 +122,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0

@@ -22,12 +22,11 @@
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
-import type { ImageDecodedSignal, ImageInfo } from "../models";
+import type { ImageInfo } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
 
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
-type ImageFinding = { level: string; title: string; detail: string };
 
 function formatExifValue(value: unknown) {
   if (value == null) return "--";
@@ -60,12 +59,9 @@ export type ImageToolServices = {
   analyzeImageBytes: ImageService;
   analyzeUndecodedImageBytes: ImageService;
   buildAutoRevealPreviews: ImageService;
-  buildHiddenPayloadPreviews: ImageService;
-  buildImageDecodedSignals: ImageService;
   buildImageRepairCandidates: ImageService;
   bytesToDataUrl: ImageService;
   createChannelPreviews: ImageService;
-  createNormalizedImageDataUrl: ImageService;
   detectImageFormat: ImageService;
   emptyImageChannels: ImageService;
   guessImageDimensions: ImageService;
@@ -79,9 +75,9 @@ export type ImageToolServices = {
 
 export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: ImageToolServices }) {
   const {
-    analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews,
-    buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews,
-    createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions,
+    analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews,
+    buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews,
+    detectImageFormat, emptyImageChannels, guessImageDimensions,
     imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl,
     loadBrowserImage, tryRebuildPngContainer
   } = services;
@@ -152,44 +148,24 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         decoded,
         width: dimensions.width,
         height: dimensions.height,
-        sha256: "",
         dataUrl: effectiveDisplayDataUrl,
         repairedDataUrl: "",
         repairedContainerBytes: null,
-        repairNotes: [],
         repairStatus: decoded ? (isEnglish ? "Image opened successfully." : "图片可正常打开。") : (isEnglish ? "Open Repair to try recovery." : "可进入修复页尝试恢复。"),
         recoveryRows: [],
-        autoAssessment: { level: "info", title: "", subtitle: "", primaryAction: "", items: [] },
-        scanSteps: [],
-        triageRows: [],
-        priorityReveals: [],
-        evidenceBoard: [],
-        autoInsights: [],
-        autoDisplayItems: [],
-        decodedSignals: [],
-        briefing: "",
-        recommendedActions: [],
-        summaryCards: [],
-        diagnosis: { level: "info", title: "", detail: "" },
         exif,
-        exifSummary: [],
-        findings: analysis.findings,
         structureRows: analysis.rows,
         hiddenRows: analysis.hiddenRows,
-        stegoRows: analysis.stegoRows,
         trailerBytes: analysis.trailerBytes,
         trailerPreview: analysis.trailerPreview,
         trailerText: analysis.trailerText,
-        lsbText: analysis.lsbText,
         lsbCandidates: analysis.lsbCandidates,
         hiddenPayloads: analysis.hiddenPayloads,
         repairDownloads: [],
         pngTextEntries: analysis.pngTextEntries,
         pngChunks: analysis.pngChunks,
-        hiddenPayloadPreviews: [],
         repairPreviewItems: [],
         autoRevealPreviews: [],
-        autoFocusPreviews: [],
         channelDataUrls: emptyImageChannels(placeholderDataUrl)
       });
       setImagePage("overview");
@@ -212,9 +188,8 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       const analysis = source.image
         ? analyzeImageBytes(source.bytes, source.file.type, source.image, source.exif)
         : analyzeUndecodedImageBytes(source.bytes, source.file.type, source.exif, [["Original container", "failed"]]);
-      const hiddenPayloadPreviews = await buildHiddenPayloadPreviews(analysis.hiddenPayloads);
       if (analysisId !== analysisIdRef.current) return;
-      setImageInfo((current) => current ? { ...current, findings: analysis.findings, hiddenRows: analysis.hiddenRows, stegoRows: analysis.stegoRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbText: analysis.lsbText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks, hiddenPayloadPreviews } : current);
+      setImageInfo((current) => current ? { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks } : current);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
@@ -252,16 +227,19 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         try { await loadBrowserImage(src); previews.push({ label: candidate.label, src, detail: candidate.note }); rows.push([candidate.label, "decoded"]); }
         catch { rows.push([candidate.label, "failed"]); }
       }
-      const normalized = source.image ? createNormalizedImageDataUrl(source.image) : "";
       if (analysisId !== analysisIdRef.current) return;
       setImageInfo((current) => current ? {
         ...current,
-        repairedDataUrl: normalized || previews[0]?.src || "",
+        repairedDataUrl: previews[0]?.src || "",
         repairedContainerBytes: rebuiltPng?.bytes ?? null,
-        repairStatus: previews.length || normalized ? (isEnglish ? "Repair results are ready." : "修复结果已生成。") : (isEnglish ? "No repair result could be decoded." : "没有生成可用的修复结果。"),
+        repairStatus: previews.length
+          ? (isEnglish ? "A displayable repair result is available." : "已找到可显示的修复结果。")
+          : source.image
+            ? (isEnglish ? "The image already opens; no repair result was generated." : "图片当前可正常打开，未生成修复结果。")
+            : (isEnglish ? "No displayable repair result was found." : "没有找到可显示的修复结果。"),
         recoveryRows: rows,
         repairPreviewItems: previews,
-        repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, sha256: "", extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
+        repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
       } : current);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -338,7 +316,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         onDrop={handleImageDrop}
       >
         <PanelTitle title={t.uploadImage} />
-        <input ref={inputRef} type="file" accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => void handleImage(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => void handleImage(event.target.files?.[0])} />
         <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}>
           <strong>{imageInfo?.name || t.dropFileTitle}</strong>
           <span>{imageInfo ? `${imageInfo.type} · ${formatBytes(imageInfo.size)}` : (isEnglish ? "PNG, JPEG, GIF, WebP, BMP, TIFF, HEIC, or image-like data" : "支持 PNG、JPEG、GIF、WebP、BMP、TIFF、HEIC 和疑似图片数据")}</span>
@@ -382,10 +360,6 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
               </div>
             </div>
           </div>
-          {imageInfo.decodedSignals.length > 0 && <div className="image-simple-signals">
-            <PanelTitle title={t.decodedSignals} />
-            <div className="image-signal-list">{imageInfo.decodedSignals.map((signal) => <div key={`${signal.source}-${signal.type}-${signal.value.slice(0, 20)}`}><strong>{signal.type}</strong><span>{signal.source}</span><code>{signal.value}</code></div>)}</div>
-          </div>}
         </div>}
 
         {imagePage === "structure" && <div className="tool-panel wide-panel image-simple-structure-panel">
@@ -422,7 +396,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         </div>}
 
         {imagePage === "repair" && <div className="tool-panel wide-panel image-simple-repair-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Generating..." : "正在生成...") : (isEnglish ? "Generate repair results" : "生成修复结果")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.decoded && imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-normalized.png`}>{t.downloadRepaired}</AButton>}</div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Checking..." : "正在检查...") : (isEnglish ? "Check repair options" : "检查修复结果")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-recovered.png`}>{t.downloadRepaired}</AButton>}</div></div>
           <InfoTable rows={imageInfo.recoveryRows} />
           <div className="image-repair-preview-grid">{imageInfo.repairPreviewItems.map((item) => <figure key={`${item.label}-${item.detail}`}><img src={item.src} alt={item.label} /><figcaption><strong>{item.label}</strong><span>{item.detail}</span></figcaption></figure>)}</div>
           {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}

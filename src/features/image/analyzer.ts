@@ -20,13 +20,10 @@
  */
 
 import { decompressSync, strFromU8 } from "fflate";
-import type { ImageDecodedSignal, ImageInfo, IocRecord, PngChunkInfo, PngTextEntry, QrAnalysis } from "../../models";
+import type { ImageInfo, PngChunkInfo, PngTextEntry } from "../../models";
 import { crc32, findEmbeddedFileSignatures, hexPreview, previewText, readAscii, shannonEntropy } from "../../utils/binary";
-import { formatBytes, limitReportText } from "../../utils/files";
-import { analyzeCodecCandidates } from "../codec/analyzer";
-import { analyzeIocs } from "../ioc/analyzer";
+import { formatBytes } from "../../utils/files";
 import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
-import { classifyQrPayload, parseQrPayloadDetails, qrGeometryRows } from "../qr/analyzer";
 
 const imageObjectUrls = new Set<string>();
 
@@ -229,17 +226,6 @@ function imageAnalysisDimensions(width: number, height: number, maxPixels = 2_00
     height: Math.max(1, Math.round(height * scale)),
     scale
   };
-}
-
-function createNormalizedImageDataUrl(image: HTMLImageElement) {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Canvas is not available");
-  const dimensions = imageAnalysisDimensions(image.naturalWidth, image.naturalHeight, 3_000_000);
-  canvas.width = dimensions.width;
-  canvas.height = dimensions.height;
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/png");
 }
 
 function buildPngChunk(type: string, data: Uint8Array) {
@@ -514,7 +500,6 @@ function collectHiddenPayloads(bytes: Uint8Array, logicalEnd: number, trailer: U
       source,
       offset,
       size: carvedBytes.length,
-      sha256: "",
       extension: meta.extension,
       mime: meta.mime,
       preview: previewText(carvedBytes, 4096),
@@ -546,7 +531,6 @@ function collectPngChunkPayloads(bytes: Uint8Array, chunks: PngChunkInfo[]) {
       source: `PNG ancillary chunk ${chunk.type}`,
       offset: chunk.dataOffset,
       size: carvedBytes.length,
-      sha256: "",
       extension: meta.extension,
       mime: meta.mime,
       preview: previewText(carvedBytes, 4096),
@@ -604,7 +588,6 @@ function collectLsbPayloadsFromImageData(source: ImageData) {
           source: `LSB byte stream (${mode.label} bit ${bitPlane} ${bitOrder.toUpperCase()})`,
           offset: payloadOffset,
           size: payloadBytes.length,
-            sha256: "",
             extension: meta.extension,
             mime: meta.mime,
             preview: previewText(payloadBytes, 4096),
@@ -617,61 +600,6 @@ function collectLsbPayloadsFromImageData(source: ImageData) {
   return payloads.slice(0, 12);
 }
 
-async function buildHiddenPayloadPreviews(payloads: ImageInfo["hiddenPayloads"]) {
-  const previews: ImageInfo["hiddenPayloadPreviews"] = [];
-  for (const payload of payloads.slice(0, 8)) {
-    if (!/^image\//i.test(payload.mime)) continue;
-    const format = detectImageFormat(payload.bytes, payload.mime);
-    const candidates: Array<{ label: string; bytes: Uint8Array; mime: string; note: string }> = [
-      {
-        label: "Original payload candidate",
-        bytes: payload.bytes,
-        mime: payload.mime,
-        note: "Payload candidate decoded without repair."
-      },
-      ...buildImageRepairCandidates(payload.bytes, format)
-    ];
-    const rebuiltPng = tryRebuildPngContainer(payload.bytes);
-    if (rebuiltPng) {
-      candidates.push({
-        label: "Rebuilt hidden PNG critical chunks",
-        bytes: rebuiltPng.bytes,
-        mime: "image/png",
-        note: rebuiltPng.notes.join(" ")
-      });
-    }
-    for (const candidate of candidates) {
-      try {
-        const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
-        await loadBrowserImage(src);
-        const repaired = candidate.label !== "Original payload candidate";
-        const sha256 = "";
-        previews.push({
-          label: repaired ? `${payload.label} / repaired` : payload.label,
-          offset: payload.offset,
-          src,
-          detail: `${payload.label} at offset ${payload.offset}, ${formatBytes(payload.size)}, SHA256 ${payload.sha256.slice(0, 16)}...${repaired ? ` Preview recovered by: ${candidate.label}. Repaired SHA256 ${sha256.slice(0, 16)}...` : ""} ${candidate.note}`
-        });
-        break;
-      } catch {
-        // Try the next candidate. Extraction still remains available in the payload table.
-      }
-    }
-    if (previews.some((preview) => preview.offset === payload.offset && preview.label.includes(payload.label))) continue;
-    try {
-      previews.push({
-        label: payload.label,
-        offset: payload.offset,
-        src: await bytesToDataUrl(payload.bytes, payload.mime),
-        detail: `${payload.label} at offset ${payload.offset}, ${formatBytes(payload.size)}, SHA256 ${payload.sha256.slice(0, 16)}... Browser decode was not confirmed; download and inspect separately.`
-      });
-    } catch {
-      // Keep extraction available even if the browser cannot preview this payload.
-    }
-  }
-  return previews;
-}
-
 function loadBrowserImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -679,152 +607,6 @@ function loadBrowserImage(src: string) {
     img.onerror = reject;
     img.src = src;
   });
-}
-
-function addImageSignal(signals: ImageDecodedSignal[], signal: ImageDecodedSignal) {
-  const key = `${signal.type}|${signal.value.slice(0, 240)}`;
-  if (signals.some((item) => `${item.type}|${item.value.slice(0, 240)}` === key)) return;
-  signals.push(signal);
-}
-
-function classifyImageTextSignal(source: string, text: string) {
-  const value = text.trim();
-  const signals: ImageDecodedSignal[] = [];
-  if (!value || value.length < 4) return signals;
-  const preview = value.slice(0, 4000);
-  const iocAnalysis = analyzeIocs(preview, source);
-  const riskyIocs = iocAnalysis.records.filter((record) => record.risk.length);
-  const urls = Array.from(new Set(preview.match(/https?:\/\/[^\s"'<>]+|www\.[^\s"'<>]+/gi) ?? [])).slice(0, 6);
-  const emails = Array.from(new Set(preview.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [])).slice(0, 6);
-  const secretMatches = Array.from(new Set(preview.match(/(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{22,}|sk-[A-Za-z0-9_-]{24,}|(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*["']?[^"'\s,;]{6,}/gi) ?? [])).slice(0, 8);
-  if (secretMatches.length) {
-    addImageSignal(signals, {
-      source,
-      type: "Key / token pattern",
-      level: "warn",
-      value: secretMatches.join("\n"),
-      detail: "文本片段包含 key/token/password 等字段样式，请结合上下文复核。",
-      rows: secretMatches.map((item, index) => [`Hit ${index + 1}`, item])
-    });
-  }
-  if (urls.length) {
-    const urlRows = urls.map((url, index) => [`URL ${index + 1}`, url] as [string, string]);
-    addImageSignal(signals, {
-      source,
-      type: "URL / Link",
-      level: "info",
-      value: urls.join("\n"),
-      detail: "文本片段中提取到 URL，可继续用 URL 分析器核验跳转、参数和主机信息。",
-      rows: urlRows
-    });
-  }
-  if (emails.length) {
-    addImageSignal(signals, {
-      source,
-      type: "Email address",
-      level: "info",
-      value: emails.join("\n"),
-      detail: "文本片段中提取到邮箱地址，请结合邮件、页面或案件上下文复核。",
-      rows: emails.map((item, index) => [`Email ${index + 1}`, item] as [string, string])
-    });
-  }
-  if (riskyIocs.length) {
-    addImageSignal(signals, {
-      source,
-      type: "IOC review marker",
-      level: "warn",
-      value: riskyIocs.slice(0, 12).map((record) => `${record.type}: ${record.value}`).join("\n"),
-      detail: "文本片段命中 IOC 样式规则，建议单独登记并交叉验证来源。",
-      rows: riskyIocs.slice(0, 12).map((record) => [record.type, `${record.value} (${record.risk.join(", ")})`] as [string, string])
-    });
-  }
-  if (/^[A-Za-z0-9+/=_-]{80,}$/.test(value.replace(/\s+/g, ""))) {
-    const codec = analyzeCodecCandidates(value);
-    addImageSignal(signals, {
-      source,
-      type: "Encoded blob",
-      level: "info",
-      value: value.slice(0, 1000),
-      detail: "隐藏文本像 Base64/Base64URL/十六进制等编码内容，已列出自动检测候选。",
-      rows: codec.candidates.slice(0, 6).map((candidate) => [candidate.label, `score ${candidate.score}; ${candidate.note ?? "--"}`] as [string, string])
-    });
-  }
-  return signals;
-}
-
-async function decodeQrSignalFromDataUrl(src: string, source: string) {
-  try {
-    const jsQrModule = await import("jsqr");
-    const jsQR = jsQrModule.default;
-    const image = await loadBrowserImage(src);
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) return null;
-    const dimensions = imageAnalysisDimensions(image.naturalWidth, image.naturalHeight, 1_000_000);
-    canvas.width = dimensions.width;
-    canvas.height = dimensions.height;
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (!code?.data) return null;
-    const payloadType = classifyQrPayload(code.data);
-    const payloadRows = parseQrPayloadDetails(code.data, payloadType);
-    const iocAnalysis = analyzeIocs(code.data, `${source} QR`);
-    const urlFindings: Array<{ level: string; title: string; detail: string }> = [];
-    const geometryRows: Array<[string, string]> = code.location ? qrGeometryRows(code.location as unknown as Record<string, unknown>, canvas.width, canvas.height) : [["Geometry", "--"]];
-    const findings = buildQrFindings(code.data, payloadType, payloadRows, iocAnalysis.records, urlFindings, true, geometryRows, 0);
-    const level = findings.some((finding) => finding.level === "danger") ? "danger" : findings.some((finding) => finding.level === "warn") ? "warn" : "info";
-    return {
-      source,
-      type: `QR: ${payloadType}`,
-      level,
-      value: code.data,
-      detail: findings.slice(0, 4).map((finding) => finding.title).join(" / ") || "二维码已在浏览器本地解码。",
-      rows: [...payloadRows, ...geometryRows].slice(0, 28)
-    } satisfies ImageDecodedSignal;
-  } catch {
-    return null;
-  }
-}
-
-async function buildImageDecodedSignals(info: {
-  displayDataUrl: string;
-  repairedDataUrl: string;
-  autoRevealPreviews: ImageInfo["autoRevealPreviews"];
-  hiddenPayloadPreviews: ImageInfo["hiddenPayloadPreviews"];
-  hiddenPayloads: ImageInfo["hiddenPayloads"];
-  lsbCandidates: ImageInfo["lsbCandidates"];
-  trailerText: string;
-  pngTextEntries: PngTextEntry[];
-}) {
-  const signals: ImageDecodedSignal[] = [];
-  const qrTargets = [
-    { source: "Displayed image", src: info.displayDataUrl },
-    { source: "Normalized PNG", src: info.repairedDataUrl },
-    ...info.autoRevealPreviews
-      .filter((preview) => /LSB|Low-bit|Alpha|Noise/i.test(preview.label))
-      .slice(0, 5)
-      .map((preview) => ({ source: preview.label, src: preview.src })),
-    ...info.hiddenPayloadPreviews.slice(0, 4).map((preview) => ({ source: `Payload candidate ${preview.label}`, src: preview.src }))
-  ].filter((target, index, rows) => target.src && rows.findIndex((item) => item.src === target.src) === index).slice(0, 6);
-  for (const target of qrTargets) {
-    const signal = await decodeQrSignalFromDataUrl(target.src, target.source);
-    if (signal) addImageSignal(signals, signal);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  for (const candidate of info.lsbCandidates) {
-    classifyImageTextSignal(`LSB ${candidate.mode}`, candidate.text).forEach((signal) => addImageSignal(signals, signal));
-  }
-  if (info.trailerText) classifyImageTextSignal("Container trailer text", info.trailerText).forEach((signal) => addImageSignal(signals, signal));
-  for (const entry of info.pngTextEntries) {
-    classifyImageTextSignal(`PNG ${entry.chunk} ${entry.keyword}@${entry.offset}`, entry.text).forEach((signal) => addImageSignal(signals, signal));
-  }
-  for (const payload of info.hiddenPayloads.slice(0, 8)) {
-    if (/^text\//i.test(payload.mime) || payload.preview.match(/[\t\n\r -~]{32,}/)) {
-      classifyImageTextSignal(`${payload.source} ${payload.label}@${payload.offset}`, payload.preview).forEach((signal) => addImageSignal(signals, signal));
-    }
-  }
-  return signals.slice(0, 24);
 }
 
 function inspectJpegStructure(bytes: Uint8Array) {
@@ -948,76 +730,6 @@ function inspectTiffStructure(bytes: Uint8Array) {
   if (magic !== 42) findings.push({ level: "warn", title: "TIFF magic mismatch", detail: `Expected 42, got ${magic}.` });
   if (ifdOffset >= bytes.length) findings.push({ level: "warn", title: "TIFF IFD offset out of range", detail: `First IFD offset ${ifdOffset} is outside the file.` });
   return { rows, findings };
-}
-
-function imageEvidenceReportText(info: ImageInfo) {
-  return [
-    "# Image Analysis",
-    "",
-    `File: ${info.name}`,
-    `Size: ${formatBytes(info.size)}`,
-    `Type: ${info.type}`,
-    `Decoded pixels: ${info.decoded ? "yes" : "no"}`,
-    `Dimensions: ${info.width} x ${info.height}`,
-    `SHA256: ${info.sha256}`,
-    "",
-    "## Diagnosis",
-    `${info.diagnosis.title}: ${info.diagnosis.detail}`,
-    "",
-    "## Assessment",
-    `[${info.autoAssessment.level}] ${info.autoAssessment.title}`,
-    info.autoAssessment.subtitle,
-    `Action: ${info.autoAssessment.primaryAction}`,
-    ...info.autoAssessment.items.map((item) => `- [${item.level}] ${item.label}: ${item.value} - ${item.detail}`),
-    "",
-    "## Scan Steps",
-    ...info.scanSteps.map((step) => `- [${step.level}] ${step.stage}: ${step.status}\n  Evidence: ${limitReportText(step.evidence, 700)}\n  Display: ${step.display}\n  Next: ${step.next}`),
-    "",
-    "## Display Queue",
-    ...info.autoDisplayItems.map((item, index) => `${index + 1}. [${item.level}] ${item.label} (${item.role})\n   Reason: ${limitReportText(item.reason, 700)}\n   Action: ${item.action}`),
-    "",
-    "## Details",
-    ...info.triageRows.map((row) => `- [${row.level}] ${row.area}: ${row.verdict}\n  Evidence: ${limitReportText(row.evidence, 700)}\n  Display: ${row.display}\n  Action: ${row.action}`),
-    "",
-    "## Priority Reveals",
-    ...info.priorityReveals.map((item, index) => `${index + 1}. [${item.level}] ${item.title}\n   Result: ${limitReportText(item.result, 700)}\n   Reason: ${limitReportText(item.reason, 700)}`),
-    "",
-    "## Notes",
-    ...info.autoInsights.map((item, index) => `${index + 1}. [${item.level}] ${item.title}\n   ${item.detail}\n   Action: ${item.action}`),
-    "",
-    "## Notes Board",
-    ...info.evidenceBoard.map((item, index) => `${index + 1}. [${item.level}] ${item.title}\n   ${item.detail}\n   Action: ${item.action}`),
-    "",
-    "## Decoded Signals",
-    ...(info.decodedSignals.length
-      ? info.decodedSignals.map((signal) => `- [${signal.level}] ${signal.source} / ${signal.type}\n  ${limitReportText(signal.detail, 500)}\n  ${limitReportText(signal.value, 1000)}`)
-      : ["- Not detected"]),
-    "",
-    "## Repair",
-    info.repairStatus,
-    ...info.repairNotes.map((note) => `- ${note}`),
-    ...(info.repairDownloads.length
-      ? ["", "## Downloadable Repair Candidates", ...info.repairDownloads.map((candidate) => `- ${candidate.label} / ${formatBytes(candidate.size)} / SHA256 ${candidate.sha256}\n  ${candidate.note}`)]
-      : []),
-    "",
-    "## Findings",
-    ...info.findings.map((finding) => `- [${finding.level}] ${finding.title}: ${finding.detail}`),
-    "",
-    "## Hidden Payloads",
-    ...(info.hiddenPayloads.length
-      ? info.hiddenPayloads.map((payload) => `- ${payload.label} / ${payload.source} / offset ${payload.offset} / ${formatBytes(payload.size)} / SHA256 ${payload.sha256}`)
-      : ["- Not detected"]),
-    "",
-    "## PNG Text Metadata",
-    ...(info.pngTextEntries.length
-      ? info.pngTextEntries.map((entry) => `- ${entry.chunk} ${entry.keyword}@${entry.offset}: ${entry.text.slice(0, 300)}`)
-      : ["- Not detected"]),
-    "",
-    "## LSB Candidates",
-    ...(info.lsbCandidates.length
-      ? info.lsbCandidates.map((candidate) => `- ${candidate.mode}: ${candidate.text.slice(0, 500)}`)
-      : ["- Not detected"])
-  ].join("\n");
 }
 
 function scoreImageNoise(source: ImageData) {
@@ -1540,40 +1252,4 @@ function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntr
   return null;
 }
 
-function buildQrFindings(payload: string, payloadType: string, payloadRows: Array<[string, string]>, iocs: IocRecord[], urlFindings: QrAnalysis["urlFindings"], hasCode: boolean, geometryRows: Array<[string, string]>, imageEntropy: number) {
-  const findings: QrAnalysis["findings"] = [];
-  if (!hasCode) {
-    findings.push({ level: "warn", title: "No QR code decoded", detail: "The image loaded, but jsQR did not find a decodable QR symbol." });
-    return findings;
-  }
-  findings.push({ level: "info", title: "QR decoded locally", detail: `${payloadType} payload, ${new Blob([payload]).size} byte(s).` });
-  if (payload.length > 2048) findings.push({ level: "warn", title: "Long QR payload", detail: `${payload.length} characters may hide nested or encoded data.` });
-  if (payloadType === "OTP Secret") findings.push({ level: "warn", title: "OTP secret QR", detail: "The QR appears to contain a TOTP/HOTP enrollment secret. Treat it like a credential and redact before sharing." });
-  if (payloadType === "Crypto Payment") findings.push({ level: "warn", title: "Cryptocurrency payment URI", detail: "The QR contains a cryptocurrency address or payment request. Verify address ownership and amount out-of-band." });
-  if (payloadType === "Payment / App Link") findings.push({ level: "warn", title: "Payment or app action link", detail: "The QR can launch a payment/app workflow. Check scheme, host, amount, callback, and redirect parameters." });
-  if (payloadType === "App Deep Link") findings.push({ level: "warn", title: "App deep link", detail: "The payload uses a non-web URI scheme and may trigger app-specific actions." });
-  if (/WIFI:/i.test(payload) && /(?:^|;)P:[^;]+/i.test(payload)) findings.push({ level: "warn", title: "WiFi password in QR", detail: "The payload appears to contain a WiFi password field." });
-  if (payloadType === "WiFi Config" && payloadRows.some(([key, value]) => key === "Auth" && /^nopass$/i.test(value))) findings.push({ level: "warn", title: "Open WiFi QR", detail: "The QR config appears to describe a network without authentication." });
-  if (payloadType === "vCard") findings.push({ level: "info", title: "Contact data payload", detail: "The QR contains personal/contact fields; preserve only when relevant to the case scope." });
-  if (payloadType === "Geo") findings.push({ level: "info", title: "Location payload", detail: "The QR contains geographic coordinates or a map query." });
-  if (payloadType === "Email") findings.push({ level: "warn", title: "Email action payload", detail: "The QR can prefill an email recipient, subject, or body. Check the surrounding social-engineering context." });
-  if (payloadType === "SMS") findings.push({ level: "warn", title: "SMS action payload", detail: "The QR can prefill a phone number and message body." });
-  if (/(token|secret|password|passwd|pwd|session|auth|apikey|api_key)=/i.test(payload)) findings.push({ level: "warn", title: "Sensitive-looking parameter", detail: "Payload contains a credential/session keyword." });
-  if (/[\u200b-\u200f\u202a-\u202e]/.test(payload)) findings.push({ level: "warn", title: "Invisible Unicode marker", detail: "Payload contains zero-width or bidi control characters." });
-  if (/^[A-Za-z0-9+/=_-]{80,}$/.test(payload.trim().replace(/\s+/g, ""))) findings.push({ level: "info", title: "Encoded-looking payload", detail: "Payload resembles Base64/Base64URL or another compact encoding." });
-  if (payloadRows.some(([key, value]) => /Address|URL|Host|To|Phone|Number/i.test(key) && /(xn--|\.top|\.xyz|\.zip|\.mov|bit\.ly|tinyurl|t\.co)/i.test(value))) {
-    findings.push({ level: "warn", title: "Destination needs review", detail: "Structured QR fields contain punycode, special TLD, or URL-shortener-like destination." });
-  }
-  const geometryMap = new Map(geometryRows);
-  const coverage = Number((geometryMap.get("Coverage") ?? "0").replace("%", ""));
-  const rotation = Math.abs(Number((geometryMap.get("Rotation") ?? "0").replace(" deg", "")));
-  if (coverage > 0 && coverage < 2) findings.push({ level: "warn", title: "Small QR in image", detail: `QR bounding box covers ${coverage.toFixed(2)}% of the image; resampling may affect repeatability.` });
-  if (rotation > 12) findings.push({ level: "info", title: "Rotated QR symbol", detail: `Estimated top-edge rotation is ${rotation.toFixed(2)} degrees.` });
-  if (imageEntropy > 7.4) findings.push({ level: "info", title: "High image entropy", detail: `${imageEntropy.toFixed(4)} / 8; compression/noise may affect decode repeatability.` });
-  findings.push(...urlFindings);
-  const riskyIocs = iocs.filter((record) => record.risk.length);
-  if (riskyIocs.length) findings.push({ level: "warn", title: "IOC worth review", detail: riskyIocs.slice(0, 8).map((record) => `${record.type} ${record.value}: ${record.risk.join(", ")}`).join("\n") });
-  return findings;
-}
-
-export { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };

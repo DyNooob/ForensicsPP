@@ -210,7 +210,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
           title={english ? "Input" : "输入文本"}
           actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
         />
-        <input className="hidden-file-input" ref={inputRef} type="file" accept=".log,.txt,.csv,.json,text/*,application/json" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,text/*,application/json" onChange={(event) => void handleFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone text-tool-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

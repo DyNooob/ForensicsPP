@@ -139,7 +139,7 @@ export function SqlTool({ t }: { t: Translation }) {
     <div className={`sql-workbench ${result ? "has-sql" : "empty-sql"}`}>
       <div className="tool-panel upload-zone sql-upload">
         <PanelTitle title={labels.source} />
-        <input ref={inputRef} type="file" accept=".sql,.txt,text/plain,application/sql" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".sql,.txt,text/plain,application/sql" onChange={(event) => void handleFile(event.target.files?.[0])} />
         <p>{t.physicalMysqlHint}</p>
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}

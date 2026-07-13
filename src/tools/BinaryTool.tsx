@@ -126,7 +126,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
     <div className={`tool-grid binary-workbench ${analysis ? "has-binary" : "empty-binary"}`}>
       <div className="tool-panel wide-panel binary-source-panel">
         <PanelTitle title={english ? "Binary source" : "二进制文件"} />
-        <input ref={inputRef} type="file" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"

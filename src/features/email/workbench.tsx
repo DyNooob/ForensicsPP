@@ -227,16 +227,12 @@ export async function parseEmail(raw: string): Promise<EmailAnalysis> {
     const filename = attachment.filename || `attachment-${index + 1}`;
     const extension = extensionOf(filename);
     const signature = fileSignatureForBytes(content);
-    return { filename, contentType: attachment.mimeType || "application/octet-stream", size: content.byteLength, sha256: "", extension: extension || "--", signature: signature?.label ?? (content.byteLength ? "Unknown" : "--"), mismatch: Boolean(signature && extension && !signature.extensions.includes(extension)), risk: [], preview: "", content, iocs: [], urlRows: [], nestedHeaders: [] };
+    return { filename, contentType: attachment.mimeType || "application/octet-stream", size: content.byteLength, extension: extension || "--", signature: signature?.label ?? (content.byteLength ? "Unknown" : "--"), content };
   });
   const rawSize = new TextEncoder().encode(raw).byteLength;
   const rows: Array<[string, string]> = [["Raw size", formatBytes(rawSize)], ["From", from === "--" ? get("From") : from], ["To", to === "--" ? get("To") : to], ["Subject", subject], ["Date", date], ["Message-ID", messageId], ["Reply-To", replyTo], ["Return-Path", returnPath], ["From domain", fromDomain || "--"], ["SPF / DKIM / DMARC", `${spf} / ${dkim} / ${dmarc}`], ["Received hops", String(receivedHops.length)], ["Attachments", String(attachments.length)]];
   return {
-    rawSha256: "", rawSize, rows, headers, received, receivedHops, attachments,
-    contentSignals: [], findings: [], evidencePoints: [], scoreFactors: [], evidenceMatrix: [], authLedger: [], identityRows: [], infrastructureRows: [],
-    routeRows: receivedHops.map((hop) => [`#${hop.index}`, `${hop.from} -> ${hop.by} · ${hop.ip} · ${hop.date}`]),
-    verdict: { label: "parsed", detail: `SPF=${spf}, DKIM=${dkim}, DMARC=${dmarc}` },
-    auth: [["SPF", spf], ["DKIM", dkim], ["DMARC", dmarc], ["Authentication-Results", authHeader], ["DKIM-Signature", dkimSignature]],
-    authAssessments, dkimDetails: [], urls: [], linkRows: [], urlRows: [], iocs: [], bodyTimeline: [], domainAlignment: [], decoded: [], bodyText: parsed.text || "", bodyHtml: parsed.html || ""
+    rawSize, rows, headers, received, receivedHops, attachments,
+    authAssessments, bodyText: parsed.text || "", bodyHtml: parsed.html || ""
   };
 }

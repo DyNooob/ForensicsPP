@@ -23,7 +23,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0061A4" />
+    <meta name="theme-color" content="#4457A6" />
     <meta name="color-scheme" content="light dark" />
     <meta
       name="description"
@@ -77,8 +77,8 @@
         --ink: #111827;
         --muted: #5f6b7a;
         --line: #d7dde7;
-        --accent: #0061a4;
-        --accent-soft: #d2e4ff;
+        --accent: #4457a6;
+        --accent-soft: #eef0fa;
         --danger: #b3261e;
       }
 
@@ -89,8 +89,8 @@
           --ink: #e4e8ee;
           --muted: #b7c0cb;
           --line: #394149;
-          --accent: #9bcaff;
-          --accent-soft: #17324a;
+          --accent: #aeb9ff;
+          --accent-soft: #252b42;
           --danger: #ffb4ab;
         }
       }
@@ -110,7 +110,7 @@
       }
 
       .page {
-        width: min(1040px, calc(100% - 32px));
+        width: min(1120px, calc(100% - 40px));
         margin: 0 auto;
         padding: 34px 0 42px;
       }
@@ -164,17 +164,55 @@
         font-weight: 750;
       }
 
-      main {
+      .legal-layout {
         display: grid;
-        gap: 14px;
-        margin-top: 18px;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+        margin-top: 24px;
+      }
+
+      nav {
+        position: sticky;
+        top: 24px;
+        display: grid;
+        gap: 4px;
+        border-left: 2px solid var(--line);
+        padding-left: 12px;
+      }
+
+      nav strong {
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      nav a {
+        border-radius: 4px;
+        color: var(--muted);
+        padding: 7px 9px;
+        font-size: 14px;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      main {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
       }
 
       section {
-        border: 1px solid var(--line);
-        border-radius: 4px;
-        background: var(--surface);
-        padding: 20px;
+        padding: 26px 28px;
+      }
+
+      section + section {
+        border-top: 1px solid var(--line);
       }
 
       section h2 {
@@ -202,17 +240,12 @@
       }
 
       .notice {
-        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
         background: var(--accent-soft);
       }
 
       .notice p,
       .notice li {
         color: var(--ink);
-      }
-
-      .danger h2 {
-        color: var(--danger);
       }
 
       footer {
@@ -252,6 +285,12 @@
           padding: 16px;
         }
       }
+
+      @media (max-width: 820px) {
+        .legal-layout { grid-template-columns: 1fr; }
+        nav { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; padding: 0; }
+        nav strong { grid-column: 1 / -1; }
+      }
     </style>
   </head>
   <body>
@@ -260,103 +299,85 @@
         <span class="eyebrow">Forensics++</span>
         <h1>法律说明</h1>
         <p>
-          使用 Forensics++ 前，请确认你理解并接受以下条款、隐私说明、免责声明和开源许可说明。继续使用本站工具，即表示你同意按这些规则使用。
+          这里说明 Forensics++ 的使用范围、数据处理方式以及工具结果的责任边界。请在使用前阅读。
         </p>
         <div class="meta">
-          <span>当前版本：0.5</span>
-          <span>生效日期：2026-06-24</span>
-          <span>反馈邮箱：i@digiforensics.cn</span>
+          <span>说明版本：2026-07-13</span>
+          <span>产品邮箱：toolab@digiforensics.cn</span>
         </div>
         <div class="actions">
           <a class="button" href="/">返回工作台</a>
           <a class="button" href="https://github.com/DyNooob/ForensicsPP">GitHub</a>
-          <a class="button" href="mailto:i@digiforensics.cn">联系反馈</a>
+          <a class="button" href="mailto:toolab@digiforensics.cn">联系反馈</a>
         </div>
       </header>
 
-      <main>
-        <section class="notice">
-          <h2>使用前确认</h2>
-          <ul>
-            <li>你只会在合法、授权、符合适用规则的场景中使用本站工具。</li>
-            <li>你确认自己有权处理输入的文件、文本、日志、流量包、镜像片段或其他数据。</li>
-            <li>你理解工具输出只是辅助结果，需要结合原始材料和专业判断复核。</li>
-            <li>你理解浏览器、扩展、系统、第三方静态包或本地环境可能影响工具行为。</li>
-          </ul>
-        </section>
+      <div class="legal-layout">
+        <nav aria-label="页面目录">
+          <strong>页面目录</strong>
+          <a href="#scope">使用范围</a>
+          <a href="#data">数据处理</a>
+          <a href="#results">结果与责任</a>
+          <a href="#opensource">开源许可</a>
+          <a href="#changes">更新与反馈</a>
+        </nav>
 
-        <section id="security">
-          <h2>服务定位</h2>
-          <p>
-            Forensics++ 是面向在线取证、CTF/MISC、教学、安全研究和个人数据分析的工具工作台。本站提供编码解码、哈希、图片、文件头、流量包、IOC、URL、时间戳、JSON、正则等辅助功能。
-          </p>
-          <h3>允许的使用场景</h3>
-          <ul>
-            <li>处理你本人拥有或已获得明确授权处理的数据。</li>
-            <li>在 CTF、靶场、课程、培训、内部演练和安全研究中分析样本。</li>
-            <li>对公开样例、测试数据、脱敏日志、合法收集的告警材料进行辅助分析。</li>
-          </ul>
-          <h3>禁止的使用场景</h3>
-          <ul>
-            <li>未授权访问、攻击、扫描、绕过安全控制或规避审计。</li>
-            <li>窃取、泄露、隐藏、篡改他人数据或协助违法违规行为。</li>
-            <li>侵犯第三方隐私、知识产权、商业秘密或其他合法权益。</li>
-            <li>把本站输出直接作为司法、合规、生产处置或高风险决策的唯一依据。</li>
-          </ul>
-        </section>
+        <main>
+          <section class="notice" id="scope">
+            <h2>使用范围</h2>
+            <p>使用本站工具时，你应当有权处理输入的数据，并遵守所在地适用的法律、授权范围和组织规定。</p>
+            <h3>可以使用</h3>
+            <ul>
+              <li>处理本人所有或已获得明确授权的数据。</li>
+              <li>用于电子数据取证、CTF、教学、内部演练和安全研究。</li>
+              <li>分析公开样例、测试数据、脱敏日志和合法取得的材料。</li>
+            </ul>
+            <h3>不得使用</h3>
+            <ul>
+              <li>未授权访问、攻击、绕过安全控制或规避审计。</li>
+              <li>窃取、泄露、隐藏、篡改他人数据，或侵犯第三方合法权益。</li>
+              <li>协助任何违法违规行为。</li>
+            </ul>
+          </section>
 
-        <section id="privacy">
-          <h2>数据存储</h2>
-          <ul>
-            <li>部分偏好设置会保存在浏览器 localStorage 中，可随时清除。</li>
-            <li>Some preferences may be stored in localStorage and can be cleared anytime.</li>
-            <li>你可以使用浏览器自带的站点数据清理功能。</li>
-            <li>请不要在公共电脑、共享账号或不可信浏览器环境中输入敏感数据。</li>
-            <li>如果你通过邮件反馈问题，邮件正文、附件、发件地址和相关元数据会由收件邮箱系统接收和保存。</li>
-          </ul>
-        </section>
+          <section id="data">
+            <h2>数据处理</h2>
+            <ul>
+              <li>本站没有为工具检材设置默认上传接口；所选文件由当前浏览器页面读取和处理。</li>
+              <li>界面偏好、最近使用和部分工具输入可能保存在浏览器站点数据中，可在设置中清除。</li>
+              <li>刷新页面、关闭工具或清除站点数据可能移除尚未导出的内容。</li>
+              <li>通过邮件反馈时，邮件内容和附件会由收件邮箱系统接收。</li>
+            </ul>
+          </section>
 
-        <section class="danger">
-          <h2>免责声明</h2>
-          <ul>
-            <li>本站工具按现状提供，不保证持续可用、完全准确、完整、无错误或适合特定目的。</li>
-            <li>文件格式识别、哈希、解码、隐写预览、流量包摘要、IOC 提取和正则匹配等结果可能存在误报、漏报或解析偏差。</li>
-            <li>浏览器限制、文件损坏、编码差异、样本混淆、第三方库行为和用户输入都可能导致输出变化。</li>
-            <li>你需要自行评估工具输出、保留原始证据，并在必要时使用专业工具和人工复核。</li>
-            <li>因误用、误判、数据丢失、业务中断、合规争议或第三方工具行为造成的风险，由使用者自行承担。</li>
-          </ul>
-        </section>
+          <section id="results">
+            <h2>结果与责任</h2>
+            <ul>
+              <li>工具输出用于辅助分析，不保证完全准确、完整或适合特定目的。</li>
+              <li>文件损坏、格式差异、浏览器限制、第三方依赖和输入内容都可能影响结果。</li>
+              <li>请保留原始材料，并结合其他工具、原始记录和人工判断复核重要结果。</li>
+              <li>不要把本站输出作为司法、合规、生产处置或其他高风险决定的唯一依据。</li>
+              <li>使用者对数据来源、操作过程和使用结果承担责任。</li>
+            </ul>
+          </section>
 
-        <section>
-          <h2>第三方工具与开源许可</h2>
-          <p>
-            Forensics++ 集成或参考了若干开源项目和公开规范。第三方项目归其各自作者或权利人所有，并受对应开源许可证约束。
-          </p>
-          <ul>
-            <li><a href="https://github.com/DyNooob/ForensicsPP">Forensics++ / ForensicsPP</a>：本站全部源码、构建脚本、静态页面和工具实现。</li>
-            <li><a href="https://github.com/gchq/CyberChef">CyberChef</a>：本地嵌入的编码、解码、哈希和 Recipe 工作台。</li>
-            <li><a href="https://github.com/ant-design/ant-design">Ant Design</a>、<a href="https://github.com/facebook/react">React</a>：桌面端组件、表单、主题和前端状态。</li>
-            <li><a href="https://github.com/brix/crypto-js">CryptoJS</a>、<a href="https://github.com/JuneAndGreen/sm-crypto">sm-crypto</a>、<a href="https://github.com/dcodeIO/bcrypt.js">bcrypt.js</a>：摘要、HMAC、PBKDF2、SM3 和 bcrypt 功能。</li>
-            <li><a href="https://github.com/MikeKovarik/exifr">exifr</a>、<a href="https://github.com/cozmo/jsQR">jsQR</a>：图片元数据和二维码识别。</li>
-            <li><a href="https://github.com/postalsys/postal-mime">postal-mime</a>：EML、邮件头、正文和附件解析。</li>
-            <li><a href="https://github.com/sql-js/sql.js">sql.js</a>、<a href="https://github.com/sql-formatter-org/sql-formatter">sql-formatter</a>：SQLite 数据库浏览和 SQL 格式化。</li>
-            <li><a href="https://github.com/101arrowz/fflate">fflate</a>：ZIP、APK、JAR 和 OOXML 容器解析。</li>
-            <li><a href="https://github.com/vitejs/vite">Vite</a>、<a href="https://github.com/microsoft/TypeScript">TypeScript</a>：本地开发、生产构建和类型检查。</li>
-          </ul>
-          <p>
-            如需审阅完整许可，请以项目仓库、依赖包自带 LICENSE 文件和第三方官方网站为准。本站不会将第三方项目名称、商标或许可证说明解释为任何形式的背书。
-          </p>
-        </section>
+          <section id="opensource">
+            <h2>开源许可</h2>
+            <p>
+              Forensics++ 源码采用 MIT License。项目使用的第三方软件仍受各自许可证约束，完整项目及依赖链接可在
+              <a href="https://github.com/DyNooob/ForensicsPP"> GitHub 仓库</a>和工作台“设置 → 开源项目”中查看。
+            </p>
+          </section>
 
-        <section>
-          <h2>变更与反馈</h2>
-          <ul>
-            <li>这些说明可能随着功能、依赖、部署方式或法律合规要求调整。</li>
-            <li>重要更新可能会再次弹出确认；继续使用即表示接受更新后的说明。</li>
-            <li>如发现页面显示、工具输出、许可证标注或法律说明存在问题，请通过反馈邮箱联系。</li>
-          </ul>
-        </section>
-      </main>
+          <section id="changes">
+            <h2>更新与反馈</h2>
+            <p>
+              当功能、数据处理方式或这些说明发生重要变化时，工作台可能要求重新确认。问题反馈请发送至
+              <a href="mailto:toolab@digiforensics.cn"> toolab@digiforensics.cn</a>。
+            </p>
+          </section>
+        </main>
+      </div>
 
       <footer>
         <p>本页面不构成法律意见。如你的使用场景涉及司法取证、合规调查、监管报送或其他高风险事项，请咨询专业人员。</p>

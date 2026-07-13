@@ -208,7 +208,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
             <AButton variant="text" disabled={!input && !hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={inputRef} type="file" accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
         {error && <div className="empty-state error-state">{error}</div>}
         <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={english ? "JSON operation" : "JSON 操作"}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>

@@ -30,8 +30,8 @@ import {
 } from "../features/browserArtifacts/analyzer";
 import { downloadTextFile, formatBytes } from "../utils/files";
 
-const MAX_FILE_BYTES = 256 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+const MAX_FILE_BYTES = 128 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const PAGE_SIZE = 200;
 
 type View = "overview" | BrowserArtifactRecord["category"] | "files";
@@ -57,12 +57,15 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   const [view, setView] = React.useState<View>("overview");
   const [filter, setFilter] = React.useState("");
   const [page, setPage] = React.useState(0);
+  const [selectedRecordId, setSelectedRecordId] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [progress, setProgress] = React.useState("");
   const [error, setError] = React.useState("");
   const [dragActive, setDragActive] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
   const workerRef = React.useRef<Worker | null>(null);
+  const runRef = React.useRef(0);
   const directoryProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
 
   const queueFiles = (files?: FileList | File[] | null) => {
@@ -81,8 +84,8 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (tooLarge || total > MAX_TOTAL_BYTES) {
       setError(tooLarge
-        ? (english ? `${tooLarge.name} exceeds the 256 MiB per-file limit.` : `${tooLarge.name} 超过单文件 256 MiB 限制。`)
-        : (english ? "The selected files exceed the 512 MiB total limit." : "所选文件总大小超过 512 MiB。"));
+        ? (english ? `${tooLarge.name} exceeds the 128 MiB per-file limit.` : `${tooLarge.name} 超过单文件 128 MiB 限制。`)
+        : (english ? "The selected files exceed the 256 MiB total limit." : "所选文件总大小超过 256 MiB。"));
       return;
     }
     setSelectedFiles(next);
@@ -90,17 +93,23 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
     setView("overview");
     setFilter("");
     setPage(0);
+    setSelectedRecordId("");
     setError("");
   };
 
   const analyze = async () => {
     if (!selectedFiles.length || loading) return;
+    const run = runRef.current + 1;
+    runRef.current = run;
     setLoading(true);
+    setProgress("");
     setError("");
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const inputs: Array<Omit<BrowserArtifactInput, "bytes"> & { bytes: ArrayBuffer }> = [];
-      for (const file of selectedFiles) {
+      for (const [index, file] of selectedFiles.entries()) {
+        if (runRef.current !== run) return;
+        setProgress(english ? `Reading ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在读取 ${index + 1}/${selectedFiles.length}：${file.name}`);
         inputs.push({
           name: file.name,
           path: file.webkitRelativePath || file.name,
@@ -109,6 +118,8 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
         });
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
+      if (runRef.current !== run) return;
+      setProgress(english ? "Parsing browser data" : "正在解析浏览器数据");
       const result = await new Promise<BrowserArtifactAnalysis>((resolve, reject) => {
         const worker = new Worker(new URL("../features/browserArtifacts/browser-artifacts.worker.ts", import.meta.url), { type: "module" });
         workerRef.current = worker;
@@ -131,14 +142,19 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
       setAnalysis(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (runRef.current === run) {
+        setLoading(false);
+        setProgress("");
+      }
     }
   };
 
   const cancel = () => {
+    runRef.current += 1;
     workerRef.current?.terminate();
     workerRef.current = null;
     setLoading(false);
+    setProgress("");
   };
 
   const clear = () => {
@@ -148,6 +164,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
     setView("overview");
     setFilter("");
     setPage(0);
+    setSelectedRecordId("");
     setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (folderInputRef.current) folderInputRef.current.value = "";
@@ -158,14 +175,16 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   const categoryRecords = React.useMemo(() => analysis && view !== "overview" && view !== "files"
     ? analysis.records.filter((record) => record.category === view)
     : [], [analysis, view]);
+  const deferredFilter = React.useDeferredValue(filter);
   const filteredRecords = React.useMemo(() => {
-    const query = filter.trim().toLowerCase();
+    const query = deferredFilter.trim().toLowerCase();
     if (!query) return categoryRecords;
     return categoryRecords.filter((record) => [record.time, record.browser, record.profile, record.primary, record.secondary, record.detail, record.source].join(" ").toLowerCase().includes(query));
-  }, [categoryRecords, filter]);
+  }, [categoryRecords, deferredFilter]);
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const visibleRecords = filteredRecords.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const selectedBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  const selectedRecord = categoryRecords.find((record) => record.id === selectedRecordId) ?? null;
 
   React.useEffect(() => setPage(0), [filter, view]);
   React.useEffect(() => { if (page >= pageCount) setPage(pageCount - 1); }, [page, pageCount]);
@@ -200,7 +219,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
           <AButton variant="filled" disabled={!selectedFiles.length || loading} onClick={() => void analyze()}>{loading ? (english ? "Parsing..." : "正在解析...") : (english ? "Parse data" : "开始解析")}</AButton>
           {loading && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
         </div>
-        {loading && <ALinearProgress />}
+        {loading && <><ALinearProgress /><div className="tool-loading-state">{progress}</div></>}
         {error && <div className="empty-state error-state">{error}</div>}
       </section>
 
@@ -214,7 +233,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
           <ASegmentedGroup className="browser-artifact-tabs" value={view} selects="single">
             {views.map((item) => {
               const count = item === "files" ? analysis.files.length : item === "overview" ? analysis.records.length : analysis.counts[item];
-              return <ASegmentedButton key={item} value={item} onClick={() => setView(item)}>{viewLabel(item, english)} ({count})</ASegmentedButton>;
+              return <ASegmentedButton key={item} value={item} onClick={() => { setView(item); setSelectedRecordId(""); }}>{viewLabel(item, english)} ({count})</ASegmentedButton>;
             })}
           </ASegmentedGroup>
 
@@ -237,8 +256,17 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
           {view !== "overview" && view !== "files" && (
             <>
               <div className="browser-artifact-toolbar"><input className="text-input" aria-label={english ? "Filter browser records" : "筛选浏览器记录"} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter URL, title, profile, path, or detail" : "筛选 URL、标题、Profile、路径或详情"} /><span>{filteredRecords.length}/{categoryRecords.length}</span></div>
-              <div className="table-scroll browser-artifact-table-scroll"><table className="data-table browser-artifact-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>{english ? "Primary" : "主要字段"}</th><th>{english ? "Secondary" : "次要字段"}</th><th>{english ? "Browser / Profile" : "浏览器 / Profile"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Details" : "详情"}</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.id}><td>{record.time || "--"}</td><td title={record.primary}>{record.primary || "--"}</td><td title={record.secondary}>{record.secondary || "--"}</td><td>{record.browser}<br /><small>{record.profile}</small></td><td title={record.source}>{record.source}</td><td title={record.detail}>{record.detail}</td></tr>)}</tbody></table></div>
+              <div className="table-scroll browser-artifact-table-scroll"><table className="data-table browser-artifact-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>{english ? "Primary" : "主要字段"}</th><th>{english ? "Secondary" : "次要字段"}</th><th>{english ? "Browser / Profile" : "浏览器 / Profile"}</th><th>{english ? "Source" : "来源"}</th></tr></thead><tbody>{visibleRecords.map((record) => <tr className={record.id === selectedRecordId ? "selected-row" : ""} key={record.id} tabIndex={0} onClick={() => setSelectedRecordId(record.id)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedRecordId(record.id); }}><td>{record.time || "--"}</td><td title={record.primary}>{record.primary || "--"}</td><td title={record.secondary}>{record.secondary || "--"}</td><td>{record.browser}<br /><small>{record.profile}</small></td><td title={record.source}>{record.source}</td></tr>)}</tbody></table></div>
               {filteredRecords.length > PAGE_SIZE && <div className="browser-artifact-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredRecords.length)} / {filteredRecords.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
+              {selectedRecord && <div className="browser-artifact-detail"><ToolPanelHeader title={selectedRecord.primary || viewLabel(view, english)} subtitle={selectedRecord.time || selectedRecord.source} /><InfoTable rows={[
+                [english ? "Category" : "类型", viewLabel(selectedRecord.category, english)],
+                [english ? "Secondary" : "次要字段", selectedRecord.secondary || "--"],
+                ["URL", selectedRecord.url || "--"],
+                [english ? "Path" : "路径", selectedRecord.path || "--"],
+                [english ? "Browser / Profile" : "浏览器 / Profile", `${selectedRecord.browser} / ${selectedRecord.profile}`],
+                [english ? "Source" : "来源", selectedRecord.source],
+                [english ? "Details" : "详情", selectedRecord.detail || "--"]
+              ]} /></div>}
             </>
           )}
         </section>

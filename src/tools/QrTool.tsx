@@ -191,7 +191,7 @@ export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrTo
     <div className={`tool-grid qr-workbench ${analysis ? "has-qr" : "empty-qr"}`}>
       <div className="tool-panel wide-panel qr-preview-panel">
         <PanelTitle title={english ? "QR image" : "二维码图片"} />
-        <input ref={inputRef} type="file" accept="image/*" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*" onChange={(event) => void handleFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"

@@ -26,8 +26,8 @@ import { parseSigmaRules, runSigmaRules, type SigmaMatch, type SigmaRule } from 
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
 
-const MAX_FILE_BYTES = 512 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 768 * 1024 * 1024;
+const MAX_FILE_BYTES = 256 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
 const MAX_RECORDS_PER_FILE = 50_000;
 const PAGE_SIZE = 250;
 
@@ -83,8 +83,9 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const analyses = parsedFiles.filter(isAnalysis);
   const events = React.useMemo(() => analyses.flatMap((file) => file.events).sort((left, right) => left.timestamp.localeCompare(right.timestamp)), [parsedFiles]);
+  const deferredFilter = React.useDeferredValue(filter);
   const filteredEvents = React.useMemo(() => {
-    const query = filter.trim().toLowerCase();
+    const query = deferredFilter.trim().toLowerCase();
     const wantedEventId = eventIdFilter.trim();
     return events.filter((event) => {
       if (wantedEventId && String(event.eventId ?? "") !== wantedEventId) return false;
@@ -92,7 +93,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
       if (!query) return true;
       return [event.timestamp, event.provider, event.channel, event.computer, event.recordId, event.message, ...Object.entries(event.data).flat()].join(" ").toLowerCase().includes(query);
     });
-  }, [eventIdFilter, events, filter, levelFilter]);
+  }, [deferredFilter, eventIdFilter, events, levelFilter]);
   const pageCount = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
   const visibleEvents = filteredEvents.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
@@ -115,8 +116,8 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (tooLarge || total > MAX_TOTAL_BYTES) {
       setError(tooLarge
-        ? (english ? `${tooLarge.name} exceeds 512 MiB.` : `${tooLarge.name} 超过 512 MiB。`)
-        : (english ? "Selected files exceed 768 MiB in total." : "所选文件总大小超过 768 MiB。"));
+        ? (english ? `${tooLarge.name} exceeds 256 MiB.` : `${tooLarge.name} 超过 256 MiB。`)
+        : (english ? "Selected files exceed 512 MiB in total." : "所选文件总大小超过 512 MiB。"));
       return;
     }
     setSelectedFiles(next);
@@ -261,7 +262,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
           </div>
           <div className="table-scroll evtx-event-table-scroll"><table className="data-table evtx-event-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>Event ID</th><th>{english ? "Provider" : "提供程序"}</th><th>{english ? "Level" : "级别"}</th><th>{english ? "Computer" : "计算机"}</th><th>{english ? "Summary" : "摘要"}</th></tr></thead><tbody>{visibleEvents.map((event) => <tr key={event.id} className={selectedEventId === event.id ? "selected-row" : ""} onClick={() => setSelectedEventId(event.id)}><td>{event.timestamp || "--"}</td><td>{event.eventId ?? "--"}</td><td title={event.provider}>{event.provider || "--"}</td><td>{event.levelName}</td><td>{event.computer || "--"}</td><td title={event.message}>{event.message || "--"}</td></tr>)}</tbody></table></div>
           {filteredEvents.length > PAGE_SIZE && <div className="evtx-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredEvents.length)} / {filteredEvents.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
-          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>XML</AButton>} /><InfoTable rows={[[english ? "Time" : "时间", selectedEvent.timestamp || "--"], [english ? "Channel" : "通道", selectedEvent.channel || "--"], [english ? "Computer" : "计算机", selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{english ? "Field" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /></div>}
+          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>{english ? "Save XML" : "保存 XML"}</AButton>} /><InfoTable rows={[[english ? "Time" : "时间", selectedEvent.timestamp || "--"], [english ? "Channel" : "通道", selectedEvent.channel || "--"], [english ? "Computer" : "计算机", selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{english ? "Field" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<details className="evtx-xml-details"><summary>{english ? "Raw XML" : "原始 XML"}</summary><textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /></details></div>}
         </>}
 
         {view === "sigma" && <div className="evtx-sigma-workspace">

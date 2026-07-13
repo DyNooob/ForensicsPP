@@ -29,6 +29,7 @@ import {
   GithubOutlined,
   InfoCircleOutlined,
   LinkOutlined,
+  MailOutlined,
   MoonOutlined,
   ReloadOutlined,
   SunOutlined
@@ -38,6 +39,7 @@ import type { ThemeMode } from "../models";
 import type { ToolId } from "../config/app";
 import {
   appVersion,
+  feedbackEmail,
   lastUpdated,
   projectLicense,
   projectLinks,
@@ -272,6 +274,7 @@ export function SettingsModal({
                 <strong>{labels.relatedLinks}</strong>
                 <div>
                   <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
+                  <a href={`mailto:${feedbackEmail}`}><MailOutlined aria-hidden="true" />{feedbackEmail}</a>
                   <a href="https://www.电子取证.com" target="_blank" rel="noreferrer">电子取证.com</a>
                   <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>

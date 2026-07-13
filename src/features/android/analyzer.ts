@@ -369,7 +369,6 @@ function classifyAndroidApkEntry(name: string, bytes: Uint8Array): AndroidApkEnt
     directory,
     extension: extension || "--",
     size: bytes.length,
-    sha256: "",
     signature,
     role,
     risk,

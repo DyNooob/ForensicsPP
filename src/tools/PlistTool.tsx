@@ -21,7 +21,7 @@
 
 import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
-import { AButton, ATextField, PanelTitle } from "../components/ui";
+import { AButton, ALinearProgress, ATextField, PanelTitle } from "../components/ui";
 import { parsePlist, plistChildren, plistJson, plistPreview, plistType, type PlistValue } from "../features/plist/analyzer";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
@@ -37,18 +37,27 @@ export function PlistTool({ t }: { t: (typeof copy)["zh"] }) {
   const [stack, setStack] = React.useState<Array<{ path: string; value: PlistValue }>>([]);
   const [query, setQuery] = React.useState("");
   const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
   const current = stack[stack.length - 1] ?? null;
   const children = React.useMemo(() => current ? plistChildren(current.value, current.path).filter((entry) => !query.trim() || `${entry.key} ${entry.preview} ${entry.type}`.toLowerCase().includes(query.trim().toLowerCase())) : [], [current, query]);
 
   const open = async (next: File | undefined) => {
     if (!next) return;
     if (next.size > LIMIT) { setError(english ? "Plist exceeds the 64 MiB limit." : "Plist 超过 64 MiB 解析上限。"); return; }
+    setLoading(true);
+    setFile(next);
+    setRoot(undefined);
+    setStack([]);
+    setFormat("");
+    setError("");
     try {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const parsed = parsePlist(new Uint8Array(await next.arrayBuffer()));
-      setFile(next); setFormat(parsed.format); setRoot(parsed.value); setStack([{ path: "$", value: parsed.value }]); setQuery(""); setError("");
+      setFormat(parsed.format); setRoot(parsed.value); setStack([{ path: "$", value: parsed.value }]); setQuery("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); setRoot(undefined); setStack([]); }
+    finally { setLoading(false); }
   };
-  const clear = () => { setFile(null); setRoot(undefined); setStack([]); setFormat(""); setQuery(""); setError(""); if (inputRef.current) inputRef.current.value = ""; };
+  const clear = () => { setFile(null); setRoot(undefined); setStack([]); setFormat(""); setQuery(""); setError(""); setLoading(false); if (inputRef.current) inputRef.current.value = ""; };
   const exportData = () => { if (root !== undefined) downloadTextFile(`${file?.name || "plist"}.json`, plistJson(root), "application/json;charset=utf-8"); };
   const downloadValue = (value: PlistValue, key: string) => {
     if (!(value instanceof Uint8Array)) return;
@@ -60,10 +69,11 @@ export function PlistTool({ t }: { t: (typeof copy)["zh"] }) {
     <div className="tool-grid browser-tool-workbench">
       <div className="tool-panel wide-panel browser-source-panel">
         <div className="panel-heading-row"><PanelTitle title={english ? "Plist browser" : "Plist 浏览器"} />{root !== undefined && <span className="status-pill">{format.toUpperCase()} · {formatBytes(file?.size ?? 0)}</span>}</div>
-        <input ref={inputRef} className="hidden-file-input" type="file" accept=".plist,.strings,.xml,application/x-plist" onChange={(event) => void open(event.target.files?.[0])} />
-        {!current && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{english ? "Open a Plist file" : "打开 Plist 文件"}</strong><span>XML · bplist00</span></div>}
-        <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="outlined" disabled={root === undefined} onClick={exportData}><DownloadOutlined /> JSON</AButton><AButton variant="text" disabled={root === undefined} onClick={clear}>{t.clear}</AButton></div>
-        {error && <pre className="result-box">{error}</pre>}
+        <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} accept=".plist,.strings,.xml,application/x-plist" onChange={(event) => void open(event.target.files?.[0])} />
+        {!current && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{file?.name || (english ? "Open a Plist file" : "打开 Plist 文件")}</strong><span>XML · bplist00</span></div>}
+        <div className="action-row"><AButton variant="filled" disabled={loading} onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="outlined" disabled={root === undefined} onClick={exportData}><DownloadOutlined /> JSON</AButton><AButton variant="text" disabled={!file && root === undefined && !error} onClick={clear}>{t.clear}</AButton></div>
+        {loading && <ALinearProgress />}
+        {error && <div className="empty-state error-state">{error}</div>}
       </div>
       {current && <div className="tool-panel wide-panel browser-data-panel">
         <div className="browser-toolbar"><AButton variant="text" disabled={stack.length <= 1} title={english ? "Back" : "返回"} onClick={() => setStack((items) => items.slice(0, -1))}><ArrowLeftOutlined /></AButton><code className="browser-path">{current.path}</code><ATextField value={query} allowClear placeholder={english ? "Filter current level" : "筛选当前层级"} onChange={(event) => setQuery(event.currentTarget.value)} /></div>

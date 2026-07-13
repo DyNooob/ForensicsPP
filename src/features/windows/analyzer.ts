@@ -25,6 +25,8 @@ import { formatBytes } from "../../utils/files";
 import { isPrivateHost } from "../../utils/forensics";
 import { extractPrintableStrings } from "../strings/analyzer";
 
+type WindowsFinding = { level: string; title: string; detail: string };
+
 function readUint32Le(bytes: Uint8Array, offset: number) {
   if (offset + 4 > bytes.length) return null;
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, true);
@@ -114,7 +116,7 @@ function describeLnkHotkey(value: number | undefined) {
 function parseLnkLinkInfo(bytes: Uint8Array, cursor: number) {
   const rows: Array<[string, string]> = [];
   const strings: string[] = [];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   const linkInfoSize = readUint32Le(bytes, cursor) ?? 0;
   rows.push(["LinkInfo size", linkInfoSize ? formatBytes(linkInfoSize) : "--"]);
   if (!linkInfoSize || cursor + linkInfoSize > bytes.length) {
@@ -171,7 +173,7 @@ function parseLnkLinkInfo(bytes: Uint8Array, cursor: number) {
 function parseLnkArtifact(bytes: Uint8Array, source: string) {
   const rows: Array<[string, string]> = [];
   const timeline: TimelineEvent[] = [];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   const strings: string[] = [];
   const headerSize = readUint32Le(bytes, 0);
   const clsid = hexPreview(bytes.slice(4, 20), 16);
@@ -249,7 +251,7 @@ function parseLnkArtifact(bytes: Uint8Array, source: string) {
 function parsePrefetchArtifact(bytes: Uint8Array, source: string) {
   const rows: Array<[string, string]> = [];
   const timeline: TimelineEvent[] = [];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   const version = readUint32Le(bytes, 0) ?? 0;
   const declaredSize = readUint32Le(bytes, 12) ?? 0;
   const executable = decodeUtf16Le(bytes.slice(16, Math.min(bytes.length, 76)));
@@ -282,7 +284,7 @@ function parsePrefetchArtifact(bytes: Uint8Array, source: string) {
 
 function parseZoneIdentifier(text: string) {
   const rows: Array<[string, string]> = [];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   const zoneMap: Record<string, string> = { "0": "My Computer", "1": "Local Intranet", "2": "Trusted Sites", "3": "Internet", "4": "Restricted Sites" };
   const values = new Map<string, string>();
   for (const line of text.split(/\r?\n/)) {
@@ -319,7 +321,7 @@ function parseZoneIdentifier(text: string) {
 
 function parseRegistryExportArtifact(text: string) {
   const rows: Array<[string, string]> = [];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   const keys = Array.from(text.matchAll(/^\[([^\]]+)\]/gim)).map((match) => match[1]);
   const valueLines = text.split(/\r?\n/).filter((line) => /^"[^"]+"\s*=/.test(line));
   rows.push(["Registry keys", String(keys.length)]);
@@ -343,7 +345,7 @@ function analyzeWindowsArtifact(bytes: Uint8Array, name: string): WindowsArtifac
     ["Size", formatBytes(bytes.length)],
     ["Header", hexPreview(bytes, 16)]
   ];
-  const findings: WindowsArtifactAnalysis["findings"] = [];
+  const findings: WindowsFinding[] = [];
   let artifactType = "Generic Windows-related File";
   let timeline: TimelineEvent[] = [];
   const lnkClsid = "01 14 02 00 00 00 00 00 C0 00 00 00 00 00 00 46";
@@ -382,13 +384,10 @@ function analyzeWindowsArtifact(bytes: Uint8Array, name: string): WindowsArtifac
   return {
     name,
     size: bytes.length,
-    sha256: "",
     artifactType,
     rows,
     timeline,
     strings: windowsPaths.slice(0, 100),
-    iocs: [],
-    findings,
     textPreview: textPreviewValue
   };
 }

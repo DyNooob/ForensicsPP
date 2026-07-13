@@ -52,7 +52,6 @@ export type PngChunkInfo = {
   ancillary: boolean;
   privateUse: boolean;
   safeToCopy: boolean;
-  sha256: string;
   entropy: number;
   hexPreview: string;
   preview: string;
@@ -70,7 +69,6 @@ export type PngTextEntry = {
 export type PngAnalysis = {
   name: string;
   size: number;
-  sha256: string;
   rows: Array<[string, string]>;
   chunks: PngChunkInfo[];
   textEntries: PngTextEntry[];
@@ -167,44 +165,24 @@ export type ImageInfo = {
   decoded: boolean;
   width: number;
   height: number;
-  sha256: string;
   dataUrl: string;
   repairedDataUrl: string;
   repairedContainerBytes: Uint8Array | null;
-  repairNotes: string[];
   repairStatus: string;
   recoveryRows: Array<[string, string]>;
-  autoAssessment: ImageAutoAssessment;
-  scanSteps: ImageScanStep[];
-  triageRows: ImageTriageRow[];
-  priorityReveals: ImagePriorityReveal[];
-  evidenceBoard: ImageEvidenceBoardItem[];
-  autoInsights: ImageAutoInsight[];
-  autoDisplayItems: ImageDisplayItem[];
-  decodedSignals: ImageDecodedSignal[];
-  briefing: string;
-  recommendedActions: Array<{ level: string; title: string; detail: string }>;
-  summaryCards: Array<{ label: string; value: string; level: string; detail: string }>;
-  diagnosis: { level: string; title: string; detail: string };
   exif: Record<string, unknown>;
-  exifSummary: Array<[string, string]>;
-  findings: Array<{ level: string; title: string; detail: string }>;
   structureRows: Array<[string, string]>;
   hiddenRows: Array<[string, string]>;
-  stegoRows: Array<[string, string]>;
   trailerBytes: Uint8Array;
   trailerPreview: string;
   trailerText: string;
-  lsbText: string;
   lsbCandidates: Array<{ mode: string; text: string }>;
-  hiddenPayloads: Array<{ label: string; source: string; offset: number; size: number; sha256: string; extension: string; mime: string; preview: string; bytes: Uint8Array }>;
-  repairDownloads: Array<{ label: string; note: string; size: number; sha256: string; extension: string; mime: string; bytes: Uint8Array }>;
+  hiddenPayloads: Array<{ label: string; source: string; offset: number; size: number; extension: string; mime: string; preview: string; bytes: Uint8Array }>;
+  repairDownloads: Array<{ label: string; note: string; size: number; extension: string; mime: string; bytes: Uint8Array }>;
   pngTextEntries: PngTextEntry[];
   pngChunks: PngChunkInfo[];
-  hiddenPayloadPreviews: Array<{ label: string; offset: number; src: string; detail: string }>;
   autoRevealPreviews: Array<{ label: string; src: string; detail: string }>;
   repairPreviewItems: Array<{ label: string; src: string; detail: string }>;
-  autoFocusPreviews: Array<{ label: string; src: string; detail: string; level: string }>;
   channelDataUrls: {
     red: string;
     green: string;
@@ -777,13 +755,10 @@ export type StringsAnalysis = {
 export type WindowsArtifactAnalysis = {
   name: string;
   size: number;
-  sha256: string;
   artifactType: string;
   rows: Array<[string, string]>;
   timeline: TimelineEvent[];
   strings: ExtractedStringRow[];
-  iocs: IocRecord[];
-  findings: Array<{ level: string; title: string; detail: string }>;
   textPreview: string;
 };
 
@@ -870,122 +845,23 @@ export type PasswordVerifyRow = {
   risk: string[];
 };
 
-export type EmailContentSignal = {
-  source: string;
-  type: string;
-  level: string;
-  value: string;
-  detail: string;
-  risk: string[];
-};
-
 export type EmailAttachmentRow = {
   filename: string;
   contentType: string;
   size: number;
-  sha256: string;
   extension: string;
   signature: string;
-  mismatch: boolean;
-  risk: string[];
-  preview: string;
   content: Uint8Array;
-  iocs: IocRecord[];
-  urlRows: Array<{ url: string; host: string; risk: string[] }>;
-  nestedHeaders: Array<[string, string]>;
-};
-
-export type EmailEvidencePoint = {
-  group: "support" | "risk" | "review";
-  level: string;
-  title: string;
-  detail: string;
-  source: string;
-};
-
-export type EmailScoreFactor = {
-  label: string;
-  level: string;
-  impact: number;
-  detail: string;
-  evidence: string;
-};
-
-export type EmailEvidenceMatrixRow = {
-  area: string;
-  verdict: string;
-  level: string;
-  evidence: string;
-  reportValue: string;
-  nextAction: string;
-};
-
-export type EmailActionItem = {
-  level: string;
-  title: string;
-  detail: string;
-  action: string;
-  value: string;
-};
-
-export type EmailIdentityRow = {
-  role: string;
-  value: string;
-  address: string;
-  domain: string;
-  alignedWithFrom: string;
-  risk: string[];
-  source: string;
-};
-
-export type EmailInfrastructureRow = {
-  kind: string;
-  value: string;
-  sources: string[];
-  count: number;
-  risk: string[];
-};
-
-export type EmailAuthLedgerRow = {
-  claim: string;
-  evidence: string;
-  result: string;
-  level: string;
-  confidence: string;
-  action: string;
 };
 
 export type EmailAnalysis = {
-  rawSha256: string;
   rawSize: number;
   rows: Array<[string, string]>;
   headers: Array<[string, string]>;
   received: string[];
   receivedHops: Array<{ index: number; from: string; by: string; ip: string; date: string; raw: string; risk: string[] }>;
   attachments: EmailAttachmentRow[];
-  contentSignals: EmailContentSignal[];
-  findings: Array<{ level: string; title: string; detail: string }>;
-  evidencePoints: EmailEvidencePoint[];
-  scoreFactors: EmailScoreFactor[];
-  evidenceMatrix: EmailEvidenceMatrixRow[];
-  authLedger: EmailAuthLedgerRow[];
-  identityRows: EmailIdentityRow[];
-  infrastructureRows: EmailInfrastructureRow[];
-  routeRows: Array<[string, string]>;
-  verdict: {
-    label: string;
-    detail: string;
-  };
-  auth: Array<[string, string]>;
   authAssessments: Array<{ mechanism: string; result: string; domain: string; aligned: string; source: string; verdict: string }>;
-  dkimDetails: Array<[string, string]>;
-  urls: string[];
-  linkRows: Array<{ text: string; href: string; host: string; displayHost: string; risk: string[] }>;
-  urlRows: Array<{ url: string; host: string; risk: string[] }>;
-  iocs: IocRecord[];
-  bodyTimeline: TimelineEvent[];
-  domainAlignment: Array<[string, string]>;
-  decoded: Array<[string, string]>;
   bodyText: string;
   bodyHtml: string;
 };
@@ -1109,7 +985,6 @@ export type AndroidApkEntry = {
   directory: string;
   extension: string;
   size: number;
-  sha256: string;
   signature: string;
   role: string;
   risk: string[];

@@ -20,7 +20,7 @@
  */
 
 import React from "react";
-import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
+import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { WindowsArtifactAnalysis } from "../models";
 import { formatBytes } from "../utils/files";
@@ -30,6 +30,7 @@ type Services = {
 };
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
+type ResultView = "overview" | "fields" | "timestamps" | "paths" | "text";
 
 export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; services: Services }) {
   const english = t.waiting === "Waiting";
@@ -37,6 +38,8 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
+  const [view, setView] = React.useState<ResultView>("overview");
+  const [pathFilter, setPathFilter] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const loadFile = async (file?: File) => {
@@ -51,6 +54,8 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       setAnalysis(services.analyzeWindowsArtifact(bytes, file.name));
+      setView("overview");
+      setPathFilter("");
     } catch (caught) {
       setAnalysis(null);
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -64,16 +69,30 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
     setError("");
     setLoading(false);
     setDropActive(false);
+    setView("overview");
+    setPathFilter("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
   const detailRows = analysis?.rows.filter(([name]) => !["Name", "Size", "Artifact type"].includes(name)) ?? [];
+  const visiblePaths = React.useMemo(() => {
+    const query = pathFilter.trim().toLowerCase();
+    return (analysis?.strings ?? []).filter((item) => !query || item.value.toLowerCase().includes(query));
+  }, [analysis, pathFilter]);
+  const textAvailable = Boolean(analysis?.textPreview && /Zone\.Identifier|Registry Export/i.test(analysis.artifactType));
+  const views = React.useMemo(() => analysis ? [
+    { id: "overview" as const, label: english ? "Overview" : "概览", count: 0 },
+    { id: "fields" as const, label: english ? "Fields" : "字段", count: detailRows.length },
+    ...(analysis.timeline.length ? [{ id: "timestamps" as const, label: english ? "Timestamps" : "时间", count: analysis.timeline.length }] : []),
+    ...(analysis.strings.length ? [{ id: "paths" as const, label: english ? "Paths" : "路径", count: analysis.strings.length }] : []),
+    ...(textAvailable ? [{ id: "text" as const, label: english ? "Text" : "文本", count: 0 }] : [])
+  ] : [], [analysis, detailRows.length, english, textAvailable]);
 
   return (
     <div className={`tool-grid windows-artifact-workbench ${analysis ? "has-windows" : "empty-windows"}`}>
       <div className="tool-panel wide-panel windows-source-panel">
         <PanelTitle title={english ? "Windows file" : "选择 Windows 文件"} />
-        <input ref={inputRef} type="file" accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
           role="button"
@@ -101,9 +120,13 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
       </div>
 
       {analysis && (
-        <>
-          <div className="tool-panel wide-panel windows-summary-panel">
-            <PanelTitle title={t.summary} />
+          <div className="tool-panel wide-panel windows-results-panel">
+            <ToolPanelHeader title={analysis.artifactType} subtitle={`${analysis.name} · ${formatBytes(analysis.size)}`} />
+            <ASegmentedGroup className="windows-result-tabs" value={view} selects="single">
+              {views.map((item) => <ASegmentedButton key={item.id} value={item.id} onClick={() => setView(item.id)}>{item.label}{item.count ? ` (${item.count})` : ""}</ASegmentedButton>)}
+            </ASegmentedGroup>
+
+            {view === "overview" &&
             <InfoTable rows={[
               [english ? "Name" : "名称", analysis.name],
               [english ? "Type" : "类型", analysis.artifactType],
@@ -112,16 +135,13 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
               [english ? "Timestamps" : "时间记录", String(analysis.timeline.length)],
               [english ? "Paths" : "路径", String(analysis.strings.length)]
             ]} />
-          </div>
+            }
 
-          <div className="tool-panel wide-panel windows-fields-panel">
-            <PanelTitle title={english ? "Parsed fields" : "解析字段"} />
+            {view === "fields" &&
             <InfoTable rows={detailRows.length ? detailRows : [[english ? "Result" : "结果", "--"]]} />
-          </div>
+            }
 
-          {analysis.timeline.length > 0 && (
-            <div className="tool-panel wide-panel windows-time-panel">
-              <PanelTitle title={english ? "Timestamps" : "时间记录"} />
+            {view === "timestamps" && (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
                   <thead><tr><th>UTC</th><th>{english ? "Format" : "格式"}</th><th>{english ? "Context" : "说明"}</th></tr></thead>
@@ -130,33 +150,32 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
                   ))}</tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
 
-          {analysis.strings.length > 0 && (
-            <div className="tool-panel wide-panel windows-paths-panel">
-              <PanelTitle title={english ? "Paths" : "路径"} />
+            {view === "paths" && (
+              <>
+              <div className="windows-path-filter"><input className="text-input" value={pathFilter} onChange={(event) => setPathFilter(event.currentTarget.value)} placeholder={english ? "Filter paths" : "筛选路径"} aria-label={english ? "Filter paths" : "筛选路径"} /><span>{visiblePaths.length}/{analysis.strings.length}</span></div>
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
                   <thead><tr><th>{english ? "Offset" : "偏移"}</th><th>{english ? "Value" : "值"}</th></tr></thead>
-                  <tbody>{analysis.strings.map((item) => (
+                  <tbody>{visiblePaths.map((item) => (
                     <tr key={item.id}><td>0x{item.offset.toString(16).toUpperCase()}</td><td>{item.value}</td></tr>
                   ))}</tbody>
                 </table>
               </div>
-            </div>
+              </>
           )}
 
-          {analysis.textPreview && /Zone\.Identifier|Registry Export/i.test(analysis.artifactType) && (
-            <div className="tool-panel wide-panel windows-preview-panel">
-              <div className="panel-heading-row">
-                <PanelTitle title={english ? "Text preview" : "文本预览"} />
+          {view === "text" && textAvailable && (
+              <div className="windows-text-view">
+                <div className="panel-heading-row">
+                <span />
                 <AButton variant="text" onClick={() => void navigator.clipboard.writeText(analysis.textPreview)}>{t.copy}</AButton>
               </div>
               <textarea className="single-textarea windows-preview-textarea" value={analysis.textPreview} readOnly />
             </div>
           )}
-        </>
+          </div>
       )}
     </div>
   );

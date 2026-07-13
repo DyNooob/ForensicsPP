@@ -166,7 +166,7 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
 
         <div className="yara-simple-divider" />
         <div className="yara-simple-section-heading"><strong>{t.yaraSample}</strong></div>
-        <input ref={inputRef} type="file" multiple onChange={(event) => void handleFiles(event.target.files)} />
+        <input ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFiles(event.target.files)} />
         <div
           className={`desktop-drop-zone yara-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

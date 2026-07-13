@@ -75,6 +75,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   const [batchRows, setBatchRows] = React.useState<BatchHashRow[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [textHashes, setTextHashes] = React.useState<Record<string, string> | null>(null);
+  const [resultAlgorithms, setResultAlgorithms] = React.useState<string[]>([]);
   const [filter, setFilter] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [isHashing, setIsHashing] = React.useState(false);
@@ -95,8 +96,8 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const visibleRows = React.useMemo(() => filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filteredRows, page]);
   const displayedTextHashes = React.useMemo(() => textHashes
-    ? algorithms.map((algorithm) => [ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase(), textHashes[algorithm] ? formatHashCase(textHashes[algorithm], hashCase) : "--"] as [string, string])
-    : [], [algorithms, hashCase, textHashes]);
+    ? resultAlgorithms.map((algorithm) => [ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase(), textHashes[algorithm] ? formatHashCase(textHashes[algorithm], hashCase) : "--"] as [string, string])
+    : [], [hashCase, resultAlgorithms, textHashes]);
   const textMatched = React.useMemo(() => {
     if (!textHashes || !expectedTargets.length) return null;
     const values = new Set(Object.values(textHashes).map((value) => value.toLowerCase()));
@@ -152,6 +153,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
         });
       }
       setBatchRows(rows);
+      setResultAlgorithms(selected);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setBatchRows(rows);
@@ -168,6 +170,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
     try {
       const values = await hashSelectedBytes(new TextEncoder().encode(text), algorithms);
       setTextHashes(Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]))));
+      setResultAlgorithms(algorithms);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -181,8 +184,6 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
       : [...algorithms, algorithm];
     if (!next.length) return;
     setSelectedAlgorithms(next);
-    setTextHashes(null);
-    setBatchRows([]);
   };
 
   const clear = () => {
@@ -193,6 +194,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
     setText("");
     setBatchRows([]);
     setTextHashes(null);
+    setResultAlgorithms([]);
     setExpectedHash("");
     setFilter("");
     setPage(0);
@@ -306,8 +308,8 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
             title={english ? "File hashes" : "文件哈希"}
             subtitle={`${evaluatedRows.length} ${english ? "files" : "个文件"}${expectedTargets.length ? ` · ${matchedFiles} MATCH` : ""}`}
             actions={<>
-              <AButton variant="outlined" onClick={() => downloadTextFile(`hashes-${Date.now()}.csv`, rowsToCsv(filteredRows, algorithms, hashCase), "text/csv;charset=utf-8")}>{english ? "Export CSV" : "导出 CSV"}</AButton>
-              {algorithms.includes("sha256") && <AButton variant="text" onClick={() => downloadTextFile(`hashes-${Date.now()}.sha256`, filteredRows.map((row) => `${row.sha256 ? formatHashCase(row.sha256, hashCase) : ""}  ${row.name}`).join("\n"), "text/plain;charset=utf-8")}>SHA256SUM</AButton>}
+              <AButton variant="outlined" onClick={() => downloadTextFile(`hashes-${Date.now()}.csv`, rowsToCsv(filteredRows, resultAlgorithms, hashCase), "text/csv;charset=utf-8")}>{english ? "Export CSV" : "导出 CSV"}</AButton>
+              {resultAlgorithms.includes("sha256") && <AButton variant="text" onClick={() => downloadTextFile(`hashes-${Date.now()}.sha256`, filteredRows.map((row) => `${row.sha256 ? formatHashCase(row.sha256, hashCase) : ""}  ${row.name}`).join("\n"), "text/plain;charset=utf-8")}>SHA256SUM</AButton>}
             </>}
           />
           <div className="hash-simple-result-toolbar">
@@ -316,8 +318,8 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
           </div>
           <div className="table-scroll hash-simple-scroll">
             <table className="data-table hash-simple-table">
-              <thead><tr><th>{english ? "File" : "文件"}</th><th>{t.fileSize}</th><th>{t.lastModified}</th>{expectedTargets.length > 0 && <th>{english ? "Verification" : "核验"}</th>}{algorithms.map((algorithm) => <th key={algorithm}>{ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase()}</th>)}</tr></thead>
-              <tbody>{visibleRows.map((row) => <tr key={`${row.index}-${row.name}-${row.size}`}><td>{row.name}</td><td>{formatBytes(row.size)}</td><td>{row.lastModified || "--"}</td>{expectedTargets.length > 0 && <td>{row.matched ? "MATCH" : "NO MATCH"}</td>}{algorithms.map((algorithm) => {
+              <thead><tr><th>{english ? "File" : "文件"}</th><th>{t.fileSize}</th><th>{t.lastModified}</th>{expectedTargets.length > 0 && <th>{english ? "Verification" : "核验"}</th>}{resultAlgorithms.map((algorithm) => <th key={algorithm}>{ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase()}</th>)}</tr></thead>
+              <tbody>{visibleRows.map((row) => <tr key={`${row.index}-${row.name}-${row.size}`}><td>{row.name}</td><td>{formatBytes(row.size)}</td><td>{row.lastModified || "--"}</td>{expectedTargets.length > 0 && <td>{row.matched ? "MATCH" : "NO MATCH"}</td>}{resultAlgorithms.map((algorithm) => {
                 const digest = row[algorithm as keyof BatchHashRow];
                 const displayed = typeof digest === "string" ? formatHashCase(digest, hashCase) : "--";
                 return <td key={algorithm}>{displayed === "--" ? displayed : <button className="hash-simple-digest" type="button" title={english ? "Copy digest" : "复制哈希"} onClick={() => void navigator.clipboard.writeText(displayed)}>{displayed}</button>}</td>;

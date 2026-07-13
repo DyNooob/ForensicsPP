@@ -23,7 +23,18 @@ import React from "react";
 import initSqlJs from "sql.js";
 import type { Database, SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import { CopyOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  CaretDownOutlined,
+  CaretUpOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DoubleLeftOutlined,
+  DoubleRightOutlined,
+  EditOutlined,
+  LeftOutlined,
+  RightOutlined,
+  SearchOutlined
+} from "@ant-design/icons";
 import { message, Popconfirm, Switch } from "antd";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
@@ -117,6 +128,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   const [offset, setOffset] = React.useState(0);
   const [tableSearch, setTableSearch] = React.useState("");
   const [tableFilter, setTableFilter] = React.useState("");
+  const [tableFilterDraft, setTableFilterDraft] = React.useState("");
   const [sortColumn, setSortColumn] = React.useState("");
   const [sortDirection, setSortDirection] = React.useState<"asc" | "desc">("asc");
   const [selectedCell, setSelectedCell] = React.useState<SqliteCellSelection | null>(null);
@@ -200,6 +212,12 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   }, [limit, offset, selectedTable, sortColumn, sortDirection, tableFilter]);
 
   React.useEffect(() => {
+    setTableFilter("");
+    setTableFilterDraft("");
+    setOffset(0);
+  }, [selectedTable]);
+
+  React.useEffect(() => {
     if (!data.columns.length || !data.values.length) {
       if (selectedCell) setSelectedCell(null);
       setCellEditOpen(false);
@@ -239,6 +257,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
     setOffset(0);
     setTableSearch("");
     setTableFilter("");
+    setTableFilterDraft("");
     setSortColumn("");
     setSortDirection("asc");
     setObjectFilter("");
@@ -624,6 +643,26 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
   };
   const canGoNext = data.totalRows == null ? data.values.length >= limit : offset + limit < data.totalRows;
   const pageEnd = data.totalRows == null ? offset + data.values.length : Math.min(offset + limit, data.totalRows);
+  const currentPage = Math.floor(offset / limit) + 1;
+  const totalPages = data.totalRows == null ? null : Math.max(1, Math.ceil(data.totalRows / limit));
+  const applyTableFilter = () => {
+    setTableFilter(tableFilterDraft.trim());
+    setOffset(0);
+  };
+  const clearTableFilter = () => {
+    setTableFilterDraft("");
+    setTableFilter("");
+    setOffset(0);
+  };
+  const toggleSqliteSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+    setOffset(0);
+  };
   const sqliteColumnWidths = React.useMemo(
     () => data.columns.map((column) => columnWidths[sqliteColumnKey(column)] ?? sqliteColumnPreferredWidth(column)),
     [columnWidths, data.columns, sqliteColumnKey]
@@ -671,7 +710,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
       {messageContextHolder}
       <div className="tool-panel wide-panel sqlite-source-panel">
         <PanelTitle title={english ? "SQLite database" : "SQLite 数据库"} />
-        <input className="hidden-file-input" ref={inputRef} type="file" multiple onChange={(event) => void handleFiles(Array.from(event.target.files ?? []))} />
+        <input className="hidden-file-input" ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFiles(Array.from(event.target.files ?? []))} />
         <div className={`desktop-drop-zone ${isSqliteDropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
@@ -684,7 +723,6 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
           <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={clearSqliteWorkspace}>{t.clear}</AButton>
-          {hasSqliteDb && <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit" : "编辑"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>}
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
@@ -697,18 +735,25 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
         </aside>
 
         <div className="sqlite-admin-main">
-        <ASegmentedGroup className="sqlite-page-tabs" value={sqlitePage} selects="single" aria-label={english ? "SQLite workspace pages" : "SQLite 页面"}>
-          <ASegmentedButton value="data" onClick={() => setSqlitePage("data")}>{english ? "Browse" : "浏览"}</ASegmentedButton>
-          <ASegmentedButton value="schema" onClick={() => setSqlitePage("schema")}>{english ? "Structure" : "结构"}</ASegmentedButton>
-          <ASegmentedButton value="sql" onClick={() => setSqlitePage("sql")}>SQL</ASegmentedButton>
-          <ASegmentedButton value="changes" onClick={() => setSqlitePage("changes")}>{english ? "Changes" : "修改"}{dirty ? " *" : ""}</ASegmentedButton>
-        </ASegmentedGroup>
+        <div className="sqlite-workspace-tabs-row">
+          <ASegmentedGroup className="sqlite-page-tabs" value={sqlitePage} selects="single" aria-label={english ? "SQLite workspace pages" : "SQLite 页面"}>
+            <ASegmentedButton value="data" onClick={() => setSqlitePage("data")}>{english ? "Browse" : "浏览"}</ASegmentedButton>
+            <ASegmentedButton value="schema" onClick={() => setSqlitePage("schema")}>{english ? "Structure" : "结构"}</ASegmentedButton>
+            <ASegmentedButton value="sql" onClick={() => setSqlitePage("sql")}>SQL</ASegmentedButton>
+            <ASegmentedButton value="changes" onClick={() => setSqlitePage("changes")}>{english ? "Changes" : "修改"}{dirty ? " *" : ""}</ASegmentedButton>
+          </ASegmentedGroup>
+          <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit mode" : "编辑模式"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>
+        </div>
 
         {sqlitePage === "data" && <div className="sqlite-data-workspace">
           <div className="tool-panel sqlite-main-data-panel">
             <div className="panel-heading-row"><PanelTitle title={activeTable ? `${activeTable.name}` : t.sqliteData} /><span className="status-pill">{sqlitePageStatus}</span></div>
             <div className="sqlite-simple-controls">
-              <input className="text-input" aria-label={english ? "Filter current table rows" : "筛选当前表记录"} value={tableFilter} onChange={(event) => { setTableFilter(event.currentTarget.value); setOffset(0); }} placeholder={english ? "Filter rows" : "筛选当前表"} />
+              <div className="sqlite-filter-control">
+                <input className="text-input" aria-label={english ? "Filter current table rows" : "筛选当前表记录"} value={tableFilterDraft} onChange={(event) => setTableFilterDraft(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTableFilter(); }} placeholder={english ? "Filter rows" : "筛选当前表"} />
+                <AButton variant="filled" icon={<SearchOutlined aria-hidden="true" />} disabled={!tableFilterDraft.trim() && !tableFilter} onClick={applyTableFilter}>{english ? "Filter" : "筛选"}</AButton>
+                {tableFilter && <AButton variant="text" onClick={clearTableFilter}>{t.clear}</AButton>}
+              </div>
               <label className="sqlite-page-size-control"><span>{english ? "Rows" : "每页"}</span><ASelect aria-label={english ? "Rows per page" : "每页行数"} value={limit} onChange={(value) => { setLimit(Number(value)); setOffset(0); }} options={[50, 100, 250, 500].map((value) => ({ value, label: String(value) }))} /></label>
               <AButton variant="outlined" disabled={!data.values.length} onClick={() => copyDataCsv(data)}>{t.copyCsv}</AButton>
               <AButton variant="outlined" disabled={!data.values.length} onClick={() => downloadDataCsv(data, activeTable?.name || "sqlite-table")}>{t.exportCsv}</AButton>
@@ -717,7 +762,7 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
             <div className="table-scroll sqlite-data-scroll">
               {data.columns.length ? <table className="data-table sqlite-data-table sqlite-browse-table" style={{ "--sqlite-table-width": `${sqliteDataMinWidth}px` } as React.CSSProperties}>
                 <colgroup><col className="sqlite-action-col" />{data.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteColumnWidths[index] }} key={column} />)}</colgroup>
-                <thead><tr><th className="sqlite-action-cell">{english ? "Actions" : "操作"}</th>{data.columns.map((column, index) => <th key={column} title={column}><span className="sqlite-column-label">{column}</span><span className="sqlite-column-resizer" role="separator" aria-label={`${english ? "Resize" : "调整列宽"} ${column}`} aria-orientation="vertical" tabIndex={0} onPointerDown={(event) => beginSqliteColumnResize(event, column, sqliteColumnWidths[index])} onDoubleClick={(event) => { event.stopPropagation(); resizeSqliteColumn(column, sqliteColumnPreferredWidth(column)); }} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); resizeSqliteColumn(column, sqliteColumnWidths[index] + (event.key === "ArrowRight" ? 12 : -12) * (event.shiftKey ? 3 : 1)); }} /></th>)}</tr></thead>
+                <thead><tr><th className="sqlite-action-cell">{english ? "Actions" : "操作"}</th>{data.columns.map((column, index) => <th className={sortColumn === column ? "is-sorted" : ""} key={column} title={column}><button className="sqlite-column-sort" type="button" onClick={() => toggleSqliteSort(column)} aria-label={`${english ? "Sort by" : "按列排序"} ${column}${sortColumn === column ? `, ${sortDirection}` : ""}`}><span className="sqlite-column-label">{column}</span>{sortColumn === column ? (sortDirection === "asc" ? <CaretUpOutlined aria-hidden="true" /> : <CaretDownOutlined aria-hidden="true" />) : null}</button><span className="sqlite-column-resizer" role="separator" aria-label={`${english ? "Resize" : "调整列宽"} ${column}`} aria-orientation="vertical" tabIndex={0} onPointerDown={(event) => beginSqliteColumnResize(event, column, sqliteColumnWidths[index])} onDoubleClick={(event) => { event.stopPropagation(); resizeSqliteColumn(column, sqliteColumnPreferredWidth(column)); }} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); resizeSqliteColumn(column, sqliteColumnWidths[index] + (event.key === "ArrowRight" ? 12 : -12) * (event.shiftKey ? 3 : 1)); }} /></th>)}</tr></thead>
                 <tbody>{data.values.map((row, rowIndex) => <tr key={`${data.rowids[rowIndex] ?? rowIndex}`}>
                   <td className="sqlite-action-cell"><div className="button-row compact-buttons sqlite-row-action-buttons">{editingEnabled && data.editable && <AButton variant="text" icon={<EditOutlined aria-hidden="true" />} aria-label={sqliteRowActions.edit} title={sqliteRowActions.edit} onClick={() => startEdit(rowIndex)} />}<AButton variant="text" icon={<CopyOutlined aria-hidden="true" />} aria-label={sqliteRowActions.copy} title={sqliteRowActions.copy} onClick={() => copySqliteRow(data, row)} />{editingEnabled && data.editable && <Popconfirm title={`${t.sqliteDeleteRow}: rowid ${data.rowids[rowIndex] ?? rowIndex + 1}?`} okText={t.sqliteDeleteRow} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => deleteRow(rowIndex)}><AButton variant="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={sqliteRowActions.delete} title={sqliteRowActions.delete} /></Popconfirm>}</div></td>
                   {data.columns.map((column, columnIndex) => {
@@ -735,7 +780,17 @@ export function SqliteTool({ t }: { t: (typeof copy)["zh"] }) {
                 </tr>)}</tbody>
               </table> : <div className="empty-state">--</div>}
             </div>
-            <div className="sqlite-pagination-row"><AButton variant="outlined" disabled={offset <= 0} onClick={() => setOffset(Math.max(0, offset - limit))}>{english ? "Previous" : "上一页"}</AButton><span>{data.values.length ? `${offset + 1}-${pageEnd}` : "0"}</span><AButton variant="outlined" disabled={!canGoNext} onClick={() => setOffset(offset + limit)}>{english ? "Next" : "下一页"}</AButton></div>
+            <div className="sqlite-pagination-row">
+              <div className="sqlite-pagination-buttons">
+                <AButton variant="outlined" icon={<DoubleLeftOutlined aria-hidden="true" />} aria-label={english ? "First page" : "第一页"} title={english ? "First page" : "第一页"} disabled={offset <= 0} onClick={() => setOffset(0)} />
+                <AButton variant="outlined" icon={<LeftOutlined aria-hidden="true" />} aria-label={english ? "Previous page" : "上一页"} title={english ? "Previous page" : "上一页"} disabled={offset <= 0} onClick={() => setOffset(Math.max(0, offset - limit))} />
+              </div>
+              <span>{data.values.length ? `${offset + 1}-${pageEnd}` : "0"} · {english ? "Page" : "第"} {currentPage}{totalPages ? ` / ${totalPages}` : ""}{english ? "" : " 页"}</span>
+              <div className="sqlite-pagination-buttons">
+                <AButton variant="outlined" icon={<RightOutlined aria-hidden="true" />} aria-label={english ? "Next page" : "下一页"} title={english ? "Next page" : "下一页"} disabled={!canGoNext} onClick={() => setOffset(offset + limit)} />
+                <AButton variant="outlined" icon={<DoubleRightOutlined aria-hidden="true" />} aria-label={english ? "Last page" : "最后一页"} title={english ? "Last page" : "最后一页"} disabled={!totalPages || currentPage >= totalPages} onClick={() => totalPages && setOffset((totalPages - 1) * limit)} />
+              </div>
+            </div>
           </div>
 
           {selectedCell && <div className="tool-panel sqlite-simple-cell-panel">

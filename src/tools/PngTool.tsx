@@ -91,7 +91,7 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
     <div className={`tool-grid png-workbench ${analysis ? "has-png" : "empty-png"}`}>
       <div className="tool-panel wide-panel png-source-panel">
         <PanelTitle title="PNG" />
-        <input ref={inputRef} type="file" accept="image/png,.png" onChange={(event) => void loadFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/png,.png" onChange={(event) => void loadFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

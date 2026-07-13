@@ -197,7 +197,7 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
           title={english ? "File or text" : "输入文件或文本"}
           actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
         />
-        <input ref={inputRef} type="file" onChange={(event) => void handleFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => void handleFile(event.target.files?.[0])} />
         <div
           className={`desktop-drop-zone text-tool-drop-zone ${dropActive ? "active" : ""}`}
           role="button"

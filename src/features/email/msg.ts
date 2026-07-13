@@ -69,11 +69,9 @@ function msgAttachments(streams: MsgStream[]): EmailAttachmentRow[] {
       filename,
       contentType,
       size: content.byteLength,
-      sha256: "",
       extension,
       signature: detected?.label ?? (content.byteLength ? "Unknown" : "--"),
-      mismatch: Boolean(detected && extension !== "--" && !detected.extensions.includes(extension)),
-      risk: [], preview: "", content, iocs: [], urlRows: [], nestedHeaders: []
+      content
     }];
   });
 }

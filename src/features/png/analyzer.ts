@@ -59,7 +59,6 @@ function analyzePngEvidence(bytes: Uint8Array, name: string): PngAnalysis {
   return {
     name,
     size: bytes.length,
-    sha256: "",
     rows: [
       ["Name", name],
       ["Size", formatBytes(bytes.length)],

@@ -70,6 +70,11 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const english = t.waiting === "Waiting";
 
+  React.useEffect(() => {
+    if (!parsed) return;
+    setBodyMode(parsed.bodyText.trim() ? "text" : parsed.bodyHtml.trim() ? "html" : "text");
+  }, [parsed]);
+
   const parseSource = async (source = input) => {
     if (!source.trim()) return;
     setLoading(true);
@@ -178,6 +183,8 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           className="hidden-file-input"
           ref={inputRef}
           type="file"
+          aria-hidden="true"
+          tabIndex={-1}
           accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
           onChange={(event) => void handleFile(event.target.files?.[0])}
         />

@@ -21,7 +21,7 @@
 
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
-import { CodeOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, CodeOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
 import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField } from "./components/ui";
 import { GithubIconButton } from "./components/GithubIconButton";
 import { CommandPalette } from "./components/CommandPalette";
@@ -725,6 +725,11 @@ export function App() {
         )}
       >
         <p className="legal-consent-body">{t.legalNoticeBody}</p>
+        <ul className="legal-consent-list">
+          {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview].map((item) => (
+            <li key={item}><CheckCircleFilled aria-hidden="true" /><span>{item}</span></li>
+          ))}
+        </ul>
       </Modal>
 
       <SettingsModal

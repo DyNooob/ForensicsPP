@@ -156,7 +156,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={inputRef} type="file" accept=".log,.txt,.csv,.json,.xml,.html,text/*,application/json" onChange={(event) => void loadFile(event.currentTarget.files?.[0])} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,.html,text/*,application/json" onChange={(event) => void loadFile(event.currentTarget.files?.[0])} />
         <div className="regex-simple-controls">
           <label className="stack-label regex-pattern-field">{t.pattern}<input className="text-input full-input" value={pattern} onChange={(event) => { setPattern(event.currentTarget.value); setSelectedKey(""); }} placeholder={english ? "Regular expression" : "输入正则表达式"} /></label>
           <label className="stack-label">{t.flags}<input className="text-input full-input" value={flags} onChange={(event) => setFlags(event.currentTarget.value)} placeholder="gim" /></label>

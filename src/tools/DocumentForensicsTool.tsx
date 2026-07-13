@@ -20,7 +20,7 @@
  */
 
 import React from "react";
-import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import type { DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
@@ -28,25 +28,38 @@ import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 type View = "summary" | "findings" | "metadata" | "structure" | "extracts";
 
-function analyzeInWorker(file: File, workerRef: React.MutableRefObject<Worker | null>) {
+function analyzeInWorker(file: File, workerRef: React.MutableRefObject<Worker | null>, signal: AbortSignal) {
   return file.arrayBuffer().then(async (bytes) => {
+    if (signal.aborted) throw new DOMException("Analysis cancelled", "AbortError");
     const signature = new TextDecoder("ascii").decode(new Uint8Array(bytes, 0, Math.min(8, bytes.byteLength)));
-    if (signature.startsWith("%PDF-")) return (await import("../features/document/pdf")).analyzePdf(new Uint8Array(bytes), file.name);
+    if (signature.startsWith("%PDF-")) {
+      const result = await (await import("../features/document/pdf")).analyzePdf(new Uint8Array(bytes), file.name);
+      if (signal.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+      return result;
+    }
     return new Promise<DocumentAnalysis>((resolve, reject) => {
-    const worker = new Worker(new URL("../features/document/document.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = worker;
-    worker.onmessage = (event: MessageEvent<{ type: "result"; result: DocumentAnalysis } | { type: "error"; error: string }>) => {
-      worker.terminate();
-      workerRef.current = null;
-      if (event.data.type === "result") resolve(event.data.result);
-      else reject(new Error(event.data.error));
-    };
-    worker.onerror = (event) => {
-      worker.terminate();
-      workerRef.current = null;
-      reject(new Error(event.message || "Document worker failed."));
-    };
-    worker.postMessage({ name: file.name, bytes }, [bytes]);
+      const worker = new Worker(new URL("../features/document/document.worker.ts", import.meta.url), { type: "module" });
+      workerRef.current = worker;
+      const finish = () => {
+        signal.removeEventListener("abort", abort);
+        worker.terminate();
+        if (workerRef.current === worker) workerRef.current = null;
+      };
+      const abort = () => {
+        finish();
+        reject(new DOMException("Analysis cancelled", "AbortError"));
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      worker.onmessage = (event: MessageEvent<{ type: "result"; result: DocumentAnalysis } | { type: "error"; error: string }>) => {
+        finish();
+        if (event.data.type === "result") resolve(event.data.result);
+        else reject(new Error(event.data.error));
+      };
+      worker.onerror = (event) => {
+        finish();
+        reject(new Error(event.message || "Document worker failed."));
+      };
+      worker.postMessage({ name: file.name, bytes }, [bytes]);
     });
   });
 }
@@ -57,11 +70,14 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const [analysis, setAnalysis] = React.useState<DocumentAnalysis | null>(null);
   const [view, setView] = React.useState<View>("summary");
   const [filter, setFilter] = React.useState("");
+  const [findingCategory, setFindingCategory] = React.useState("all");
+  const [structureKind, setStructureKind] = React.useState("all");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [dragActive, setDragActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const workerRef = React.useRef<Worker | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const choose = (next?: File) => {
     if (!next) return;
@@ -73,6 +89,8 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     setAnalysis(null);
     setView("summary");
     setFilter("");
+    setFindingCategory("all");
+    setStructureKind("all");
     setError("");
   };
 
@@ -80,18 +98,26 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     if (!file || loading) return;
     setLoading(true);
     setError("");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      setAnalysis(await analyzeInWorker(file, workerRef));
+      setAnalysis(await analyzeInWorker(file, workerRef, controller.signal));
       setView("summary");
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setAnalysis(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
   const cancel = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     workerRef.current?.terminate();
     workerRef.current = null;
     setLoading(false);
@@ -103,15 +129,23 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     setAnalysis(null);
     setView("summary");
     setFilter("");
+    setFindingCategory("all");
+    setStructureKind("all");
     setError("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => {
+    abortRef.current?.abort();
+    workerRef.current?.terminate();
+  }, []);
   const entries = React.useMemo(() => {
     const query = filter.trim().toLowerCase();
-    return (analysis?.entries ?? []).filter((entry) => !query || `${entry.name} ${entry.kind}`.toLowerCase().includes(query));
-  }, [analysis, filter]);
+    return (analysis?.entries ?? []).filter((entry) => (structureKind === "all" || entry.kind === structureKind) && (!query || `${entry.name} ${entry.kind}`.toLowerCase().includes(query)));
+  }, [analysis, filter, structureKind]);
+  const findings = React.useMemo(() => (analysis?.findings ?? []).filter((item) => findingCategory === "all" || item.category === findingCategory), [analysis, findingCategory]);
+  const findingCategories = React.useMemo(() => Array.from(new Set((analysis?.findings ?? []).map((item) => item.category))), [analysis]);
+  const structureKinds = React.useMemo(() => Array.from(new Set((analysis?.entries ?? []).map((item) => item.kind))).sort(), [analysis]);
 
   const downloadExtract = (index: number) => {
     const extract = analysis?.extracts[index];
@@ -130,12 +164,16 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const labels: Record<View, [string, string]> = {
     summary: ["摘要", "Summary"], findings: ["检查结果", "Findings"], metadata: ["元数据", "Metadata"], structure: ["结构", "Structure"], extracts: ["可提取内容", "Extracts"]
   };
+  const categoryLabel = (category: string) => {
+    if (english) return category;
+    return ({ metadata: "元数据", external: "外部关系", embedded: "嵌入内容", macro: "宏", action: "动作", structure: "结构" } as Record<string, string>)[category] ?? category;
+  };
 
   return <div className="tool-grid document-forensics-workbench">
     <section className="tool-panel wide-panel">
       <ToolPanelHeader title={english ? "Office / PDF source" : "Office / PDF 文档"} actions={<AButton variant="text" disabled={!file && !analysis && !error} onClick={clear}>{t.clear}</AButton>} />
       <input className="hidden-file-input" ref={inputRef} type="file" accept=".pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm,.dotm,.xlam" aria-hidden="true" tabIndex={-1} onChange={(event) => choose(event.target.files?.[0])} />
-      <div className={`desktop-drop-zone ${dragActive ? "active" : ""}`} role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); choose(event.dataTransfer.files?.[0]); }}>
+      <div className={`desktop-drop-zone ${dragActive ? "active" : ""}`} role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); choose(event.dataTransfer.files?.[0]); }}>
         <strong>{file?.name || (english ? "Select an Office or PDF document" : "选择 Office 或 PDF 文档")}</strong>
         <span>{file ? formatBytes(file.size) : "PDF · DOC/XLS/PPT · DOCX/XLSX/PPTX"}</span>
       </div>
@@ -150,11 +188,11 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
 
       {view === "summary" && <InfoTable rows={[[english ? "Container" : "容器", `${analysis.kind} · ${analysis.subtype}`], [english ? "File size" : "文件大小", formatBytes(analysis.size)], [english ? "Pages" : "页数", analysis.pages ? String(analysis.pages) : "--"], [english ? "Revisions" : "修订次数", analysis.revisions ? String(analysis.revisions) : "--"], [english ? "Package parts / streams" : "部件 / 流", String(analysis.entries.length)], [english ? "External relationships" : "外部关系", String(analysis.findings.filter((item) => item.category === "external").length)], [english ? "Embedded / macro items" : "嵌入 / 宏项目", String(analysis.findings.filter((item) => item.category === "embedded" || item.category === "macro").length)], [english ? "Encrypted" : "加密", analysis.encrypted ? (english ? "Yes" : "是") : (english ? "No indication" : "未发现标记")], ...(analysis.notes.length ? [[english ? "Notes" : "备注", analysis.notes.join("; ")] as [string, string]] : [])]} />}
 
-      {view === "findings" && (analysis.findings.length ? <div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Category" : "类别"}</th><th>{english ? "Check" : "检查项"}</th><th>{english ? "Location" : "位置"}</th><th>{english ? "Detail" : "详情"}</th></tr></thead><tbody>{analysis.findings.map((finding, index) => <tr key={`${finding.location}:${finding.label}:${index}`}><td>{finding.category}</td><td>{finding.label}</td><td>{finding.location}</td><td>{finding.detail}</td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No structural issue was found by the supported checks." : "在支持的检查范围内没有发现结构问题。"}</div>)}
+      {view === "findings" && (analysis.findings.length ? <><div className="document-forensics-filter"><ASelect aria-label={english ? "Filter check category" : "筛选检查类别"} value={findingCategory} onChange={setFindingCategory} options={[{ value: "all", label: english ? "All categories" : "全部类别" }, ...findingCategories.map((category) => ({ value: category, label: categoryLabel(category) }))]} /><span>{findings.length}/{analysis.findings.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Category" : "类别"}</th><th>{english ? "Check" : "检查项"}</th><th>{english ? "Location" : "位置"}</th><th>{english ? "Detail" : "详情"}</th></tr></thead><tbody>{findings.map((finding, index) => <tr key={`${finding.location}:${finding.label}:${index}`}><td>{categoryLabel(finding.category)}</td><td>{finding.label}</td><td>{finding.location}</td><td>{finding.detail}</td></tr>)}</tbody></table></div></> : <div className="empty-state">{english ? "No structural issue was found by the supported checks." : "在支持的检查范围内没有发现结构问题。"}</div>)}
 
       {view === "metadata" && (analysis.metadata.length ? <InfoTable rows={analysis.metadata} /> : <div className="empty-state">{english ? "No readable document metadata." : "没有可读取的文档元数据。"}</div>)}
 
-      {view === "structure" && <><div className="document-forensics-filter"><input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter path or stream" : "筛选路径或流"} aria-label={english ? "Filter document structure" : "筛选文档结构"} /><span>{entries.length}/{analysis.entries.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Path / stream" : "路径 / 流"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th></tr></thead><tbody>{entries.map((entry, index) => <tr key={`${entry.name}:${index}`}><td>{entry.name}</td><td>{entry.kind}</td><td>{formatBytes(entry.size)}</td></tr>)}</tbody></table></div></>}
+      {view === "structure" && <><div className="document-forensics-filter document-structure-filter"><input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter path or stream" : "筛选路径或流"} aria-label={english ? "Filter document structure" : "筛选文档结构"} /><ASelect aria-label={english ? "Filter structure type" : "筛选结构类型"} value={structureKind} onChange={setStructureKind} options={[{ value: "all", label: english ? "All types" : "全部类型" }, ...structureKinds.map((kind) => ({ value: kind, label: kind }))]} /><span>{entries.length}/{analysis.entries.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Path / stream" : "路径 / 流"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th></tr></thead><tbody>{entries.map((entry, index) => <tr key={`${entry.name}:${index}`}><td>{entry.name}</td><td>{entry.kind}</td><td>{formatBytes(entry.size)}</td></tr>)}</tbody></table></div></>}
 
       {view === "extracts" && (analysis.extracts.length ? <div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Action" : "操作"}</th></tr></thead><tbody>{analysis.extracts.map((extract, index) => <tr key={extract.id}><td>{extract.name}</td><td>{extract.kind}</td><td>{formatBytes(extract.size)}</td><td><AButton variant="text" onClick={() => downloadExtract(index)}>{english ? "Save" : "保存"}</AButton></td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No extractable embedded item." : "没有可提取的嵌入项。"}</div>)}
     </section>}

@@ -70,7 +70,6 @@ export function parsePngFile(bytes: Uint8Array) {
       ancillary,
       privateUse,
       safeToCopy: (type.charCodeAt(3) & 0x20) !== 0,
-      sha256: "",
       entropy,
       hexPreview: hexPreview(data, 256),
       preview: previewText(data, 600),

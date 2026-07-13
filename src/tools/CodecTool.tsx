@@ -135,7 +135,7 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
             <AButton variant="text" disabled={!hasContent} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input className="hidden-file-input" ref={inputRef} type="file" accept=".txt,.log,.csv,.json,.xml,.html,.eml,text/*,message/rfc822,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
+        <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".txt,.log,.csv,.json,.xml,.html,.eml,text/*,message/rfc822,application/json" onChange={(event) => void openFile(event.currentTarget.files?.[0])} />
 
         <div className="codec-simple-controls">
           <section className="codec-simple-operation-row">

@@ -35,7 +35,7 @@ import { defaultYaraSample, runYaraScan, yaraBatchRowsToCsv, yaraHitsToCsv, yara
 import { extractPrintableStrings, stringRowKey, stringsToCsv } from "../features/strings/analyzer";
 import { analyzeWindowsArtifact } from "../features/windows/analyzer";
 import { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } from "../features/file/analyzer";
-import { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "../features/image/analyzer";
+import { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "../features/image/analyzer";
 import { analyzePngEvidence } from "../features/png/analyzer";
 import { base64DecodeLoose, transformText } from "../features/codec/analyzer";
 import { affine, atbash, baconDecode, baconEncode, caesar, morseDecode, morseEncode, railFence, railFenceDecode, rot47, vigenere } from "../features/crypto/algorithms";
@@ -94,7 +94,7 @@ const services = {
   hash: { annotateBatchHashMatches, parseExpectedHashSet },
   codec: { transformText },
   crypto: { caesar, atbash, rot47, vigenere, affine, morseEncode, morseDecode, baconEncode, baconDecode, railFence, railFenceDecode },
-  image: { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildHiddenPayloadPreviews, buildImageDecodedSignals, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, createNormalizedImageDataUrl, detectImageFormat, emptyImageChannels, guessImageDimensions, imageEvidenceReportText, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer }
+  image: { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer }
 };
 
 type ToolHostProps = {
