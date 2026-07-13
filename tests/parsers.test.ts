@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
 import { zipSync } from "fflate";
 import { analyzeIocs } from "../src/features/ioc/analyzer";
 import { parseSqlDump } from "../src/features/sql/analyzer";
-import { coerceSqliteEditValue, quoteSqlIdentifier, quoteSqlLiteral, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
+import { coerceSqliteEditValue, quoteSqlIdentifier, quoteSqlLiteral, sqliteFilterWhere, sqliteHexDump, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
 import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
 import { parseArchiveEntries } from "../src/tools/ArchiveTool";
 
@@ -89,6 +89,22 @@ describe("SQLite value helpers", () => {
 
   it("escapes exported CSV values", () => {
     expect(sqliteRowsToCsv(["id", "note"], [[1, "a,b"], [2, "line\nvalue"]])).toBe('id,note\n1,"a,b"\n2,"line\nvalue"');
+  });
+
+  it("filters only a verified column and escapes LIKE wildcards", () => {
+    const columns = [
+      { name: "id", type: "INTEGER", notNull: true, defaultValue: "NULL", primaryKey: true },
+      { name: "note", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false }
+    ];
+    expect(sqliteFilterWhere(columns, "50%_off", "note")).toContain('CAST("note" AS TEXT)');
+    expect(sqliteFilterWhere(columns, "50%_off", "note")).toContain("%50\\%\\_off%");
+    expect(sqliteFilterWhere(columns, "value", 'note\" OR 1=1')).toBe("");
+  });
+
+  it("renders a readable BLOB hex dump", () => {
+    const dump = sqliteHexDump(new Uint8Array([0x41, 0x00, 0xff, 0x42]));
+    expect(dump).toContain("00000000  41 00 FF 42");
+    expect(dump).toContain("A..B");
   });
 });
 

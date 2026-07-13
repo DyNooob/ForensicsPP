@@ -538,7 +538,7 @@ h2.panel-title {
   background: color-mix(in srgb, var(--app-surface) 95%, var(--app-bg));
   padding: 12px;
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .desktop-drop-zone:hover,
@@ -550,8 +550,6 @@ h2.panel-title {
 .sqlite-drop-zone.active {
   border-color: var(--app-primary);
   background: color-mix(in srgb, var(--app-primary-soft) 22%, var(--app-surface));
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--app-primary) 8%, transparent);
 }
 
 .desktop-drop-zone strong,

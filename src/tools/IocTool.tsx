@@ -25,6 +25,7 @@ import { analyzeIocs, iocRecordsToStixBundle } from "../features/ioc/analyzer";
 import { copy } from "../i18n";
 import type { IocAnalysis, IocRecord } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const PAGE_SIZE = 200;
 
@@ -77,8 +78,8 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
   const [error, setError] = React.useState("");
   const [sourceSize, setSourceSize] = React.useState(() => new TextEncoder().encode(text).length);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
-  const requestRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const fileReadRef = React.useRef(0);
   const hasInput = analyzedText.trim().length > 0;
   const [analysis, setAnalysis] = React.useState<IocAnalysis>(() => analyzeIocs("", "pasted text"));
   const types = React.useMemo(() => Object.keys(analysis.grouped).sort(), [analysis.grouped]);
@@ -117,7 +118,17 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
     setPage(0);
   };
 
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setAnalyzing(false);
+  };
+
   const handleText = (value: string) => {
+    fileReadRef.current += 1;
+    cancelAnalysis();
+    setLoading(false);
+    setError("");
     setText(value);
     setSource("pasted text");
     setSourceSize(new TextEncoder().encode(value).length);
@@ -127,23 +138,30 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    cancelAnalysis();
+    const requestId = ++fileReadRef.current;
     setLoading(true);
+    setError("");
     setDropActive(false);
     try {
       const value = await file.slice(0, 32 * 1024 * 1024).text();
+      if (requestId !== fileReadRef.current) return;
       setSource(file.name);
       setSourceSize(file.size);
       setText(value);
       setAnalyzedText("");
       resetReview();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === fileReadRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (requestId === fileReadRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    fileReadRef.current += 1;
+    cancelAnalysis();
+    setLoading(false);
     setText("");
     setSource("pasted text");
     setSourceSize(0);
@@ -156,43 +174,42 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
     resetReview();
   };
 
-  const analyze = () => {
+  const analyze = async () => {
     if (!text.trim() || analyzing) return;
     if (new TextEncoder().encode(text).length > 16 * 1024 * 1024) {
       setError(english ? "IOC text exceeds the 16 MiB analysis limit." : "IOC 文本超过 16 MiB 分析上限。");
       return;
     }
-    workerRef.current?.terminate();
-    const requestId = ++requestRef.current;
-    const worker = new Worker(new URL("../workers/ioc.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = worker;
+    cancelAnalysis();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const nextText = text;
+    const nextSource = source;
     setAnalyzing(true);
     setError("");
-    worker.onmessage = (event: MessageEvent<{ id: number; analysis?: IocAnalysis; error?: string }>) => {
-      if (event.data.id !== requestId) return;
-      worker.terminate();
-      workerRef.current = null;
-      setAnalyzing(false);
-      if (event.data.error || !event.data.analysis) {
-        setError(event.data.error || (english ? "IOC extraction failed." : "IOC 提取失败。"));
-        return;
-      }
-      setAnalyzedText(text);
-      setAnalyzedSource(source);
-      setAnalysis(event.data.analysis);
+    try {
+      const result = await runWorkerTask<{ text: string; source: string }, IocAnalysis>({
+        createWorker: () => new Worker(new URL("../workers/ioc.worker.ts", import.meta.url), { type: "module" }),
+        request: { text: nextText, source: nextSource },
+        signal: controller.signal,
+        timeoutMs: 60_000
+      });
+      if (controller.signal.aborted) return;
+      setAnalyzedText(nextText);
+      setAnalyzedSource(nextSource);
+      setAnalysis(result);
       resetReview();
-    };
-    worker.onerror = (event) => {
-      if (requestId !== requestRef.current) return;
-      worker.terminate();
-      workerRef.current = null;
-      setAnalyzing(false);
-      setError(event.message || (english ? "IOC worker failed." : "IOC 提取任务失败。"));
-    };
-    worker.postMessage({ id: requestId, text, source });
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setAnalyzing(false);
+      }
+    }
   };
 
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const exportJson = () => downloadTextFile(
     `ioc-${Date.now()}.json`,
@@ -208,7 +225,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
       <section className="tool-panel wide-panel ioc-simple-source-panel">
         <ToolPanelHeader
           title={english ? "Input" : "输入文本"}
-          actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
+          actions={<AButton variant="text" disabled={!text && !hasInput && !error && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
@@ -231,7 +248,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
         </div>
         <div className="ioc-simple-source-actions">
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadIocText}</AButton>
-          <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={analyze}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract indicators" : "提取 IOC")}</AButton>
+          <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={() => void analyze()}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract indicators" : "提取 IOC")}</AButton>
         </div>
         <textarea className="single-textarea ioc-simple-input" aria-label={english ? "Text to scan for IOCs" : "需要提取 IOC 的文本"} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
       </section>

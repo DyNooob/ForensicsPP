@@ -121,7 +121,7 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="text" disabled={!analysis && !error} onClick={clear}>{t.clear}</AButton>
+          <AButton variant="text" disabled={!analysis && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <ALinearProgress />}
         {error && <div className="empty-state error-state">{error}</div>}

@@ -26,6 +26,7 @@ import type { EntropyAnalysis, EntropyBlock, EntropyRange } from "../models";
 import { hexPreview, previewText } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
 export type EntropyToolServices = {
   analyzeEntropy: (bytes: Uint8Array, blockSize?: number) => EntropyAnalysis;
@@ -53,36 +54,34 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const requestRef = React.useRef(0);
   const effectiveBlockSize = Math.max(64, Number(blockSize) || 1024);
   const hasInput = bytes.length > 0;
   const [analysis, setAnalysis] = React.useState<EntropyAnalysis>(() => services.analyzeEntropy(bytes, effectiveBlockSize));
 
   React.useEffect(() => {
-    const requestId = ++requestRef.current;
     if (!bytes.length || bytes.length < 1024 * 1024 || typeof Worker === "undefined") {
       setAnalysis(services.analyzeEntropy(bytes, effectiveBlockSize));
       setAnalyzing(false);
       return;
     }
+    const controller = new AbortController();
     setAnalyzing(true);
-    const worker = new Worker(new URL("../workers/entropy.worker.ts", import.meta.url), { type: "module" });
-    worker.onmessage = (event: MessageEvent<{ id: number; analysis?: EntropyAnalysis; error?: string }>) => {
-      if (event.data.id !== requestId || requestId !== requestRef.current) return;
-      if (event.data.analysis) setAnalysis(event.data.analysis);
-      if (event.data.error) setError(event.data.error);
-      setAnalyzing(false);
-      worker.terminate();
-    };
-    worker.onerror = (event) => {
-      if (requestId !== requestRef.current) return;
-      setError(event.message || "Entropy worker failed.");
-      setAnalyzing(false);
-      worker.terminate();
-    };
+    setError("");
     const workerBytes = bytes.slice();
-    worker.postMessage({ id: requestId, bytes: workerBytes, blockSize: effectiveBlockSize }, [workerBytes.buffer]);
-    return () => worker.terminate();
+    void runWorkerTask<{ bytes: Uint8Array; blockSize: number }, EntropyAnalysis>({
+      createWorker: () => new Worker(new URL("../workers/entropy.worker.ts", import.meta.url), { type: "module" }),
+      request: { bytes: workerBytes, blockSize: effectiveBlockSize },
+      transfer: [workerBytes.buffer],
+      signal: controller.signal,
+      timeoutMs: 60_000
+    }).then((result) => {
+      if (!controller.signal.aborted) setAnalysis(result);
+    }).catch((caught) => {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    }).finally(() => {
+      if (!controller.signal.aborted) setAnalyzing(false);
+    });
+    return () => controller.abort();
   }, [bytes, effectiveBlockSize, services]);
 
   const classes = React.useMemo(() => analysis.classRows.map(([label]) => label), [analysis.classRows]);
@@ -173,7 +172,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
       <section className="tool-panel wide-panel entropy-simple-source-panel">
         <ToolPanelHeader
           title={english ? "File or text" : "输入文件或文本"}
-          actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
+          actions={<AButton variant="text" disabled={!hasInput && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div

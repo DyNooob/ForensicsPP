@@ -4,6 +4,33 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-14
+
+### Added
+
+- Added a shared Worker task runner with cancellation, timeout, progress and cleanup handling.
+- Added column-scoped SQLite filtering, BLOB text/hex previews and one-step undo for databases up to 32 MiB.
+
+### Changed
+
+- Replaced the partial in-house YARA evaluator with VirusTotal YARA-X running in WebAssembly.
+- Moved EML, MSG, browser-record and Office-container parsing into cancellable Worker tasks.
+- Moved EVTX, Sigma, PCAP and image byte/pixel analysis into the same cancellable Worker lifecycle.
+- Unified IOC, string, Android, entropy and Registry analysis with the same cancellation, timeout and cleanup path.
+
+### Fixed
+
+- Prevented completed IOC and string tasks, and delayed file reads, from replacing newer input.
+- Kept Clear available before IOC or string analysis has been run.
+- Kept Clear and cancel actions usable while large files are being read, and prevented cancelled password operations from restoring stale results.
+- Applied the default indigo theme before React starts so the first frame no longer flashes the old teal color.
+
+### Verification
+
+- 59 automated tests across ten test files, including YARA-X, MIME, PDF, EVTX, PCAP and Worker lifecycle coverage.
+- Layout audit covers 36 routes, 17 populated states and 12 file-loaded states at 1366 x 900 in both light and dark themes.
+- Production dependency audit reports no known vulnerabilities.
+
 ## [0.8.1] - 2026-07-13
 
 ### Changed
@@ -146,7 +173,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1

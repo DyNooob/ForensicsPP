@@ -66,6 +66,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   const [table, setTable] = React.useState("users");
   const [column, setColumn] = React.useState("password");
   const [whereColumn, setWhereColumn] = React.useState("username");
+  const operationRef = React.useRef(0);
 
   const fastHashes = React.useMemo<Array<[string, string]>>(() => password && quickGenerated ? [
     ["MD5", CryptoJS.MD5(password).toString()],
@@ -109,6 +110,8 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   const hasInput = Boolean(password || targetHash || candidatePasswords || generatedHashes.length || verifyRows.length || username);
 
   const clearGenerated = () => {
+    operationRef.current += 1;
+    setLoading("");
     setQuickGenerated(false);
     setBcryptHash("");
     setPbkdf2Hash("");
@@ -117,6 +120,8 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
 
   const generateQuickHashes = () => {
     if (!password) return;
+    operationRef.current += 1;
+    setLoading("");
     setError("");
     setQuickGenerated(true);
     setGeneratedView("common");
@@ -124,6 +129,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
 
   const generateBcrypt = async () => {
     if (!password) return;
+    const operationId = ++operationRef.current;
     setLoading("bcrypt");
     setError("");
     try {
@@ -132,43 +138,51 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
       const value = await new Promise<string>((resolve, reject) => {
         bcrypt.hash(password, rounds, (caught, encrypted) => caught || !encrypted ? reject(caught ?? new Error("bcrypt failed")) : resolve(encrypted));
       });
+      if (operationId !== operationRef.current) return;
       setBcryptHash(value);
       setGeneratedView("bcrypt");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (operationId === operationRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading("");
+      if (operationId === operationRef.current) setLoading("");
     }
   };
 
   const generatePbkdf2 = async () => {
     if (!password || !salt) return;
+    const operationId = ++operationRef.current;
     setLoading("pbkdf2");
     setError("");
     try {
-      setPbkdf2Hash(await djangoPbkdf2(password, salt, pbkdf2Iterations));
+      const value = await djangoPbkdf2(password, salt, pbkdf2Iterations);
+      if (operationId !== operationRef.current) return;
+      setPbkdf2Hash(value);
       setGeneratedView("pbkdf2");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (operationId === operationRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading("");
+      if (operationId === operationRef.current) setLoading("");
     }
   };
 
   const verify = async () => {
     if (!targetHash.trim() || !candidates.length) return;
+    const operationId = ++operationRef.current;
     setLoading("verify");
     setError("");
     try {
-      setVerifyRows(await verifyPasswordCandidates(targetHash.trim(), candidates));
+      const rows = await verifyPasswordCandidates(targetHash.trim(), candidates);
+      if (operationId === operationRef.current) setVerifyRows(rows);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (operationId === operationRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading("");
+      if (operationId === operationRef.current) setLoading("");
     }
   };
 
   const clear = () => {
+    operationRef.current += 1;
+    setLoading("");
     setPassword("");
     setSalt(randomSalt());
     setQuickGenerated(false);
@@ -202,8 +216,8 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
             <div className="password-simple-generate-grid">
               <label className="stack-label">{t.passwordValue}<APasswordField className="text-input full-input" value={password} onChange={(event) => { setPassword(event.currentTarget.value); clearGenerated(); }} placeholder={t.passwordValue} /></label>
               <label className="stack-label">{english ? "Salt" : "盐值"}<input className="text-input full-input" value={salt} onChange={(event) => { setSalt(event.currentTarget.value); clearGenerated(); }} /></label>
-              <label className="stack-label">{english ? "bcrypt rounds" : "bcrypt 轮数"}<AInputNumber min={4} max={14} value={rounds} onChange={(value) => { setRounds(Math.min(14, Math.max(4, value ?? 10))); setBcryptHash(""); }} /></label>
-              <label className="stack-label">{english ? "PBKDF2 iterations" : "PBKDF2 迭代"}<AInputNumber min={10000} max={2000000} step={10000} value={pbkdf2Iterations} onChange={(value) => { setPbkdf2Iterations(Math.min(2000000, Math.max(10000, value ?? 390000))); setPbkdf2Hash(""); }} /></label>
+              <label className="stack-label">{english ? "bcrypt rounds" : "bcrypt 轮数"}<AInputNumber min={4} max={14} value={rounds} onChange={(value) => { operationRef.current += 1; setLoading(""); setRounds(Math.min(14, Math.max(4, value ?? 10))); setBcryptHash(""); if (generatedView === "bcrypt") setGeneratedView(""); }} /></label>
+              <label className="stack-label">{english ? "PBKDF2 iterations" : "PBKDF2 迭代"}<AInputNumber min={10000} max={2000000} step={10000} value={pbkdf2Iterations} onChange={(value) => { operationRef.current += 1; setLoading(""); setPbkdf2Iterations(Math.min(2000000, Math.max(10000, value ?? 390000))); setPbkdf2Hash(""); if (generatedView === "pbkdf2") setGeneratedView(""); }} /></label>
             </div>
             <div className="button-row">
               <AButton variant="filled" disabled={!password || Boolean(loading)} onClick={generateQuickHashes}>{english ? "Generate common hashes" : "生成常用哈希"}</AButton>
@@ -222,8 +236,8 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
 
         {mode === "verify" && (
           <div className="password-simple-section">
-            <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "Paste the target password hash" : "粘贴目标密码哈希"} /></label>
-            <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "One candidate password per line" : "每行输入一个候选口令"} /></label>
+            <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "Paste the target password hash" : "粘贴目标密码哈希"} /></label>
+            <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "One candidate password per line" : "每行输入一个候选口令"} /></label>
             <div className="button-row"><AButton variant="filled" disabled={!targetHash.trim() || !candidates.length || Boolean(loading)} onClick={() => void verify()}>{loading === "verify" ? (english ? "Verifying..." : "正在验证...") : t.verifyCandidates}</AButton></div>
             {verifyRows.length > 0 && (
               <div className="password-simple-output">

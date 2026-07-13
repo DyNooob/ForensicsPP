@@ -25,23 +25,18 @@ import { copy } from "../i18n";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../models";
 import { hexPreview } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 type Finding = { level: string; title: string; detail: string };
-type ArchiveInspection = {
-  manifest: Uint8Array;
-  rows: Array<[string, string]>;
-  findings: Finding[];
-  entries: AndroidApkEntry[];
+type AndroidWorkerResult = {
+  xml: string;
+  archiveInfo: { rows: Array<[string, string]>; findings: Finding[]; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Finding[] };
 };
-type BinaryXmlInspection = { rows: Array<[string, string]>; findings: Finding[] };
 
 export type AndroidManifestToolServices = {
   androidComponentKey: (component: AndroidComponent) => string;
   componentExportedEffective: (component: Pick<AndroidComponent, "exported" | "actions" | "categories">, targetSdk: string) => string;
   parseAndroidManifest: (xml: string, name: string, size: number, archiveInfo?: { rows: Array<[string, string]>; findings: Finding[]; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Finding[] }) => AndroidManifestInfo;
-  inspectAndroidArchive: (bytes: Uint8Array) => ArchiveInspection;
-  inspectAndroidBinaryXml: (bytes: Uint8Array) => BinaryXmlInspection;
-  decodeAndroidManifestBytes: (bytes: Uint8Array) => string;
   androidComponentsToCsv: (components: AndroidComponent[]) => string;
   androidPermissionsToCsv: (rows: AndroidManifestInfo["permissionRows"]) => string;
   androidApkEntriesToCsv: (entries: AndroidApkEntry[]) => string;
@@ -64,8 +59,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   const [parsing, setParsing] = React.useState(false);
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
-  const requestRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
   const hasSource = Boolean(info || manifestText.trim() || error);
   const visibleComponents = React.useMemo(() => {
     const query = componentFilter.trim().toLowerCase();
@@ -100,6 +94,9 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   };
 
   const parseText = (text = manifestText, name = sourceName) => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setParsing(false);
     setError("");
     try {
       setInfo(services.parseAndroidManifest(text, name, new Blob([text]).size));
@@ -114,9 +111,8 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     if (!file) return;
     setDropActive(false);
     setError("");
-    requestRef.current += 1;
-    workerRef.current?.terminate();
-    workerRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setParsing(false);
     setManifestText("");
     setSourceName(file.name);
@@ -127,51 +123,38 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
       return;
     }
     setParsing(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const requestId = ++requestRef.current;
-      const worker = new Worker(new URL("../workers/android.worker.ts", import.meta.url), { type: "module" });
-      workerRef.current = worker;
-      worker.onmessage = (event: MessageEvent<{ id: number; xml?: string; archiveInfo?: { rows: Array<[string, string]>; findings: Finding[]; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Finding[] }; error?: string }>) => {
-        if (event.data.id !== requestId) return;
-        worker.terminate();
-        workerRef.current = null;
-        setParsing(false);
-        if (event.data.error || !event.data.archiveInfo || event.data.xml == null) {
-          setInfo(null);
-          setError(event.data.error || (english ? "Android parsing failed." : "Android 解析失败。"));
-          return;
-        }
-        try {
-          setManifestText(event.data.xml);
-          setSourceName(file.name);
-          setInfo(services.parseAndroidManifest(event.data.xml, file.name, file.size, event.data.archiveInfo));
-          resetReview();
-        } catch (caught) {
-          setInfo(null);
-          setError(caught instanceof Error ? caught.message : String(caught));
-        }
-      };
-      worker.onerror = (event) => {
-        if (requestId !== requestRef.current) return;
-        worker.terminate();
-        workerRef.current = null;
-        setParsing(false);
-        setInfo(null);
-        setError(event.message || (english ? "Android worker failed." : "Android 解析任务失败。"));
-      };
-      worker.postMessage({ id: requestId, bytes, name: file.name, size: file.size }, [bytes.buffer]);
+      const result = await runWorkerTask<{ bytes: Uint8Array; name: string; size: number }, AndroidWorkerResult>({
+        createWorker: () => new Worker(new URL("../workers/android.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes, name: file.name, size: file.size },
+        transfer: [bytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 180_000
+      });
+      if (controller.signal.aborted) return;
+      setManifestText(result.xml);
+      setSourceName(file.name);
+      setInfo(services.parseAndroidManifest(result.xml, file.name, file.size, result.archiveInfo));
+      resetReview();
     } catch (caught) {
-      setParsing(false);
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setInfo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setParsing(false);
+      }
     }
   };
 
   const clear = () => {
-    requestRef.current += 1;
-    workerRef.current?.terminate();
-    workerRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setParsing(false);
     setManifestText("");
     setInfo(null);
     setError("");
@@ -180,7 +163,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const exportInfoJson = () => {
     if (!info) return;
@@ -194,12 +177,14 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
       <section className="tool-panel wide-panel android-simple-source-panel manifest-input-panel">
         <ToolPanelHeader
           title={english ? "Open APK or manifest" : "选择 APK 或 Manifest"}
-          actions={<AButton variant="text" disabled={!manifestText && !info} onClick={clear}>{t.clear}</AButton>}
+          actions={<AButton variant="text" disabled={!manifestText && !info && !error && !parsing} onClick={clear}>{t.clear}</AButton>}
         />
         <input
           className="hidden-file-input"
           ref={inputRef}
           type="file"
+          aria-hidden="true"
+          tabIndex={-1}
           accept=".apk,.apks,.xapk,.xml,.axml,text/xml,application/xml,application/vnd.android.package-archive"
           onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />

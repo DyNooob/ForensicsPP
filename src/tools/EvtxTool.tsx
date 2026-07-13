@@ -25,6 +25,7 @@ import { evtxEventsToCsv, type EvtxEvent, type EvtxFileAnalysis } from "../featu
 import { parseSigmaRules, runSigmaRules, type SigmaMatch, type SigmaRule } from "../features/evtx/sigma";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
@@ -37,25 +38,6 @@ type ParsedFile = EvtxFileAnalysis | { source: string; size: number; error: stri
 
 function isAnalysis(file: ParsedFile): file is EvtxFileAnalysis {
   return "events" in file;
-}
-
-function parseInWorker(source: string, bytes: ArrayBuffer, workerRef: React.MutableRefObject<Worker | null>) {
-  return new Promise<EvtxFileAnalysis>((resolve, reject) => {
-    const worker = new Worker(new URL("../features/evtx/evtx.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = worker;
-    worker.onmessage = (event: MessageEvent<{ type: "result"; result: EvtxFileAnalysis } | { type: "error"; error: string }>) => {
-      worker.terminate();
-      workerRef.current = null;
-      if (event.data.type === "result") resolve(event.data.result);
-      else reject(new Error(event.data.error));
-    };
-    worker.onerror = (event) => {
-      worker.terminate();
-      workerRef.current = null;
-      reject(new Error(event.message || "EVTX worker failed."));
-    };
-    worker.postMessage({ source, bytes, maxRecords: MAX_RECORDS_PER_FILE }, [bytes]);
-  });
 }
 
 export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
@@ -78,8 +60,8 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   const [sigmaLoading, setSigmaLoading] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const sigmaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
-  const sigmaWorkerRef = React.useRef<Worker | null>(null);
+  const parseAbortRef = React.useRef<AbortController | null>(null);
+  const sigmaAbortRef = React.useRef<AbortController | null>(null);
   const runRef = React.useRef(0);
   const sigmaFileRef = React.useRef(0);
 
@@ -106,7 +88,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
 
   React.useEffect(() => setPage(0), [eventIdFilter, filter, levelFilter]);
   React.useEffect(() => { if (page >= pageCount) setPage(pageCount - 1); }, [page, pageCount]);
-  React.useEffect(() => () => { workerRef.current?.terminate(); sigmaWorkerRef.current?.terminate(); }, []);
+  React.useEffect(() => () => { parseAbortRef.current?.abort(); sigmaAbortRef.current?.abort(); }, []);
 
   const queueFiles = (files?: FileList | null) => {
     const next = Array.from(files ?? []).filter((file) => file.size > 0 && /\.evtx$/i.test(file.name));
@@ -148,6 +130,9 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     if (!selectedFiles.length || loading) return;
     const run = runRef.current + 1;
     runRef.current = run;
+    const controller = new AbortController();
+    parseAbortRef.current?.abort();
+    parseAbortRef.current = controller;
     setLoading(true);
     setParsedFiles([]);
     setError("");
@@ -158,8 +143,15 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
       setProgress(english ? `Parsing ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在解析 ${index + 1}/${selectedFiles.length}：${file.name}`);
       try {
         const bytes = await file.arrayBuffer();
-        results.push(await parseInWorker(file.name, bytes, workerRef));
+        results.push(await runWorkerTask<{ source: string; bytes: ArrayBuffer; maxRecords: number }, EvtxFileAnalysis>({
+          createWorker: () => new Worker(new URL("../features/evtx/evtx.worker.ts", import.meta.url), { type: "module" }),
+          request: { source: file.name, bytes, maxRecords: MAX_RECORDS_PER_FILE },
+          transfer: [bytes],
+          signal: controller.signal,
+          timeoutMs: 180_000
+        }));
       } catch (caught) {
+        if (caught instanceof DOMException && caught.name === "AbortError") break;
         results.push({ source: file.name, size: file.size, error: caught instanceof Error ? caught.message : String(caught) });
       }
       setParsedFiles([...results]);
@@ -169,14 +161,15 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
       setProgress("");
       setView(results.some(isAnalysis) ? "overview" : "files");
     }
+    if (parseAbortRef.current === controller) parseAbortRef.current = null;
   };
 
   const cancel = () => {
     runRef.current += 1;
-    workerRef.current?.terminate();
-    workerRef.current = null;
-    sigmaWorkerRef.current?.terminate();
-    sigmaWorkerRef.current = null;
+    parseAbortRef.current?.abort();
+    parseAbortRef.current = null;
+    sigmaAbortRef.current?.abort();
+    sigmaAbortRef.current = null;
     setLoading(false);
     setSigmaLoading(false);
     setProgress("");
@@ -223,31 +216,36 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     }
   };
 
-  const runSigma = () => {
+  const runSigma = async () => {
     const parsed = parseSigmaRules(sigmaText);
     setSigmaRules(parsed.rules);
     setSigmaErrors(parsed.errors);
     setSigmaMatches([]);
     if (!parsed.rules.length) return;
+    sigmaAbortRef.current?.abort();
+    const controller = new AbortController();
+    sigmaAbortRef.current = controller;
     setSigmaLoading(true);
-    const worker = new Worker(new URL("../features/evtx/sigma.worker.ts", import.meta.url), { type: "module" });
-    sigmaWorkerRef.current = worker;
-    worker.onmessage = (event: MessageEvent<{ type: "result"; result: ReturnType<typeof runSigmaRules> } | { type: "error"; error: string }>) => {
-      worker.terminate();
-      sigmaWorkerRef.current = null;
-      setSigmaLoading(false);
-      if (event.data.type === "result") {
-        setSigmaMatches(event.data.result.matches);
-        setSigmaErrors([...parsed.errors, ...event.data.result.errors]);
-      } else setSigmaErrors([...parsed.errors, event.data.error]);
-    };
-    worker.onerror = (event) => {
-      worker.terminate();
-      sigmaWorkerRef.current = null;
-      setSigmaLoading(false);
-      setSigmaErrors([...parsed.errors, event.message || "Sigma worker failed."]);
-    };
-    worker.postMessage({ events, rules: parsed.rules });
+    try {
+      const result = await runWorkerTask<{ events: EvtxEvent[]; rules: SigmaRule[] }, ReturnType<typeof runSigmaRules>>({
+        createWorker: () => new Worker(new URL("../features/evtx/sigma.worker.ts", import.meta.url), { type: "module" }),
+        request: { events, rules: parsed.rules },
+        signal: controller.signal,
+        timeoutMs: 60_000
+      });
+      if (controller.signal.aborted) return;
+      setSigmaMatches(result.matches);
+      setSigmaErrors([...parsed.errors, ...result.errors]);
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        setSigmaErrors([...parsed.errors, caught instanceof Error ? caught.message : String(caught)]);
+      }
+    } finally {
+      if (sigmaAbortRef.current === controller) {
+        sigmaAbortRef.current = null;
+        setSigmaLoading(false);
+      }
+    }
   };
 
   const views: View[] = ["overview", "events", "sigma", "files"];

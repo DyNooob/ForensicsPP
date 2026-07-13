@@ -25,14 +25,16 @@ import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/u
 import {
   emailAttachmentPreferredExtension,
   emailSummaryValue,
-  parseEmail,
 } from "../features/email/workbench";
-import { isMsgFile, parseMsg } from "../features/email/msg";
+import { isMsgFile } from "../features/email/msg";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
+type EmailWorkerResult = { analysis: EmailAnalysis; source: string };
+type EmailWorkerRequest = { format: "eml"; source: string } | { format: "msg"; bytes: ArrayBuffer };
 
 function safeEmailFilename(value: string, fallback: string) {
   const cleaned = value
@@ -68,9 +70,16 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const [bodyMode, setBodyMode] = React.useState<"text" | "html">("text");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const requestRef = React.useRef(0);
-  React.useEffect(() => () => { requestRef.current += 1; }, []);
+  const abortRef = React.useRef<AbortController | null>(null);
   const english = t.waiting === "Waiting";
+
+  const parseInWorker = (request: EmailWorkerRequest, signal: AbortSignal, transfer: Transferable[] = []) => runWorkerTask<EmailWorkerRequest, EmailWorkerResult>({
+    createWorker: () => new Worker(new URL("../features/email/email.worker.ts", import.meta.url), { type: "module" }),
+    request,
+    transfer,
+    signal,
+    timeoutMs: 120_000
+  });
 
   React.useEffect(() => {
     if (!parsed) return;
@@ -79,28 +88,34 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const parseSource = async (source = input) => {
     if (!source.trim()) return;
-    const requestId = ++requestRef.current;
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
     setLoading(true);
     try {
-      const next = await parseEmail(source);
-      if (requestId !== requestRef.current) return;
-      setParsed(next);
+      const next = await parseInWorker({ format: "eml", source }, controller.signal);
+      if (controller.signal.aborted) return;
+      setParsed(next.analysis);
       setError("");
     } catch (caught) {
-      if (requestId === requestRef.current) {
-        setParsed(null);
-        setError(caught instanceof Error ? caught.message : String(caught));
-      }
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setParsed(null);
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (requestId === requestRef.current) setLoading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    const requestId = ++requestRef.current;
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
     setDropActive(false);
-    setLoading(false);
+    setLoading(true);
     setInput("");
     setSourceBytes(null);
     setSourceFormat("eml");
@@ -108,41 +123,49 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     setBodyMode("text");
     if (file.size > EMAIL_FILE_LIMIT) {
       setError(english ? "Email exceeds the 64 MiB browser parsing limit." : "邮件超过 64 MiB 浏览器解析上限。");
+      setLoading(false);
+      abortRef.current = null;
       return;
     }
     try {
       setError("");
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (requestId !== requestRef.current) return;
+      if (controller.signal.aborted) return;
       if (isMsgFile(file, bytes)) {
-        setLoading(true);
-        const result = await parseMsg(bytes);
-        if (requestId !== requestRef.current) return;
+        const workerBytes = bytes.slice();
+        const result = await parseInWorker({ format: "msg", bytes: workerBytes.buffer }, controller.signal, [workerBytes.buffer]);
+        if (controller.signal.aborted) return;
         setInput(result.source);
         setSourceBytes(bytes);
         setSourceFormat("msg");
         setParsed(result.analysis);
         setError("");
-        setLoading(false);
       } else {
         const source = new TextDecoder().decode(bytes);
+        const result = await parseInWorker({ format: "eml", source }, controller.signal);
+        if (controller.signal.aborted) return;
         setInput(source);
         setSourceBytes(null);
         setSourceFormat("eml");
-        await parseSource(source);
+        setParsed(result.analysis);
       }
     } catch (caught) {
-      if (requestId === requestRef.current) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setParsed(null);
+      setSourceBytes(null);
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
         setLoading(false);
-        setParsed(null);
-        setSourceBytes(null);
-        setError(caught instanceof Error ? caught.message : String(caught));
       }
     }
   };
 
   const clearEmail = () => {
-    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
     setInput("");
     setSourceFormat("eml");
     setSourceBytes(null);
@@ -152,6 +175,8 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     setDropActive(false);
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const downloadRawEmail = () => {
     if (sourceFormat === "msg" && sourceBytes) {
@@ -236,7 +261,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
           <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
-          <AButton variant="text" disabled={!input.trim()} onClick={clearEmail}>{t.clear}</AButton>
+          <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>
         {!parsed && (
           <textarea

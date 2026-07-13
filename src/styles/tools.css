@@ -3046,7 +3046,13 @@ pre.result-box {
 }
 
 .sqlite-filter-control .text-input {
+  flex: 1 1 150px;
   min-width: 120px;
+}
+
+.sqlite-filter-column-select {
+  width: 138px;
+  flex: 0 1 138px;
 }
 
 .sqlite-page-size-control {

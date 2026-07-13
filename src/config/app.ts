@@ -83,10 +83,10 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "0.8.1";
+export const appVersion = "0.9.0";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-07-13";
+export const lastUpdated = "2026-07-14";
 export const legalVersion = "2026-07-13-v2";
 export const feedbackEmail = "toolab@digiforensics.cn";
 

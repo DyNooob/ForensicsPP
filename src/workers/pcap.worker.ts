@@ -26,11 +26,11 @@
 
 import { parsePcap } from "../features/pcap/analyzer";
 
-self.onmessage = (event: MessageEvent<{ id: number; bytes: Uint8Array; name: string; size: number }>) => {
-  const { id, bytes, name, size } = event.data;
+self.onmessage = (event: MessageEvent<{ bytes: Uint8Array; name: string; size: number }>) => {
+  const { bytes, name, size } = event.data;
   try {
-    self.postMessage({ id, result: parsePcap(bytes, name, size, "") });
+    self.postMessage({ type: "result", result: parsePcap(bytes, name, size, "") });
   } catch (caught) {
-    self.postMessage({ id, error: caught instanceof Error ? caught.message : String(caught) });
+    self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
   }
 };

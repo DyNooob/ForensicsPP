@@ -26,11 +26,11 @@
 
 import { extractPrintableStrings } from "../features/strings/analyzer";
 
-self.onmessage = (event: MessageEvent<{ id: number; bytes: Uint8Array; minLength: number }>) => {
-  const { id, bytes, minLength } = event.data;
+self.onmessage = (event: MessageEvent<{ bytes: Uint8Array; minLength: number }>) => {
+  const { bytes, minLength } = event.data;
   try {
-    self.postMessage({ id, analysis: extractPrintableStrings(bytes, minLength) });
+    self.postMessage({ type: "result", result: extractPrintableStrings(bytes, minLength) });
   } catch (caught) {
-    self.postMessage({ id, error: caught instanceof Error ? caught.message : String(caught) });
+    self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
   }
 };

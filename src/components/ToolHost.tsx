@@ -26,16 +26,16 @@ import type { ToolId } from "../config/app";
 import type { Lang } from "../models";
 import { copy } from "../i18n";
 import { analyzeEntropy, entropyBlockKey, entropyBlocksToCsv, entropyRangesToCsv } from "../features/entropy/analyzer";
-import { androidApkEntriesToCsv, androidComponentKey, androidComponentsToCsv, androidManifestSecurityRows, androidPermissionsToCsv, componentExportedEffective, decodeAndroidManifestBytes, inspectAndroidArchive, inspectAndroidBinaryXml, parseAndroidManifest } from "../features/android/analyzer";
+import { androidApkEntriesToCsv, androidComponentKey, androidComponentsToCsv, androidManifestSecurityRows, androidPermissionsToCsv, componentExportedEffective, parseAndroidManifest } from "../features/android/analyzer";
 import { annotateBatchHashMatches, parseExpectedHashSet } from "../features/hash/matching";
 import { extractJwtTokens, inspectJwtToken, jwtCryptoAlgorithm, signJwtHS256, verifyJwtAsymmetricSignature } from "../features/jwt/analyzer";
 import { mysqlNativePassword, passwordRowsToCsv, randomSalt, verifyPasswordCandidates } from "../features/password/analyzer";
 import { classifyQrPayload, parseQrPayloadDetails, qrGeometryRows, qrPointRow } from "../features/qr/analyzer";
-import { defaultYaraSample, runYaraScan, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates } from "../features/yara/analyzer";
+import { defaultYaraSample, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates } from "../features/yara/analyzer";
 import { extractPrintableStrings, stringRowKey, stringsToCsv } from "../features/strings/analyzer";
 import { analyzeWindowsArtifact } from "../features/windows/analyzer";
 import { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } from "../features/file/analyzer";
-import { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer } from "../features/image/analyzer";
+import { buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls } from "../features/image/analyzer";
 import { analyzePngEvidence } from "../features/png/analyzer";
 import { base64DecodeLoose, transformText } from "../features/codec/analyzer";
 import { affine, atbash, baconDecode, baconEncode, caesar, morseDecode, morseEncode, railFence, railFenceDecode, rot47, vigenere } from "../features/crypto/algorithms";
@@ -86,15 +86,15 @@ const services = {
   binary: { analyzeFileBytes, binaryHexDumpRows, parseByteOffset },
   strings: { extractPrintableStrings, stringRowKey, stringsToCsv },
   entropy: { analyzeEntropy, entropyBlockKey, entropyBlocksToCsv, entropyRangesToCsv },
-  yara: { defaultYaraSample, runYaraScan, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates },
+  yara: { defaultYaraSample, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates },
   qr: { classifyQrPayload, detectImageFormat, parseQrPayloadDetails, qrGeometryRows, qrPointRow },
-  android: { androidComponentKey, androidManifestSecurityRows, componentExportedEffective, parseAndroidManifest, inspectAndroidArchive, inspectAndroidBinaryXml, decodeAndroidManifestBytes, androidComponentsToCsv, androidPermissionsToCsv, androidApkEntriesToCsv },
+  android: { androidComponentKey, androidManifestSecurityRows, componentExportedEffective, parseAndroidManifest, androidComponentsToCsv, androidPermissionsToCsv, androidApkEntriesToCsv },
   password: { mysqlNativePassword, randomSalt, verifyPasswordCandidates, passwordRowsToCsv },
   jwt: { inspectJwtToken, extractJwtTokens, jwtCryptoAlgorithm, verifyJwtAsymmetricSignature, signJwtHS256 },
   hash: { annotateBatchHashMatches, parseExpectedHashSet },
   codec: { transformText },
   crypto: { caesar, atbash, rot47, vigenere, affine, morseEncode, morseDecode, baconEncode, baconDecode, railFence, railFenceDecode },
-  image: { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls, tryRebuildPngContainer }
+  image: { buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls }
 };
 
 type ToolHostProps = {
@@ -110,7 +110,7 @@ type ToolHostProps = {
 export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, setToolDirty }: ToolHostProps) {
   const handleDirtyChange = React.useCallback((dirty: boolean) => setToolDirty(toolId, dirty), [setToolDirty, toolId]);
   return (
-    <div className="tool-retained-view" hidden={!active}>
+    <div className="tool-retained-view" data-tool-id={toolId} hidden={!active}>
       {toolId === "home" ? (
         <HomeTool t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} />
       ) : (

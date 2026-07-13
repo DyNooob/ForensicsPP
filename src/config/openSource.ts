@@ -47,6 +47,7 @@ export const openSourceProjects: OpenSourceProject[] = [
   { name: "sql-formatter", category: "runtime", purpose: { zh: "SQL 格式化", en: "SQL formatting" }, license: "MIT", repository: "https://github.com/sql-formatter-org/sql-formatter", version: "15" },
   { name: "sql.js", category: "runtime", purpose: { zh: "浏览器内 SQLite 数据库", en: "SQLite in the browser" }, license: "MIT", repository: "https://github.com/sql-js/sql.js", version: "1" },
   { name: "TS-EVTX", category: "runtime", purpose: { zh: "Windows EVTX 与 BinXML 解析", en: "Windows EVTX and BinXML parsing" }, license: "MIT", repository: "https://github.com/NickSmet/ts-evtx", version: "1.2" },
+  { name: "YARA-X", category: "runtime", purpose: { zh: "在浏览器内编译并扫描 YARA 规则", en: "Compile and scan YARA rules in the browser" }, license: "BSD-3-Clause", repository: "https://github.com/VirusTotal/yara-x", version: "1.15" },
   { name: "YAML", category: "runtime", purpose: { zh: "Sigma YAML 规则读取", en: "Sigma YAML rule parsing" }, license: "ISC", repository: "https://github.com/eemeli/yaml", version: "2" },
   { name: "CyberChef", category: "embedded", purpose: { zh: "内置数据转换工作台", en: "Embedded data transformation workbench" }, license: "Apache-2.0", repository: "https://github.com/gchq/CyberChef", version: "10.19.4", notices: "./cyberchef/assets/main.js.LICENSE.txt" },
   { name: "Vite", category: "development", purpose: { zh: "开发服务器与生产构建", en: "Development server and production build" }, license: "MIT", repository: "https://github.com/vitejs/vite", version: "6" },

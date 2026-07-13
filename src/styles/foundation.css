@@ -33,9 +33,9 @@
   --app-text: #17212b;
   --app-muted: #637180;
   --app-faint: #8b98a5;
-  --app-primary: #176b77;
+  --app-primary: #4457a6;
   --app-primary-contrast: #ffffff;
-  --app-primary-soft: rgba(23, 107, 119, 0.09);
+  --app-primary-soft: rgba(68, 87, 166, 0.09);
   --app-primary-strong: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface));
   --app-surface-2: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg-2));
   --app-surface-3: color-mix(in srgb, var(--app-surface) 90%, var(--app-surface-soft));
@@ -88,7 +88,7 @@
   --app-text: #e7eef6;
   --app-muted: #afc0d2;
   --app-faint: #96a9bd;
-  --app-primary-soft: rgba(34, 98, 122, 0.22);
+  --app-primary-soft: rgba(68, 87, 166, 0.22);
   --app-primary-strong: color-mix(in srgb, var(--app-primary) 18%, var(--app-surface));
   --app-surface-2: color-mix(in srgb, var(--app-surface) 94%, #1d2d3c);
   --app-surface-3: color-mix(in srgb, var(--app-surface) 88%, #243547);

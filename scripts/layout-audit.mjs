@@ -735,11 +735,12 @@ async function loadToolState(client, tool, options = {}) {
   });
   await client.send("Page.reload", { ignoreCache: true });
   await wait(tool === "cyberchef" ? 1800 : 500);
-  await waitForRuntimeValue(
+  const toolReady = await waitForRuntimeValue(
     client,
-    "Boolean(document.querySelector('.tool-body')?.firstElementChild && document.querySelector('.page-title')?.textContent && !document.querySelector('.tool-loading-state'))",
+    `Boolean(location.hash === ${JSON.stringify(`#${tool}`)} && document.querySelector(${JSON.stringify(`.tool-retained-view[data-tool-id="${tool}"]:not([hidden])`)}) && document.querySelector('.page-title')?.textContent && !document.querySelector(${JSON.stringify(`.tool-retained-view[data-tool-id="${tool}"]:not([hidden]) .tool-loading-state`)}))`,
     tool === "cyberchef" ? 12000 : 8000
   );
+  if (!toolReady) throw new Error(`Tool did not become active: ${tool}`);
 }
 
 async function clickRuntimeButton(client, expression, readyExpression) {
@@ -1389,9 +1390,15 @@ async function auditLoadedFileTools(client) {
         );
       }
       if (state.action) {
+        const actionLabels = JSON.stringify(state.action);
+        await waitForRuntimeValue(
+          client,
+          `Boolean([...document.querySelectorAll('button')].find((node) => ${actionLabels}.includes((node.textContent || '').trim()) && !node.disabled))`,
+          5000
+        );
         await clickRuntimeButton(
           client,
-          `[...document.querySelectorAll('button')].find((node) => ${JSON.stringify(state.action)}.includes((node.textContent || '').trim()))?.click();`,
+          `[...document.querySelectorAll('button')].find((node) => ${actionLabels}.includes((node.textContent || '').trim()) && !node.disabled)?.click();`,
           `Boolean(document.querySelector(${JSON.stringify(state.readyClass)}))`
         );
       }

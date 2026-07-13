@@ -26,11 +26,11 @@ import type { YaraBatchRow, YaraRuleResult, YaraScanResult } from "../models";
 import { previewText } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
 type RuleTemplate = { id: string; label: string; rule: string };
 
 export type YaraToolServices = {
-  runYaraScan: (ruleText: string, data: Uint8Array, name: string) => YaraScanResult;
   yaraRuleTemplates: RuleTemplate[];
   defaultYaraSample: string;
   yaraHitsToCsv: (results: YaraRuleResult[]) => string;
@@ -51,6 +51,7 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
   const [scanning, setScanning] = React.useState(false);
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
   const selectedResult = selectedRule && result
     ? result.results.find((item) => item.rule.name === selectedRule) ?? null
     : null;
@@ -73,14 +74,40 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
     setError("");
   };
 
-  const runTextScan = () => {
+  const scanSample = (bytes: Uint8Array, name: string, signal: AbortSignal) => {
+    const workerBytes = bytes.slice();
+    return runWorkerTask<{ ruleText: string; data: ArrayBuffer; name: string; timeoutMs: number }, YaraScanResult>({
+      createWorker: () => new Worker(new URL("../features/yara/yara.worker.ts", import.meta.url), { type: "module" }),
+      request: { ruleText: rules, data: workerBytes.buffer, name, timeoutMs: 10_000 },
+      transfer: [workerBytes.buffer],
+      signal,
+      timeoutMs: 20_000
+    });
+  };
+
+  const runTextScan = async () => {
     const bytes = sampleName === "text sample" ? new TextEncoder().encode(sample) : sampleBytes;
     setSampleBytes(bytes);
-    const next = services.runYaraScan(rules, bytes, sampleName);
-    setResult(next);
-    setSelectedRule(next.results.find((item) => item.matched)?.rule.name ?? "");
-    setBatchRows([]);
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+    setScanning(true);
     setError("");
+    try {
+      const next = await scanSample(bytes, sampleName, controller.signal);
+      if (controller.signal.aborted) return;
+      setResult(next);
+      setSelectedRule(next.results.find((item) => item.matched)?.rule.name ?? "");
+      setBatchRows([]);
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setScanning(false);
+      }
+    }
   };
 
   const handleFiles = async (files?: FileList | null) => {
@@ -89,13 +116,17 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
     setDropActive(false);
     setError("");
     const rows: YaraBatchRow[] = [];
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
     try {
       const selectedFiles = Array.from(files).slice(0, 25);
       let firstResult: YaraScanResult | null = null;
       for (const [index, file] of selectedFiles.entries()) {
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        if (controller.signal.aborted) break;
         const bytes = new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer());
-        const scan = services.runYaraScan(rules, bytes, file.name);
+        const scan = await scanSample(bytes, file.name, controller.signal);
         const matchedRules = scan.results.filter((item) => item.matched).map((item) => item.rule.name);
         rows.push({
           name: file.name,
@@ -120,10 +151,20 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
       setSelectedRule(firstResult?.results.find((item) => item.matched)?.rule.name ?? "");
       if (files.length > selectedFiles.length) setError(english ? "Only the first 25 files were scanned." : "仅扫描前 25 个文件。");
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setScanning(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setScanning(false);
+      }
     }
+  };
+
+  const cancel = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setScanning(false);
   };
 
   const loadDemo = () => {
@@ -135,12 +176,15 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
   };
 
   const clear = () => {
+    cancel();
     setSample("");
     setSampleName("text sample");
     setSampleBytes(new Uint8Array());
     invalidate();
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   return (
     <div className={`tool-grid yara-simple-workbench yara-workbench ${result ? "has-yara" : "empty-yara"}`}>
@@ -187,8 +231,9 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
         </div>
         <textarea className="single-textarea yara-simple-sample" aria-label={english ? "YARA text sample" : "YARA 文本样本"} value={sample} onChange={(event) => { setSampleName("text sample"); setSample(event.target.value); invalidate(); }} placeholder={t.textPlaceholder} />
         <div className="yara-simple-primary-action">
-          <AButton variant="filled" disabled={!rules.trim() || !sample.trim()} onClick={runTextScan}>{t.run}</AButton>
-          <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadSample}</AButton>
+          <AButton variant="filled" disabled={scanning || !rules.trim() || !sample.trim()} onClick={() => void runTextScan()}>{t.run}</AButton>
+          <AButton variant="outlined" disabled={scanning || !rules.trim()} onClick={() => inputRef.current?.click()}>{t.uploadSample}</AButton>
+          {scanning && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
         </div>
       </section>
 

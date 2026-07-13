@@ -58,4 +58,45 @@ describe("EML parsing", () => {
       ["DMARC", "pass"]
     ]));
   });
+
+  it("keeps text and HTML bodies and decodes attachments", async () => {
+    const raw = [
+      "From: sender@example.org",
+      "To: analyst@example.net",
+      "Subject: =?UTF-8?B?5rWL6K+V6YKu5Lu2?=",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="outer"',
+      "",
+      "--outer",
+      'Content-Type: multipart/alternative; boundary="body"',
+      "",
+      "--body",
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      "5pys5Zyw5paH5pys5q2j5paH",
+      "--body",
+      "Content-Type: text/html; charset=utf-8",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      "<html><body><strong>HTML body</strong></body></html>",
+      "--body--",
+      "--outer",
+      'Content-Type: image/png; name="fixture.png"',
+      'Content-Disposition: attachment; filename="fixture.png"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      "iVBORw0KGgo=",
+      "--outer--"
+    ].join("\r\n");
+
+    const parsed = await parseEmail(raw);
+
+    expect(Object.fromEntries(parsed.rows).Subject).toBe("测试邮件");
+    expect(parsed.bodyText).toContain("本地文本正文");
+    expect(parsed.bodyHtml).toContain("<strong>HTML body</strong>");
+    expect(parsed.attachments).toHaveLength(1);
+    expect(parsed.attachments[0]).toMatchObject({ filename: "fixture.png", contentType: "image/png", signature: "PNG image" });
+    expect(Array.from(parsed.attachments[0].content.slice(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  });
 });

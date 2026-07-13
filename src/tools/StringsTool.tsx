@@ -26,6 +26,7 @@ import type { ExtractedStringRow, StringsAnalysis } from "../models";
 import { hexPreview, previewText } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
 export type StringsToolServices = {
   extractPrintableStrings: (bytes: Uint8Array, minLength: number) => StringsAnalysis;
@@ -54,8 +55,8 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const [error, setError] = React.useState("");
   const [analyzing, setAnalyzing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
-  const requestRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const fileReadRef = React.useRef(0);
   const hasInput = bytes.length > 0;
   const [analysis, setAnalysis] = React.useState<StringsAnalysis>(() => services.extractPrintableStrings(new Uint8Array(), appliedMinLength));
   const types = React.useMemo(() => analysis.typeRows.map(([type]) => type), [analysis.typeRows]);
@@ -108,7 +109,17 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
     setPage(0);
   };
 
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setAnalyzing(false);
+  };
+
   const handleText = (value: string) => {
+    fileReadRef.current += 1;
+    cancelAnalysis();
+    setLoading(false);
+    setError("");
     setText(value);
     setSourceName("text input");
     const next = new TextEncoder().encode(value);
@@ -121,24 +132,31 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    cancelAnalysis();
+    const requestId = ++fileReadRef.current;
     setLoading(true);
     setError("");
     setDropActive(false);
     try {
+      const nextBytes = new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer());
+      if (requestId !== fileReadRef.current) return;
       setSourceName(file.name);
       setSourceSize(file.size);
-      setPendingBytes(new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer()));
+      setPendingBytes(nextBytes);
       setBytes(new Uint8Array());
       setAnalysis(services.extractPrintableStrings(new Uint8Array(), minLength));
       resetReview();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === fileReadRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (requestId === fileReadRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    fileReadRef.current += 1;
+    cancelAnalysis();
+    setLoading(false);
     setText("");
     setSourceName("text input");
     setSourceSize(0);
@@ -150,40 +168,40 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
     resetReview();
   };
 
-  const analyze = () => {
+  const analyze = async () => {
     if (!pendingBytes.length) return;
-    workerRef.current?.terminate();
-    const requestId = ++requestRef.current;
-    const worker = new Worker(new URL("../workers/strings.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = worker;
-    const workerBytes = pendingBytes.slice();
+    cancelAnalysis();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const nextBytes = pendingBytes.slice();
+    const workerBytes = nextBytes.slice();
+    const nextMinLength = minLength;
     setAnalyzing(true);
     setError("");
-    worker.onmessage = (event: MessageEvent<{ id: number; analysis?: StringsAnalysis; error?: string }>) => {
-      if (event.data.id !== requestId) return;
-      worker.terminate();
-      workerRef.current = null;
-      setAnalyzing(false);
-      if (event.data.error || !event.data.analysis) {
-        setError(event.data.error || (english ? "String extraction failed." : "字符串提取失败。"));
-        return;
-      }
-      setAppliedMinLength(minLength);
-      setBytes(pendingBytes.slice());
-      setAnalysis(event.data.analysis);
+    try {
+      const result = await runWorkerTask<{ bytes: Uint8Array; minLength: number }, StringsAnalysis>({
+        createWorker: () => new Worker(new URL("../workers/strings.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes: workerBytes, minLength: nextMinLength },
+        transfer: [workerBytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 60_000
+      });
+      if (controller.signal.aborted) return;
+      setAppliedMinLength(nextMinLength);
+      setBytes(nextBytes);
+      setAnalysis(result);
       resetReview();
-    };
-    worker.onerror = (event) => {
-      if (requestId !== requestRef.current) return;
-      worker.terminate();
-      workerRef.current = null;
-      setAnalyzing(false);
-      setError(event.message || (english ? "String worker failed." : "字符串提取任务失败。"));
-    };
-    worker.postMessage({ id: requestId, bytes: workerBytes, minLength }, [workerBytes.buffer]);
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setAnalyzing(false);
+      }
+    }
   };
 
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const sourceLabel = sourceName === "text input" ? (english ? "Text input" : "文本输入") : sourceName;
 
@@ -195,7 +213,7 @@ export function StringsTool({ t, services }: { t: (typeof copy)["zh"]; services:
       <section className="tool-panel wide-panel strings-simple-source-panel">
         <ToolPanelHeader
           title={english ? "File or text" : "输入文件或文本"}
-          actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>}
+          actions={<AButton variant="text" disabled={!pendingBytes.length && !hasInput && !error && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div

@@ -24,6 +24,8 @@ import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable,
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
+import type { ImageAnalysisResult, ImageRepairWorkerResult, ImageWorkerRequest } from "../features/image/image.worker";
 
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
@@ -56,13 +58,10 @@ function formatExifValue(value: unknown) {
 }
 
 export type ImageToolServices = {
-  analyzeImageBasics: ImageService;
-  analyzeImageBytes: ImageService;
-  analyzeUndecodedImageBytes: ImageService;
   buildAutoRevealPreviews: ImageService;
-  buildImageRepairCandidates: ImageService;
   bytesToDataUrl: ImageService;
   createChannelPreviews: ImageService;
+  createImageAnalysisPixels: ImageService;
   detectImageFormat: ImageService;
   emptyImageChannels: ImageService;
   guessImageDimensions: ImageService;
@@ -71,16 +70,14 @@ export type ImageToolServices = {
   imagePlaceholderDataUrl: ImageService;
   loadBrowserImage: ImageService;
   revokeImageObjectUrls: ImageService;
-  tryRebuildPngContainer: ImageService;
 };
 
 export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: ImageToolServices }) {
   const {
-    analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews,
-    buildImageRepairCandidates, bytesToDataUrl, createChannelPreviews,
+    buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels,
     detectImageFormat, emptyImageChannels, guessImageDimensions,
     imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl,
-    loadBrowserImage, tryRebuildPngContainer
+    loadBrowserImage
   } = services;
   const isEnglish = t.waiting === "Waiting";
   const [imageInfo, setImageInfo] = React.useState<ImageInfo | null>(null);
@@ -91,16 +88,28 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "repair">("overview");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
   const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
 
   React.useEffect(() => () => {
     analysisIdRef.current += 1;
+    abortRef.current?.abort();
     services.revokeImageObjectUrls();
   }, [services]);
+
+  const runImageWorker = <T,>(request: ImageWorkerRequest, transfer: Transferable[], signal: AbortSignal) => runWorkerTask<ImageWorkerRequest, T>({
+    createWorker: () => new Worker(new URL("../features/image/image.worker.ts", import.meta.url), { type: "module" }),
+    request,
+    transfer,
+    signal,
+    timeoutMs: 120_000
+  });
 
   const handleImage = async (file: File | undefined) => {
     if (!file) return;
     analysisIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     services.revokeImageObjectUrls();
     sourceRef.current = null;
     setImageInfo(null);
@@ -113,6 +122,8 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     }
     const analysisId = analysisIdRef.current + 1;
     analysisIdRef.current = analysisId;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setError("");
     try {
@@ -144,7 +155,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         "warn"
       );
       const effectiveDisplayDataUrl = image ? rawDataUrl : placeholderDataUrl;
-      const analysis = services.analyzeImageBasics(bytes, file.type, exif);
+      const workerBytes = bytes.slice();
+      const analysis = await runImageWorker<ImageAnalysisResult>({
+        action: "basics",
+        bytes: workerBytes.buffer,
+        fileType: file.type,
+        metadataFields: Object.keys(exif).length
+      }, [workerBytes.buffer], controller.signal);
       sourceRef.current = { file, bytes, image, exif, rawDataUrl, format: detectedFormat };
       if (analysisId !== analysisIdRef.current) return;
       setImageInfo({
@@ -177,11 +194,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       setImagePage("overview");
     } catch (caught) {
       if (analysisId !== analysisIdRef.current) return;
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       services.revokeImageObjectUrls();
       sourceRef.current = null;
       setImageInfo(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (analysisId === analysisIdRef.current) setLoading(false);
     }
   };
@@ -189,17 +208,42 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     const source = sourceRef.current;
     if (!source || !imageInfo || advancedTask) return;
     const analysisId = analysisIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setAdvancedTask("hidden");
     setError("");
     try {
-      const analysis = source.image
-        ? analyzeImageBytes(source.bytes, source.file.type, source.image, source.exif)
-        : analyzeUndecodedImageBytes(source.bytes, source.file.type, source.exif, [["Original container", "failed"]]);
+      const workerBytes = source.bytes.slice();
+      let analysis: ImageAnalysisResult;
+      if (source.image) {
+        const pixels = createImageAnalysisPixels(source.image) as { data: Uint8ClampedArray; width: number; height: number };
+        analysis = await runImageWorker<ImageAnalysisResult>({
+          action: "hidden-pixels",
+          bytes: workerBytes.buffer,
+          fileType: source.file.type,
+          metadataFields: Object.keys(source.exif).length,
+          pixels: pixels.data.buffer as ArrayBuffer,
+          width: pixels.width,
+          height: pixels.height
+        }, [workerBytes.buffer, pixels.data.buffer as ArrayBuffer], controller.signal);
+      } else {
+        analysis = await runImageWorker<ImageAnalysisResult>({
+          action: "hidden-undecoded",
+          bytes: workerBytes.buffer,
+          fileType: source.file.type,
+          metadataFields: Object.keys(source.exif).length,
+          recoveryRows: [["Original container", "failed"]]
+        }, [workerBytes.buffer], controller.signal);
+      }
       if (analysisId !== analysisIdRef.current) return;
       setImageInfo((current) => current ? { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks } : current);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      if (analysisId === analysisIdRef.current) setAdvancedTask("");
+    }
   };
   const runChannelAnalysis = () => {
     const source = sourceRef.current;
@@ -221,11 +265,16 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     const source = sourceRef.current;
     if (!source || !imageInfo || advancedTask) return;
     const analysisId = analysisIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setAdvancedTask("repair");
     setError("");
     try {
-      const candidates: ImageRepairCandidate[] = buildImageRepairCandidates(source.bytes, source.format);
-      const rebuiltPng = tryRebuildPngContainer(source.bytes);
+      const workerBytes = source.bytes.slice();
+      const repair = await runImageWorker<ImageRepairWorkerResult>({ action: "repair", bytes: workerBytes.buffer, format: source.format }, [workerBytes.buffer], controller.signal);
+      const candidates: ImageRepairCandidate[] = repair.candidates;
+      const rebuiltPng = repair.rebuiltPng;
       if (rebuiltPng) candidates.push({ label: "Rebuilt PNG critical chunks", note: rebuiltPng.notes.join(" "), bytes: rebuiltPng.bytes, mime: "image/png" });
       const previews: ImageInfo["repairPreviewItems"] = [];
       const rows: Array<[string, string]> = [];
@@ -249,8 +298,11 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
       } : current);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      if (analysisId === analysisIdRef.current) setAdvancedTask("");
+    }
   };
   const handleImageDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -259,6 +311,8 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   };
   const clearImage = () => {
     analysisIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     services.revokeImageObjectUrls();
     setImageInfo(null);
     setError("");
@@ -317,14 +371,14 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   return (
     <div className={`tool-grid image-workbench image-workbench-simple ${imageInfo ? "has-image" : "empty-image"}`}>
       <div
-        className={`tool-panel wide-panel image-source-panel ${isImageDropActive ? "active" : ""}`}
+        className="tool-panel wide-panel image-source-panel"
         onDragOver={(event) => { event.preventDefault(); setIsImageDropActive(true); }}
         onDragLeave={() => setIsImageDropActive(false)}
         onDrop={handleImageDrop}
       >
         <PanelTitle title={t.uploadImage} />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleImage(file); }} />
-        <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}>
+        <div className={`desktop-drop-zone ${isImageDropActive ? "active" : ""}`} role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}>
           <strong>{imageInfo?.name || t.dropFileTitle}</strong>
           <span>{imageInfo ? `${imageInfo.type} · ${formatBytes(imageInfo.size)}` : (isEnglish ? "PNG, JPEG, GIF, WebP, BMP, TIFF, HEIC, or image-like data" : "支持 PNG、JPEG、GIF、WebP、BMP、TIFF、HEIC 和疑似图片数据")}</span>
         </div>

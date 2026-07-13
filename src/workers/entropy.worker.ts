@@ -22,16 +22,15 @@
 import { analyzeEntropy } from "../features/entropy/analyzer";
 
 type EntropyWorkerRequest = {
-  id: number;
   bytes: Uint8Array;
   blockSize: number;
 };
 
 self.onmessage = (event: MessageEvent<EntropyWorkerRequest>) => {
-  const { id, bytes, blockSize } = event.data;
+  const { bytes, blockSize } = event.data;
   try {
-    self.postMessage({ id, analysis: analyzeEntropy(bytes, blockSize) });
+    self.postMessage({ type: "result", result: analyzeEntropy(bytes, blockSize) });
   } catch (caught) {
-    self.postMessage({ id, error: caught instanceof Error ? caught.message : String(caught) });
+    self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
   }
 };

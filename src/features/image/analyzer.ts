@@ -26,6 +26,12 @@ import { formatBytes } from "../../utils/files";
 import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
 
 const imageObjectUrls = new Set<string>();
+type ImageMetadata = Record<string, unknown> | number;
+type ImagePixelData = { data: Uint8ClampedArray; width: number; height: number };
+
+function imageMetadataFieldCount(metadata: ImageMetadata) {
+  return typeof metadata === "number" ? metadata : Object.keys(metadata).length;
+}
 
 function revokeImageObjectUrls() {
   imageObjectUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -375,7 +381,7 @@ function decodeBitsToText(bits: number[], bitOrder: "msb" | "lsb", maxChars: num
   return "";
 }
 
-function extractLsbCandidatesFromImageData(source: ImageData, maxChars = 4096) {
+function extractLsbCandidatesFromImageData(source: ImagePixelData, maxChars = 4096) {
   const channelSets: Array<{ mode: string; indexes: number[] }> = [
     { mode: "RGB", indexes: [0, 1, 2] },
     { mode: "R", indexes: [0] },
@@ -540,7 +546,7 @@ function collectPngChunkPayloads(bytes: Uint8Array, chunks: PngChunkInfo[]) {
   return payloads.slice(0, 16);
 }
 
-function buildLsbByteStream(source: ImageData, channelIndexes: number[], bitPlane: number, bitOrder: "msb" | "lsb", maxBytes = 262_144) {
+function buildLsbByteStream(source: ImagePixelData, channelIndexes: number[], bitPlane: number, bitOrder: "msb" | "lsb", maxBytes = 262_144) {
   const bitLimit = Math.min(source.width * source.height * channelIndexes.length, maxBytes * 8);
   const bytes: number[] = [];
   let value = 0;
@@ -562,7 +568,7 @@ function buildLsbByteStream(source: ImageData, channelIndexes: number[], bitPlan
   return new Uint8Array(bytes);
 }
 
-function collectLsbPayloadsFromImageData(source: ImageData) {
+function collectLsbPayloadsFromImageData(source: ImagePixelData) {
   const payloads: ImageInfo["hiddenPayloads"] = [];
   const modes = [
     { label: "RGB", indexes: [0, 1, 2] },
@@ -732,7 +738,7 @@ function inspectTiffStructure(bytes: Uint8Array) {
   return { rows, findings };
 }
 
-function scoreImageNoise(source: ImageData) {
+function scoreImageNoise(source: ImagePixelData) {
   if (source.width < 3 || source.height < 3) {
     return { rows: [["Local noise anomaly", "not available; image too small"]] as Array<[string, string]>, findings: [] as Array<{ level: string; title: string; detail: string }> };
   }
@@ -921,7 +927,7 @@ function buildAutoRevealPreviews(channels: ImageInfo["channelDataUrls"], hasAlph
   return previews;
 }
 
-function scoreImageBitPlanes(source: ImageData) {
+function scoreImageBitPlanes(source: ImagePixelData) {
   const rows: Array<[string, string]> = [];
   const findings: Array<{ level: string; title: string; detail: string }> = [];
   const channels = [
@@ -966,7 +972,7 @@ function scoreImageBitPlanes(source: ImageData) {
   return { rows, findings };
 }
 
-function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: Record<string, unknown>) {
+function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: ImageMetadata) {
   const format = detectImageFormat(bytes, fileType);
   const logicalEnd = getImageLogicalEnd(bytes, format);
   const trailer = logicalEnd >= 0 && logicalEnd < bytes.length ? bytes.slice(logicalEnd) : new Uint8Array();
@@ -1051,11 +1057,12 @@ function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: R
       detail: `${formatBytes(trailer.length)} after ${format} logical end; this is a common place for appended payload candidates.${trailerHits.length ? ` Signature: ${trailerHits.map((hit) => hit.label).join(", ")}` : ""}`
     });
   }
-  if (Object.keys(exif).length > 20) findings.push({ level: "warn", title: "Large metadata surface", detail: `${Object.keys(exif).length} metadata fields were parsed.` });
+  const metadataFields = imageMetadataFieldCount(exif);
+  if (metadataFields > 20) findings.push({ level: "warn", title: "Large metadata surface", detail: `${metadataFields} metadata fields were parsed.` });
   return { format, logicalEnd, trailer, rows, findings, embeddedHits, pngChunks, pngTextEntries };
 }
 
-function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: Record<string, unknown>, recoveryRows: Array<[string, string]>) {
+function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: ImageMetadata, recoveryRows: Array<[string, string]>) {
   const container = inspectImageContainerBytes(bytes, fileType, exif);
   const hiddenPayloads = [
     ...collectHiddenPayloads(bytes, container.logicalEnd, container.trailer, container.embeddedHits),
@@ -1085,7 +1092,7 @@ function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: R
     ["Readable LSB candidates", "not available; pixel decode failed"],
     ["PNG text metadata", container.pngTextEntries.length ? container.pngTextEntries.map((entry) => `${entry.keyword}@${entry.offset}`).join(", ") : "not detected"],
     ["Alpha anomaly", "not available; pixel decode failed"],
-    ["Metadata fields", String(Object.keys(exif).length)]
+    ["Metadata fields", String(imageMetadataFieldCount(exif))]
   ];
   return {
     rows: container.rows,
@@ -1103,7 +1110,7 @@ function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: R
   };
 }
 
-function analyzeImageBasics(bytes: Uint8Array, fileType: string, exif: Record<string, unknown>) {
+function analyzeImageBasics(bytes: Uint8Array, fileType: string, exif: ImageMetadata) {
   const container = inspectImageContainerBytes(bytes, fileType, exif);
   return {
     rows: container.rows,
@@ -1121,10 +1128,7 @@ function analyzeImageBasics(bytes: Uint8Array, fileType: string, exif: Record<st
   };
 }
 
-function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImageElement, exif: Record<string, unknown>) {
-  const container = inspectImageContainerBytes(bytes, fileType, exif);
-  const { rows, findings, pngTextEntries, pngChunks, embeddedHits, logicalEnd, trailer } = container;
-
+function createImageAnalysisPixels(image: HTMLImageElement): ImagePixelData {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("Canvas is not available");
@@ -1132,7 +1136,12 @@ function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImage
   canvas.width = dimensions.width;
   canvas.height = dimensions.height;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function analyzeImagePixels(bytes: Uint8Array, fileType: string, imageData: ImagePixelData, exif: ImageMetadata) {
+  const container = inspectImageContainerBytes(bytes, fileType, exif);
+  const { rows, findings, pngTextEntries, pngChunks, embeddedHits, logicalEnd, trailer } = container;
   let alphaTransparent = 0;
   let alphaNon255 = 0;
   let redOnes = 0;
@@ -1201,7 +1210,7 @@ function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImage
     ["Readable LSB candidates", lsbCandidates.length ? lsbCandidates.map((candidate) => candidate.mode).join(", ") : "not detected"],
     ["PNG text metadata", pngTextEntries.length ? pngTextEntries.map((entry) => `${entry.keyword}@${entry.offset}`).join(", ") : "not detected"],
     ["Alpha anomaly", alphaNon255 ? `${alphaNon255} non-opaque pixels` : "not detected"],
-    ["Metadata fields", String(Object.keys(exif).length)]
+    ["Metadata fields", String(imageMetadataFieldCount(exif))]
   ];
 
   return {
@@ -1218,6 +1227,10 @@ function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImage
     pngTextEntries,
     pngChunks
   };
+}
+
+function analyzeImageBytes(bytes: Uint8Array, fileType: string, image: HTMLImageElement, exif: ImageMetadata) {
+  return analyzeImagePixels(bytes, fileType, createImageAnalysisPixels(image), exif);
 }
 
 function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntry | null {
@@ -1252,4 +1265,4 @@ function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntr
   return null;
 }
 
-export { analyzeImageBasics, analyzeImageBytes, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };

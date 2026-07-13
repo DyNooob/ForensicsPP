@@ -131,6 +131,20 @@ export function sqliteCellPreviewRows(value: SqliteValue): Array<[string, string
   ];
 }
 
+export function sqliteHexDump(value: SqliteValue, maxBytes = 4096) {
+  const bytes = sqliteValueBytes(value);
+  const visible = bytes.slice(0, Math.max(0, maxBytes));
+  const lines: string[] = [];
+  for (let offset = 0; offset < visible.length; offset += 16) {
+    const chunk = visible.slice(offset, offset + 16);
+    const hex = Array.from(chunk).map((byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join(" ").padEnd(47, " ");
+    const ascii = Array.from(chunk).map((byte) => byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : ".").join("");
+    lines.push(`${offset.toString(16).padStart(8, "0").toUpperCase()}  ${hex}  ${ascii}`);
+  }
+  if (bytes.length > visible.length) lines.push(`... ${bytes.length - visible.length} more byte(s)`);
+  return lines.join("\n") || "--";
+}
+
 export function sqliteValueRisk(column: string, value: SqliteValue): string[] {
   void column;
   void value;
@@ -330,12 +344,15 @@ export function getSqliteColumns(db: { exec: (sql: string) => Array<{ columns: s
   }));
 }
 
-export function sqliteFilterWhere(columns: SqliteColumnInfo[], filter: string) {
+export function sqliteFilterWhere(columns: SqliteColumnInfo[], filter: string, filterColumn = "") {
   const value = filter.trim();
   if (!value) return "";
   const like = `%${value.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
-  return columns.length
-    ? ` WHERE ${columns.map((column) => `CAST(${quoteSqlIdentifier(column.name)} AS TEXT) LIKE ${quoteSqlLiteral(like)} ESCAPE '\\'`).join(" OR ")}`
+  const selectedColumns = filterColumn
+    ? columns.filter((column) => column.name === filterColumn)
+    : columns;
+  return selectedColumns.length
+    ? ` WHERE ${selectedColumns.map((column) => `CAST(${quoteSqlIdentifier(column.name)} AS TEXT) LIKE ${quoteSqlLiteral(like)} ESCAPE '\\'`).join(" OR ")}`
     : "";
 }
 
@@ -347,10 +364,11 @@ export function loadSqliteTableRows(
   offset: number,
   filter: string,
   sortColumn: string,
-  sortDirection: "asc" | "desc"
+  sortDirection: "asc" | "desc",
+  filterColumn = ""
 ): SqliteDataSet {
   const tableName = quoteSqlIdentifier(table.name);
-  const where = sqliteFilterWhere(columns, filter);
+  const where = sqliteFilterWhere(columns, filter, filterColumn);
   const orderBy = sortColumn && columns.some((column) => column.name === sortColumn)
     ? ` ORDER BY ${quoteSqlIdentifier(sortColumn)} ${sortDirection === "desc" ? "DESC" : "ASC"}`
     : "";
@@ -477,10 +495,11 @@ export function loadSqliteTableRowsForExport(
   filter: string,
   sortColumn: string,
   sortDirection: "asc" | "desc",
-  maxRows = 50000
+  maxRows = 50000,
+  filterColumn = ""
 ): SqliteDataSet {
   const tableName = quoteSqlIdentifier(table.name);
-  const where = sqliteFilterWhere(columns, filter);
+  const where = sqliteFilterWhere(columns, filter, filterColumn);
   const orderBy = sortColumn && columns.some((column) => column.name === sortColumn)
     ? ` ORDER BY ${quoteSqlIdentifier(sortColumn)} ${sortDirection === "desc" ? "DESC" : "ASC"}`
     : "";

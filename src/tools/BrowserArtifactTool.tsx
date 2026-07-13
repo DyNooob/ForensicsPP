@@ -29,6 +29,7 @@ import {
   type BrowserArtifactRecord
 } from "../features/browserArtifacts/analyzer";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
@@ -64,8 +65,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   const [dragActive, setDragActive] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
-  const runRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
   const directoryProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
 
   const queueFiles = (files?: FileList | File[] | null) => {
@@ -111,8 +111,9 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const analyze = async () => {
     if (!selectedFiles.length || loading) return;
-    const run = runRef.current + 1;
-    runRef.current = run;
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
     setLoading(true);
     setProgress("");
     setError("");
@@ -120,7 +121,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const inputs: Array<Omit<BrowserArtifactInput, "bytes"> & { bytes: ArrayBuffer }> = [];
       for (const [index, file] of selectedFiles.entries()) {
-        if (runRef.current !== run) return;
+        if (controller.signal.aborted) return;
         setProgress(english ? `Reading ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在读取 ${index + 1}/${selectedFiles.length}：${file.name}`);
         inputs.push({
           name: file.name,
@@ -128,33 +129,27 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
           size: file.size,
           bytes: await file.arrayBuffer()
         });
+        if (controller.signal.aborted) return;
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
-      if (runRef.current !== run) return;
+      if (controller.signal.aborted) return;
       setProgress(english ? "Parsing browser data" : "正在解析浏览器数据");
-      const result = await new Promise<BrowserArtifactAnalysis>((resolve, reject) => {
-        const worker = new Worker(new URL("../features/browserArtifacts/browser-artifacts.worker.ts", import.meta.url), { type: "module" });
-        workerRef.current = worker;
-        worker.onmessage = (event: MessageEvent<{ type: "result"; result: BrowserArtifactAnalysis } | { type: "error"; error: string }>) => {
-          worker.terminate();
-          workerRef.current = null;
-          if (event.data.type === "result") resolve(event.data.result);
-          else reject(new Error(event.data.error));
-        };
-        worker.onerror = (event) => {
-          worker.terminate();
-          workerRef.current = null;
-          reject(new Error(event.message || "Browser artifact worker failed."));
-        };
-        worker.postMessage({ inputs }, inputs.map((input) => input.bytes));
+      const result = await runWorkerTask<{ inputs: typeof inputs }, BrowserArtifactAnalysis>({
+        createWorker: () => new Worker(new URL("../features/browserArtifacts/browser-artifacts.worker.ts", import.meta.url), { type: "module" }),
+        request: { inputs },
+        transfer: inputs.map((input) => input.bytes),
+        signal: controller.signal,
+        timeoutMs: 120_000
       });
       setAnalysis(result);
       if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setAnalysis(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (runRef.current === run) {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
         setLoading(false);
         setProgress("");
       }
@@ -162,9 +157,8 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const cancel = () => {
-    runRef.current += 1;
-    workerRef.current?.terminate();
-    workerRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setLoading(false);
     setProgress("");
   };
@@ -182,7 +176,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
     if (folderInputRef.current) folderInputRef.current.value = "";
   };
 
-  React.useEffect(() => () => workerRef.current?.terminate(), []);
+  React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const categoryRecords = React.useMemo(() => analysis && view !== "overview" && view !== "files"
     ? analysis.records.filter((record) => record.category === view)

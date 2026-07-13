@@ -9,7 +9,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 0.8.1" src="https://img.shields.io/badge/Version-0.8.1-4457A6?style=flat-square" />
+    <img alt="Version 0.9.0" src="https://img.shields.io/badge/Version-0.9.0-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Verify source" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
@@ -104,7 +104,7 @@ npm run release:package
 输出：
 
 ```text
-release/ForensicsPP-v0.8.1-static.zip
+release/ForensicsPP-v0.9.0-static.zip
 release/SHA256SUMS.txt
 ```
 

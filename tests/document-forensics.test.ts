@@ -91,6 +91,12 @@ describe("OOXML analysis", () => {
     expect(result.findings.some((finding) => finding.category === "macro" && finding.location === "word/vbaProject.bin")).toBe(true);
     expect(result.extracts.map((extract) => extract.name)).toEqual(expect.arrayContaining(["oleObject1.bin", "vbaProject.bin"]));
   });
+
+  it("rejects ordinary ZIP files and truncated containers", () => {
+    const ordinaryZip = zipSync({ "readme.txt": encoder.encode("not an Office package") });
+    expect(() => analyzeOoxml(ordinaryZip, "ordinary.zip")).toThrow("not an OOXML package");
+    expect(() => analyzeOoxml(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]), "truncated.docx")).toThrow();
+  });
 });
 
 describe("OLE analysis", () => {

@@ -26,8 +26,8 @@
 
 import { analyzeIocs } from "../features/ioc/analyzer";
 
-self.onmessage = (event: MessageEvent<{ id: number; text: string; source: string }>) => {
-  const { id, text, source } = event.data;
-  try { self.postMessage({ id, analysis: analyzeIocs(text, source) }); }
-  catch (caught) { self.postMessage({ id, error: caught instanceof Error ? caught.message : String(caught) }); }
+self.onmessage = (event: MessageEvent<{ text: string; source: string }>) => {
+  const { text, source } = event.data;
+  try { self.postMessage({ type: "result", result: analyzeIocs(text, source) }); }
+  catch (caught) { self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) }); }
 };

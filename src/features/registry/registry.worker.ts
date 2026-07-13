@@ -21,10 +21,10 @@
 
 import { parseRegistryHive } from "./analyzer";
 
-self.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+self.onmessage = (event: MessageEvent<{ bytes: ArrayBuffer }>) => {
   try {
-    self.postMessage({ ok: true, hive: parseRegistryHive(new Uint8Array(event.data)) });
+    self.postMessage({ type: "result", result: parseRegistryHive(new Uint8Array(event.data.bytes)) });
   } catch (caught) {
-    self.postMessage({ ok: false, error: caught instanceof Error ? caught.message : String(caught) });
+    self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
   }
 };

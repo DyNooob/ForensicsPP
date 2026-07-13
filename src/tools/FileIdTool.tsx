@@ -163,7 +163,7 @@ export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="text" disabled={!result && !error} onClick={clear}>{t.clear}</AButton>
+          <AButton variant="text" disabled={!result && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <ALinearProgress />}
         {error && <pre className="result-box">{error}</pre>}

@@ -33,7 +33,8 @@ import {
   EditOutlined,
   LeftOutlined,
   RightOutlined,
-  SearchOutlined
+  SearchOutlined,
+  UndoOutlined
 } from "@ant-design/icons";
 import { message, Modal, Popconfirm, Switch } from "antd";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
@@ -63,10 +64,9 @@ import {
   quoteSqlIdentifier,
   quoteSqlLiteral,
   runSqliteQuery,
-  sqliteCellPreviewRows,
   sqliteDefaultCellSelection,
   sqliteEmptyDataSet,
-  sqliteFilterWhere,
+  sqliteHexDump,
   sqliteQueryTemplates,
   sqliteRowsToCsv,
   sqliteSelectedRowJson,
@@ -103,6 +103,16 @@ function chooseSqliteDefaultTable(tables: SqliteTableInfo[], preferred = "") {
   return [...tables].sort((left, right) => score(right) - score(left))[0]?.name ?? "";
 }
 
+const SQLITE_UNDO_SNAPSHOT_LIMIT = 32 * 1024 * 1024;
+
+type SqliteUndoState = {
+  bytes: Uint8Array;
+  dirty: boolean;
+  changeLogLength: number;
+  queryHistory: SqliteQueryHistoryEntry[];
+  selectedTable: string;
+};
+
 export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDirtyChange?: (dirty: boolean) => void }) {
   const [messageApi, messageContextHolder] = message.useMessage();
   const [modalApi, modalContextHolder] = Modal.useModal();
@@ -129,10 +139,12 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
   const [tableSearch, setTableSearch] = React.useState("");
   const [tableFilter, setTableFilter] = React.useState("");
   const [tableFilterDraft, setTableFilterDraft] = React.useState("");
+  const [tableFilterColumn, setTableFilterColumn] = React.useState("");
   const [sortColumn, setSortColumn] = React.useState("");
   const [sortDirection, setSortDirection] = React.useState<"asc" | "desc">("asc");
   const [selectedCell, setSelectedCell] = React.useState<SqliteCellSelection | null>(null);
   const [selectedCellDraft, setSelectedCellDraft] = React.useState("");
+  const [selectedCellPreviewMode, setSelectedCellPreviewMode] = React.useState<"text" | "hex">("text");
   const [cellEditOpen, setCellEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<{ rowIndex: number; rowid: number; values: Record<string, string> } | null>(null);
   const [creating, setCreating] = React.useState<Record<string, string> | null>(null);
@@ -140,6 +152,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
   const [queryHistory, setQueryHistory] = React.useState<SqliteQueryHistoryEntry[]>([]);
   const [dirty, setDirty] = React.useState(false);
   const [editingEnabled, setEditingEnabled] = React.useState(false);
+  const [undoState, setUndoState] = React.useState<SqliteUndoState | null>(null);
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [error, setError] = React.useState("");
   const [isSqliteDropActive, setSqliteDropActive] = React.useState(false);
@@ -194,14 +207,14 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
       const nextIndexes = getSqliteIndexInfo(db, table.name);
       setColumns(nextColumns);
       setIndexes(nextIndexes);
-      setData(loadSqliteTableRows(db, table, nextColumns, limit, offset, tableFilter, sortColumn, sortDirection));
+      setData(loadSqliteTableRows(db, table, nextColumns, limit, offset, tableFilter, sortColumn, sortDirection, tableFilterColumn));
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setIndexes([]);
       setData(sqliteEmptyDataSet());
     }
-  }, [limit, offset, selectedTable, sortColumn, sortDirection, tableFilter, tables]);
+  }, [limit, offset, selectedTable, sortColumn, sortDirection, tableFilter, tableFilterColumn, tables]);
 
   React.useEffect(() => {
     refreshSelectedTable();
@@ -209,17 +222,19 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
 
   React.useEffect(() => {
     setSelectedCellDraft(selectedCell ? editableSqliteValue(selectedCell.value) : "");
+    setSelectedCellPreviewMode("text");
   }, [selectedCell]);
 
   React.useEffect(() => {
     setCellEditOpen(false);
     setEditing(null);
     setCreating(null);
-  }, [limit, offset, selectedTable, sortColumn, sortDirection, tableFilter]);
+  }, [limit, offset, selectedTable, sortColumn, sortDirection, tableFilter, tableFilterColumn]);
 
   React.useEffect(() => {
     setTableFilter("");
     setTableFilterDraft("");
+    setTableFilterColumn("");
     setOffset(0);
   }, [selectedTable]);
 
@@ -264,6 +279,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setTableSearch("");
     setTableFilter("");
     setTableFilterDraft("");
+    setTableFilterColumn("");
     setSortColumn("");
     setSortDirection("asc");
     setObjectFilter("");
@@ -271,7 +287,55 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setCreating(null);
     setSelectedCell(null);
     setCellEditOpen(false);
+    setUndoState(null);
   }, []);
+
+  const createUndoSnapshot = React.useCallback((): SqliteUndoState | null => {
+    const db = dbRef.current;
+    if (!db || fileSize > SQLITE_UNDO_SNAPSHOT_LIMIT) return null;
+    const exported = db.export();
+    if (exported.byteLength > SQLITE_UNDO_SNAPSHOT_LIMIT) return null;
+    const bytes = new Uint8Array(exported.byteLength);
+    bytes.set(exported);
+    return {
+      bytes,
+      dirty,
+      changeLogLength: changeLog.length,
+      queryHistory: queryHistory.slice(),
+      selectedTable
+    };
+  }, [changeLog.length, dirty, fileSize, queryHistory, selectedTable]);
+
+  const undoLastChange = React.useCallback(() => {
+    const SQL = sqlRef.current;
+    const snapshot = undoState;
+    if (!SQL || !snapshot) return;
+    try {
+      dbRef.current?.close();
+      const bytes = new Uint8Array(snapshot.bytes.byteLength);
+      bytes.set(snapshot.bytes);
+      const db = new SQL.Database(bytes);
+      dbRef.current = db;
+      const nextTables = getSqliteTables(db);
+      const nextSelected = chooseSqliteDefaultTable(nextTables, snapshot.selectedTable);
+      setTables(nextTables);
+      setObjects(getSqliteObjects(db));
+      setPragmaRows(getSqlitePragmaRows(db));
+      setSelectedTable(nextSelected);
+      setChangeLog((previous) => previous.slice(0, snapshot.changeLogLength));
+      setQueryHistory(snapshot.queryHistory);
+      setDirty(snapshot.dirty);
+      setUndoState(null);
+      setQueryResult(sqliteEmptyDataSet(english ? "Last change undone" : "已撤销上一步修改"));
+      setEditing(null);
+      setCreating(null);
+      setSelectedCell(null);
+      setCellEditOpen(false);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }, [english, undoState]);
 
   const resizeSqliteColumn = React.useCallback((column: string, width: number) => {
     setColumnWidths((current) => ({
@@ -316,6 +380,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setQueryHistory([]);
     setDirty(false);
     setEditingEnabled(false);
+    setUndoState(null);
     setColumnWidths({});
     setError("");
     setSqliteDropActive(false);
@@ -449,12 +514,14 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     const db = dbRef.current;
     if (!db || !activeTable || !editing) return;
     try {
+      const undo = createUndoSnapshot();
       const assignments = data.columns.map((column) => `${quoteSqlIdentifier(column)} = ?`).join(", ");
       const before = Object.fromEntries(data.columns.map((column, index) => [column, displaySqliteValue(data.values[editing.rowIndex]?.[index] ?? null)]));
       const after = Object.fromEntries(data.columns.map((column) => [column, editing.values[column] ?? ""]));
       const changedColumns = data.columns.filter((column) => before[column] !== after[column]);
       const params = data.columns.map((column, index) => coerceSqliteEditValue(data.values[editing.rowIndex]?.[index] ?? null, editing.values[column] ?? ""));
       db.run(`UPDATE ${quoteSqlIdentifier(activeTable.name)} SET ${assignments} WHERE rowid = ?`, [...params, editing.rowid]);
+      setUndoState(undo);
       appendChange({
         action: "row-update",
         table: activeTable.name,
@@ -477,10 +544,12 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     const db = dbRef.current;
     if (!db || !activeTable || !selectedCell || !data.editable || typeof selectedCell.rowid !== "number") return;
     try {
+      const undo = createUndoSnapshot();
       const nextValue = coerceSqliteEditValue(selectedCell.value, selectedCellDraft);
       const before = displaySqliteValue(selectedCell.value);
       const after = displaySqliteValue(nextValue);
       db.run(`UPDATE ${quoteSqlIdentifier(activeTable.name)} SET ${quoteSqlIdentifier(selectedCell.column)} = ? WHERE rowid = ?`, [nextValue, selectedCell.rowid]);
+      setUndoState(undo);
       appendChange({
         action: "cell-update",
         table: activeTable.name,
@@ -511,6 +580,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     const db = dbRef.current;
     if (!db || !activeTable || !creating) return;
     try {
+      const undo = createUndoSnapshot();
       const insertColumns = columns.filter((column) => column.name && !(column.primaryKey && !creating[column.name]?.trim()));
       const names = insertColumns.map((column) => quoteSqlIdentifier(column.name)).join(", ");
       const placeholders = insertColumns.map(() => "?").join(", ");
@@ -521,6 +591,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
           : `INSERT INTO ${quoteSqlIdentifier(activeTable.name)} DEFAULT VALUES`,
         params
       );
+      setUndoState(undo);
       appendChange({
         action: "row-insert",
         table: activeTable.name,
@@ -543,8 +614,10 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     const rowid = data.rowids[rowIndex];
     if (!db || !activeTable || !data.editable || typeof rowid !== "number") return;
     try {
+      const undo = createUndoSnapshot();
       const before = Object.fromEntries(data.columns.map((column, index) => [column, displaySqliteValue(data.values[rowIndex]?.[index] ?? null)]));
       db.run(`DELETE FROM ${quoteSqlIdentifier(activeTable.name)} WHERE rowid = ?`, [rowid]);
+      setUndoState(undo);
       appendChange({
         action: "row-delete",
         table: activeTable.name,
@@ -571,6 +644,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
       return;
     }
     try {
+      const undo = queryMutating ? createUndoSnapshot() : null;
       const result = runSqliteQuery(db, sql);
       const trimmedSql = sql.trim();
       const mutating = sqliteSqlIsMutating(trimmedSql);
@@ -589,6 +663,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
       ].slice(0, 30));
       setError("");
       if (mutating) {
+        setUndoState(undo);
         setDirty(true);
         appendChange({
           action: "sql-execute",
@@ -616,6 +691,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     savedBytes.set(bytes);
     setOriginalBytes(savedBytes);
     setDirty(false);
+    setUndoState(null);
   };
 
   const exportChangeLog = () => {
@@ -698,6 +774,9 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
   const sqliteQueryMinWidth = Math.max(720, sqliteQueryColumnWidths.reduce((sum, width) => sum + width, 0));
   const selectedCellDisplay = selectedCell ? displaySqliteValue(selectedCell.value) : "";
   const selectedCellTextPreview = selectedCell ? previewText(sqliteValueBytes(selectedCell.value), 8000) || selectedCellDisplay : "";
+  const selectedCellPreview = selectedCell && selectedCellPreviewMode === "hex"
+    ? sqliteHexDump(selectedCell.value)
+    : selectedCellTextPreview;
   const sqliteRowActions = t.waiting === "Waiting"
     ? { edit: "Edit", copy: "Copy", delete: "Del" }
     : { edit: "改", copy: "复制", delete: "删" };
@@ -777,6 +856,16 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
             <div className="panel-heading-row"><PanelTitle title={activeTable ? `${activeTable.name}` : t.sqliteData} /><span className="status-pill">{sqlitePageStatus}</span></div>
             <div className="sqlite-simple-controls">
               <div className="sqlite-filter-control">
+                <ASelect
+                  className="sqlite-filter-column-select"
+                  aria-label={english ? "Filter column" : "筛选列"}
+                  value={tableFilterColumn}
+                  onChange={(value) => { setTableFilterColumn(String(value)); if (tableFilter) setOffset(0); }}
+                  options={[
+                    { value: "", label: english ? "All columns" : "全部列" },
+                    ...columns.map((column) => ({ value: column.name, label: column.name }))
+                  ]}
+                />
                 <input className="text-input" aria-label={english ? "Filter current table rows" : "筛选当前表记录"} value={tableFilterDraft} onChange={(event) => setTableFilterDraft(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTableFilter(); }} placeholder={english ? "Filter rows" : "筛选当前表"} />
                 <AButton variant="filled" icon={<SearchOutlined aria-hidden="true" />} disabled={!tableFilterDraft.trim() && !tableFilter} onClick={applyTableFilter}>{english ? "Filter" : "筛选"}</AButton>
                 {tableFilter && <AButton variant="text" onClick={clearTableFilter}>{t.clear}</AButton>}
@@ -821,10 +910,10 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
           </div>
 
           {selectedCell && <div className="tool-panel sqlite-simple-cell-panel">
-            <div className="panel-heading-row"><PanelTitle title={`${selectedCell.column}`} /><span className="status-pill">{selectedCell.rowid == null ? `row ${selectedCell.rowIndex + 1}` : `rowid ${selectedCell.rowid}`}</span></div>
-            <InfoTable rows={[[english ? "Type" : "类型", sqliteValueKind(selectedCell.value)], [t.fileSize, formatBytes(sqliteValueSize(selectedCell.value))], [english ? "Value" : "值", selectedCellDisplay || "--"]]} />
-            <textarea aria-label={english ? "Selected cell value" : "选中单元格值"} className="single-textarea sqlite-cell-value" value={selectedCellTextPreview} readOnly />
-            <div className="action-row"><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedCellDisplay)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{english ? "Copy row JSON" : "复制行 JSON"}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton></div>
+            <div className="panel-heading-row"><PanelTitle title={`${selectedCell.column}`} /><div className="button-row compact-buttons"><span className="status-pill">{selectedCell.rowid == null ? `row ${selectedCell.rowIndex + 1}` : `rowid ${selectedCell.rowid}`}</span>{selectedCell.value instanceof Uint8Array && <ASegmentedGroup value={selectedCellPreviewMode} selects="single" aria-label={english ? "Cell preview format" : "单元格预览格式"}><ASegmentedButton value="text" onClick={() => setSelectedCellPreviewMode("text")}>{english ? "Text" : "文本"}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setSelectedCellPreviewMode("hex")}>Hex</ASegmentedButton></ASegmentedGroup>}</div></div>
+            <InfoTable rows={[[english ? "Type" : "类型", sqliteValueKind(selectedCell.value)], [t.fileSize, formatBytes(sqliteValueSize(selectedCell.value))], ...(selectedCell.value instanceof Uint8Array ? [[english ? "Signature" : "文件特征", sqliteValueSignature(selectedCell.value)] as [string, string]] : [[english ? "Value" : "值", selectedCellDisplay || "--"] as [string, string]])]} />
+            <textarea aria-label={english ? "Selected cell value" : "选中单元格值"} className="single-textarea sqlite-cell-value" value={selectedCellPreview} readOnly />
+            <div className="action-row"><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedCellPreview)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{english ? "Copy row JSON" : "复制行 JSON"}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton></div>
           </div>}
 
           {editing && <div className="tool-panel sqlite-row-editor-panel"><PanelTitle title={`${t.editRow}: rowid ${editing.rowid}`} /><div className="sqlite-editor-fields">{data.columns.map((column) => <label key={column}>{column}<textarea className="single-textarea compact-textarea" value={editing.values[column] ?? ""} onChange={(event) => setEditing({ ...editing, values: { ...editing.values, [column]: event.currentTarget.value } })} /></label>)}</div><div className="action-row"><AButton variant="filled" onClick={saveEdit}>{t.saveChanges}</AButton><AButton variant="text" onClick={() => setEditing(null)}>{t.cancelEdit}</AButton></div></div>}
@@ -854,7 +943,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
         </div>}
 
         {sqlitePage === "changes" && <div className="tool-panel wide-panel sqlite-simple-changes-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={english ? "Discard all changes since the last export?" : "放弃上次导出后的全部修改？"} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="outlined" icon={<UndoOutlined aria-hidden="true" />} disabled={!undoState} onClick={undoLastChange}>{english ? "Undo last" : "撤销上一步"}</AButton><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={english ? "Discard all changes since the last export?" : "放弃上次导出后的全部修改？"} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
           {changeLog.length ? <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{sqliteLabels.time}</th><th>{sqliteLabels.action}</th><th>{sqliteLabels.table}</th><th>{sqliteLabels.row}</th><th>{sqliteLabels.column}</th><th>{sqliteLabels.detail}</th></tr></thead><tbody>{changeLog.slice().reverse().map((entry) => <tr key={entry.id}><td>{entry.at}</td><td>{entry.action}</td><td>{entry.table || "--"}</td><td>{entry.rowid ?? "--"}</td><td>{entry.column ?? "--"}</td><td>{entry.detail}</td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No local changes." : "暂无本地修改。"}</div>}
         </div>}
         </div>

@@ -24,11 +24,12 @@ import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, I
 import type { DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 type View = "summary" | "findings" | "metadata" | "structure" | "extracts";
 
-function analyzeInWorker(file: File, workerRef: React.MutableRefObject<Worker | null>, signal: AbortSignal) {
+function analyzeInWorker(file: File, signal: AbortSignal) {
   return file.arrayBuffer().then(async (bytes) => {
     if (signal.aborted) throw new DOMException("Analysis cancelled", "AbortError");
     const signature = new TextDecoder("ascii").decode(new Uint8Array(bytes, 0, Math.min(8, bytes.byteLength)));
@@ -37,29 +38,12 @@ function analyzeInWorker(file: File, workerRef: React.MutableRefObject<Worker | 
       if (signal.aborted) throw new DOMException("Analysis cancelled", "AbortError");
       return result;
     }
-    return new Promise<DocumentAnalysis>((resolve, reject) => {
-      const worker = new Worker(new URL("../features/document/document.worker.ts", import.meta.url), { type: "module" });
-      workerRef.current = worker;
-      const finish = () => {
-        signal.removeEventListener("abort", abort);
-        worker.terminate();
-        if (workerRef.current === worker) workerRef.current = null;
-      };
-      const abort = () => {
-        finish();
-        reject(new DOMException("Analysis cancelled", "AbortError"));
-      };
-      signal.addEventListener("abort", abort, { once: true });
-      worker.onmessage = (event: MessageEvent<{ type: "result"; result: DocumentAnalysis } | { type: "error"; error: string }>) => {
-        finish();
-        if (event.data.type === "result") resolve(event.data.result);
-        else reject(new Error(event.data.error));
-      };
-      worker.onerror = (event) => {
-        finish();
-        reject(new Error(event.message || "Document worker failed."));
-      };
-      worker.postMessage({ name: file.name, bytes }, [bytes]);
+    return runWorkerTask<{ name: string; bytes: ArrayBuffer }, DocumentAnalysis>({
+      createWorker: () => new Worker(new URL("../features/document/document.worker.ts", import.meta.url), { type: "module" }),
+      request: { name: file.name, bytes },
+      transfer: [bytes],
+      signal,
+      timeoutMs: 120_000
     });
   });
 }
@@ -76,15 +60,12 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const [error, setError] = React.useState("");
   const [dragActive, setDragActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
 
   const choose = (next?: File) => {
     if (!next) return;
     abortRef.current?.abort();
     abortRef.current = null;
-    workerRef.current?.terminate();
-    workerRef.current = null;
     setLoading(false);
     setFile(null);
     setAnalysis(null);
@@ -107,7 +88,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      setAnalysis(await analyzeInWorker(file, workerRef, controller.signal));
+      setAnalysis(await analyzeInWorker(file, controller.signal));
       setView("summary");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -124,8 +105,6 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const cancel = () => {
     abortRef.current?.abort();
     abortRef.current = null;
-    workerRef.current?.terminate();
-    workerRef.current = null;
     setLoading(false);
   };
 
@@ -143,7 +122,6 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
 
   React.useEffect(() => () => {
     abortRef.current?.abort();
-    workerRef.current?.terminate();
   }, []);
   const entries = React.useMemo(() => {
     const query = filter.trim().toLowerCase();

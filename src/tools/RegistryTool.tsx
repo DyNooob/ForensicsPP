@@ -25,33 +25,13 @@ import { AButton, ALinearProgress, ATextField, InfoTable, PanelTitle, ToolPanelH
 import type { RegistryHive } from "../features/registry/analyzer";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
 
 const LIMIT = 256 * 1024 * 1024;
-
-function parseInWorker(buffer: ArrayBuffer, workerRef: React.MutableRefObject<Worker | null>, signal: AbortSignal) {
-  return new Promise<RegistryHive>((resolve, reject) => {
-    const worker = new Worker(new URL("../features/registry/registry.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = worker;
-    const finish = () => {
-      signal.removeEventListener("abort", abort);
-      worker.terminate();
-      if (workerRef.current === worker) workerRef.current = null;
-    };
-    const abort = () => {
-      finish();
-      reject(new DOMException("Registry parsing cancelled", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    worker.onmessage = (event: MessageEvent<{ ok: boolean; hive?: RegistryHive; error?: string }>) => { finish(); event.data.ok && event.data.hive ? resolve(event.data.hive) : reject(new Error(event.data.error || "Hive parsing failed.")); };
-    worker.onerror = (event) => { finish(); reject(new Error(event.message)); };
-    worker.postMessage(buffer, [buffer]);
-  });
-}
 
 export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const workerRef = React.useRef<Worker | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [hive, setHive] = React.useState<RegistryHive | null>(null);
@@ -60,7 +40,7 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const [valueFilter, setValueFilter] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  React.useEffect(() => () => { abortRef.current?.abort(); workerRef.current?.terminate(); }, []);
+  React.useEffect(() => () => abortRef.current?.abort(), []);
   const selected = hive?.keys[selectedId] ?? null;
   const children = React.useMemo(() => selected && hive ? selected.children.map((id) => hive.keys[id]).filter(Boolean) : [], [hive, selected]);
   const searchResults = React.useMemo(() => { const needle = query.trim().toLowerCase(); if (!needle || !hive) return []; return hive.keys.filter((key) => key.path.toLowerCase().includes(needle) || key.values.some((value) => `${value.name} ${value.value}`.toLowerCase().includes(needle))).slice(0, 300); }, [hive, query]);
@@ -72,23 +52,56 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
     if (!next) return;
     abortRef.current?.abort();
     abortRef.current = null;
-    workerRef.current?.terminate();
-    workerRef.current = null;
     setFile(next);
     setHive(null);
     setSelectedId(0);
     setQuery("");
     setValueFilter("");
     setLoading(false);
-    if (next.size > LIMIT) { setError(english ? "Hive exceeds the 256 MiB limit." : "Hive 超过 256 MiB 解析上限。"); return; }
-    setLoading(true); setError("");
+    if (next.size > LIMIT) {
+      setError(english ? "Hive exceeds the 256 MiB limit." : "Hive 超过 256 MiB 解析上限。");
+      return;
+    }
+    setLoading(true);
+    setError("");
     const controller = new AbortController();
     abortRef.current = controller;
-    try { const bytes = await next.arrayBuffer(); if (controller.signal.aborted) return; const result = await parseInWorker(bytes, workerRef, controller.signal); if (controller.signal.aborted) return; setHive(result); setSelectedId(result.rootId); setQuery(""); setValueFilter(""); }
-    catch (caught) { if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught)); }
-    finally { if (abortRef.current === controller) { abortRef.current = null; setLoading(false); } }
+    try {
+      const bytes = await next.arrayBuffer();
+      if (controller.signal.aborted) return;
+      const result = await runWorkerTask<{ bytes: ArrayBuffer }, RegistryHive>({
+        createWorker: () => new Worker(new URL("../features/registry/registry.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes },
+        transfer: [bytes],
+        signal: controller.signal,
+        timeoutMs: 180_000
+      });
+      if (controller.signal.aborted) return;
+      setHive(result);
+      setSelectedId(result.rootId);
+      setQuery("");
+      setValueFilter("");
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setLoading(false);
+      }
+    }
   };
-  const clear = () => { abortRef.current?.abort(); abortRef.current = null; workerRef.current?.terminate(); workerRef.current = null; setFile(null); setHive(null); setSelectedId(0); setQuery(""); setValueFilter(""); setLoading(false); setError(""); if (inputRef.current) inputRef.current.value = ""; };
+  const clear = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setFile(null);
+    setHive(null);
+    setSelectedId(0);
+    setQuery("");
+    setValueFilter("");
+    setLoading(false);
+    setError("");
+    if (inputRef.current) inputRef.current.value = "";
+  };
   const selectKey = (id: number) => { setSelectedId(id); setQuery(""); setValueFilter(""); };
   const exportCurrentKey = () => {
     if (!selected) return;
