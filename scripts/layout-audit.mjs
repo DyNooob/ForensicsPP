@@ -29,7 +29,7 @@ import { deflateSync } from "node:zlib";
 import { strToU8, zipSync } from "fflate";
 import { Ecc, QrCode } from "@rc-component/qrcode/es/libs/qrcodegen.js";
 
-const baseUrl = process.env.AUDIT_URL || "http://localhost:5174";
+const baseUrl = process.env.AUDIT_URL || "http://localhost:5173";
 const chromePath = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const port = Number(process.env.CDP_PORT || 9237);
 const width = Number(process.env.AUDIT_WIDTH || 1366);
@@ -836,6 +836,23 @@ async function auditNamedControls(client) {
   return result.result.value;
 }
 
+async function auditFileInputAccessibility(client) {
+  const result = await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const inputs = [...document.querySelectorAll('input[type="file"]')];
+      const invalid = inputs.filter((input) => input.getAttribute("aria-hidden") !== "true" || input.tabIndex !== -1);
+      return {
+        id: "file-input-accessibility",
+        ok: invalid.length === 0,
+        count: inputs.length,
+        invalid: invalid.map((input) => ({ className: input.className?.toString?.() || "", ariaHidden: input.getAttribute("aria-hidden"), tabIndex: input.tabIndex }))
+      };
+    })()`,
+    returnByValue: true
+  });
+  return result.result.value;
+}
+
 async function auditThemeSwitch(client) {
   await loadToolState(client, "home", { cleanHome: true, themeMode: "light" });
   await clickRuntimeButton(
@@ -889,6 +906,126 @@ async function auditThemeSwitch(client) {
       && lightValue?.sidebar === "rgb(248, 250, 251)",
     dark: darkValue,
     light: lightValue
+  };
+}
+
+async function auditReporter(client) {
+  await loadToolState(client, "codec", { cleanHome: false });
+  await client.send("Runtime.evaluate", {
+    expression: `for (const key of Object.keys(localStorage)) { if (key.startsWith("forensicspp:report.")) localStorage.removeItem(key); }`,
+    awaitPromise: true
+  });
+  await client.send("Page.reload", { ignoreCache: true });
+  await wait(500);
+  await clickRuntimeButton(
+    client,
+    `document.querySelector('.report-add-toggle')?.click();`,
+    "Boolean(document.querySelector('.reporter-panel'))"
+  );
+  const emptyCheck = await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const report = JSON.parse(localStorage.getItem('forensicspp:report.notes') || '[]');
+      return { panel: Boolean(document.querySelector('.reporter-panel')), noteCount: report.length };
+    })()`,
+    returnByValue: true
+  });
+  await client.send("Runtime.evaluate", {
+    expression: `document.querySelector('.reporter-panel .modal-close-button')?.click();`,
+    awaitPromise: true
+  });
+  await wait(220);
+  await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const textarea = document.querySelector('textarea[aria-label="输入文本"]');
+      if (!textarea) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'report audit input');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+    awaitPromise: true
+  });
+  await wait(220);
+  await clickRuntimeButton(
+    client,
+    `document.querySelector('.report-add-toggle')?.click();`,
+    "Boolean(document.querySelector('.reporter-panel .reporter-note-card'))"
+  );
+  const result = await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const panel = document.querySelector('.reporter-panel');
+      const note = document.querySelector('.reporter-note-card');
+      const rect = panel?.getBoundingClientRect();
+      const report = JSON.parse(localStorage.getItem('forensicspp:report.notes') || '[]');
+      const overflowX = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+      return {
+        id: 'reporter',
+        ok: Boolean(panel && note && rect && rect.width >= Math.min(700, innerWidth - 24) && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1 && report.length === 1 && ${emptyCheck.result.value?.noteCount ?? -1} === 0 && overflowX <= 1),
+        noteCount: report.length,
+        emptyNoteCount: ${emptyCheck.result.value?.noteCount ?? -1},
+        overflowX,
+        rect: rect ? { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) } : null
+      };
+    })()`,
+    returnByValue: true
+  });
+  await client.send("Runtime.evaluate", {
+    expression: `document.querySelector('.reporter-panel .modal-close-button')?.click();`,
+    awaitPromise: true
+  });
+  await wait(220);
+  return result.result.value;
+}
+
+async function auditHashWorkflow(client) {
+  await loadToolState(client, "hash", { cleanHome: false });
+  await client.send("Runtime.evaluate", {
+    expression: `[...document.querySelectorAll('.hash-simple-mode button')].find((node) => ['文本', 'Text'].includes((node.textContent || '').trim()))?.click();`,
+    awaitPromise: true
+  });
+  await wait(150);
+  await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const input = document.querySelector('.hash-simple-text-input');
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      if (!input || !setter) return false;
+      setter.call(input, 'hash audit input');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+    awaitPromise: true
+  });
+  await wait(250);
+  const before = await client.send("Runtime.evaluate", {
+    expression: `(() => ({
+      result: Boolean(document.querySelector('.hash-simple-text-result')),
+      checked: [...document.querySelectorAll('.hash-simple-algorithms input[type="checkbox"]')].filter((input) => input.checked).map((input) => input.closest('label')?.textContent?.trim() || input.getAttribute('aria-label') || input.value || '')
+    }))()`,
+    returnByValue: true
+  });
+  await clickRuntimeButton(
+    client,
+    `[...document.querySelectorAll('.hash-workbench button')].find((node) => ['计算哈希', 'Calculate'].includes((node.textContent || '').trim()))?.click();`,
+    "Boolean(document.querySelector('.hash-simple-text-result'))"
+  );
+  const after = await client.send("Runtime.evaluate", {
+    expression: `(() => ({
+      result: Boolean(document.querySelector('.hash-simple-text-result')),
+      rows: document.querySelectorAll('.hash-simple-text-result table tbody tr').length,
+      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
+    }))()`,
+    returnByValue: true
+  });
+  return {
+    id: "hash-workflow",
+    ok: before.result.value?.result === false
+      && before.result.value?.checked?.length === 1
+      && /SHA[- ]?256/i.test(before.result.value?.checked?.[0] || "")
+      && after.result.value?.result === true
+      && after.result.value?.rows >= 1
+      && after.result.value?.overflowX <= 1,
+    before: before.result.value,
+    after: after.result.value
   };
 }
 
@@ -1109,6 +1246,10 @@ async function auditLoadedSqlite(client) {
     await waitForRuntimeValue(client, "document.querySelector('.page-title')?.textContent.includes('哈希')", 5000);
     await client.send("Runtime.evaluate", { expression: `location.hash = 'sqlite'`, awaitPromise: true });
     const toolStateRetained = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称')", 5000);
+    await wait(900);
+    await client.send("Page.reload", { ignoreCache: true });
+    await waitForRuntimeValue(client, "document.querySelector('.page-title')?.textContent.includes('SQLite')", 8000);
+    const sessionRestored = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称')", 12000);
     const resizeBefore = await client.send("Runtime.evaluate", {
       expression: `Math.round(document.querySelectorAll('.sqlite-browse-table thead th')[2]?.getBoundingClientRect().width || 0)`,
       returnByValue: true
@@ -1179,6 +1320,7 @@ async function auditLoadedSqlite(client) {
             && ${JSON.stringify(cellEditorReady)}
             && ${JSON.stringify(cellEditSaved)}
             && ${JSON.stringify(toolStateRetained)}
+            && ${JSON.stringify(sessionRestored)}
             && ${JSON.stringify(columnResizePassed)}
             && ${JSON.stringify(sqlPageReady)}
             && ${JSON.stringify(sqlQueryPassed)}
@@ -1197,6 +1339,7 @@ async function auditLoadedSqlite(client) {
           cellEditorReady: ${JSON.stringify(cellEditorReady)},
           cellEditSaved: ${JSON.stringify(cellEditSaved)},
           toolStateRetained: ${JSON.stringify(toolStateRetained)},
+          sessionRestored: ${JSON.stringify(sessionRestored)},
           columnResizePassed: ${JSON.stringify(columnResizePassed)},
           sqlPageReady: ${JSON.stringify(sqlPageReady)},
           sqlQueryPassed: ${JSON.stringify(sqlQueryPassed)},
@@ -1208,7 +1351,35 @@ async function auditLoadedSqlite(client) {
       })()`,
       returnByValue: true
     });
-    return result.result.value;
+    const browseResult = result.result.value;
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '取证')?.click()`,
+      awaitPromise: true
+    });
+    const forensicReady = await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-forensic-pages-panel tbody tr') && document.querySelector('.sqlite-forensic-summary-panel'))", 5000);
+    const forensicResult = await client.send("Runtime.evaluate", {
+      expression: `(() => {
+        const workspace = document.querySelector('.sqlite-forensic-workspace');
+        const pageRows = document.querySelectorAll('.sqlite-forensic-pages-panel tbody tr').length;
+        const fragmentRows = document.querySelectorAll('.sqlite-forensic-fragment-panel tbody tr').length;
+        const editModeCount = document.querySelectorAll('.sqlite-edit-mode').length;
+        const rect = workspace?.getBoundingClientRect();
+        return {
+          ready: ${JSON.stringify(forensicReady)},
+          pageRows,
+          fragmentRows,
+          editModeCount,
+          rect: rect ? { w: Math.round(rect.width), h: Math.round(rect.height) } : null,
+          overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+      })()`,
+      returnByValue: true
+    });
+    return {
+      ...browseResult,
+      forensic: forensicResult.result.value,
+      ok: Boolean(browseResult.ok && forensicReady && forensicResult.result.value.pageRows >= 1 && forensicResult.result.value.editModeCount === 0 && forensicResult.result.value.overflowX === 0)
+    };
   } finally {
     await rm(fixture.dir, { recursive: true, force: true });
   }
@@ -1296,6 +1467,52 @@ async function auditLoadedEmail(client) {
   }
 }
 
+async function auditWorkspacePersistence(client) {
+  const targets = [
+    { tool: "image", selector: ".image-workbench input[type=file]", ready: ".image-workbench.has-image", path: "pngPath" },
+    { tool: "browserartifacts", selector: ".browser-artifact-workbench input[type=file]", ready: ".browser-artifact-results-panel", path: "browserHistoryPath", action: "开始解析" },
+    { tool: "evtx", selector: ".evtx-workbench input[type=file]", ready: ".evtx-results-panel", path: "evtxPath", action: "解析日志" },
+    { tool: "documentforensics", selector: ".document-forensics-workbench input[type=file]", ready: ".document-forensics-results", path: "pdfPath", action: "检查文档" }
+  ];
+  const fixture = await createFileToolFixtures();
+  const results = [];
+  try {
+    for (const target of targets) {
+      await loadToolState(client, target.tool);
+      const document = await client.send("DOM.getDocument", { depth: 1 });
+      const input = await client.send("DOM.querySelector", { nodeId: document.root.nodeId, selector: target.selector });
+      if (!input.nodeId) {
+        results.push({ tool: target.tool, ok: false, error: "File input not found" });
+        continue;
+      }
+      await client.send("DOM.setFileInputFiles", { nodeId: input.nodeId, files: [fixture[target.path]] });
+      await waitForRuntimeValue(client, `Boolean(document.querySelector(${JSON.stringify(target.ready)}))`, 15000);
+      if (target.action) {
+        await waitForRuntimeValue(client, `Boolean([...document.querySelectorAll('button')].find((node) => (node.textContent || '').trim() === ${JSON.stringify(target.action)} && !node.disabled))`, 5000);
+        await client.send("Runtime.evaluate", { expression: `[...document.querySelectorAll('button')].find((node) => (node.textContent || '').trim() === ${JSON.stringify(target.action)} && !node.disabled)?.click()` });
+        await waitForRuntimeValue(client, `Boolean(document.querySelector(${JSON.stringify(target.ready)}))`, 15000);
+      }
+      await wait(1400);
+      await client.send("Page.reload", { ignoreCache: true });
+      const restored = await waitForRuntimeValue(client, `Boolean(document.querySelector(${JSON.stringify(target.ready)}))`, 18000);
+      const state = await client.send("Runtime.evaluate", {
+        expression: `(() => ({
+          restored: Boolean(document.querySelector(${JSON.stringify(target.ready)})),
+          overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          errors: document.querySelector('.error-state')?.textContent?.trim() || '',
+          visiblePanels: [...document.querySelectorAll('.tool-panel')].filter((node) => node.offsetParent !== null).length
+        }))()`,
+        returnByValue: true
+      });
+      const value = state.result.value;
+      results.push({ tool: target.tool, restored, ...value, ok: restored && value.restored && value.overflowX === 0 && !value.errors && value.visiblePanels > 0 });
+    }
+  } finally {
+    await rm(fixture.dir, { recursive: true, force: true });
+  }
+  return results;
+}
+
 async function auditLoadedSql(client) {
   const fixture = await createSqlFixture();
   try {
@@ -1361,11 +1578,11 @@ const loadedFileToolStates = [
   { tool: "documentforensics", selector: ".document-forensics-workbench input[type=file]", readyClass: ".document-forensics-results", path: "pdfPath", action: ["检查文档", "Inspect document"] }
 ];
 
-async function auditLoadedFileTools(client) {
+async function auditLoadedFileTools(client, selectedTools = null) {
   const fixture = await createFileToolFixtures();
   const results = [];
   try {
-    for (const state of loadedFileToolStates) {
+    for (const state of loadedFileToolStates.filter((item) => !selectedTools || selectedTools.includes(item.tool))) {
       if (process.env.AUDIT_VERBOSE === "1") console.log(`Auditing loaded file: ${state.tool}`);
       await loadToolState(client, state.tool);
       const document = await client.send("DOM.getDocument", { depth: 1 });
@@ -1410,6 +1627,13 @@ async function auditLoadedFileTools(client) {
           "Boolean(document.querySelector('.image-exif-table tbody tr'))"
         );
       }
+      if (state.tool === "pcap") {
+        await clickRuntimeButton(
+          client,
+          `[...document.querySelectorAll('.pcap-simple-tabs button')].find((node) => /TCP streams|TCP 流/.test((node.textContent || '').trim()))?.click();`,
+          "Boolean(document.querySelector('.pcap-stream-detail'))"
+        );
+      }
       await wait(500);
       const result = await client.send("Runtime.evaluate", {
         expression: visiblePanelAuditExpression(state.tool),
@@ -1435,6 +1659,27 @@ async function auditLoadedFileTools(client) {
         const exif = exifResult.result.value;
         value.ok = value.ok && exif.present && exif.rows >= 5 && exif.pageOverflow === 0 && exif.panelOverflow === 0;
         value.exif = exif;
+      }
+      if (state.tool === "pcap") {
+        const streamResult = await client.send("Runtime.evaluate", {
+          expression: `(() => {
+            const workspace = document.querySelector('.pcap-stream-workspace');
+            const scroll = document.querySelector('.pcap-stream-scroll');
+            const output = document.querySelector('.pcap-stream-output');
+            const selected = document.querySelector('.pcap-stream-scroll tr.selected-row');
+            return {
+              present: Boolean(workspace && scroll && output && selected),
+              rows: document.querySelectorAll('.pcap-stream-scroll tbody tr').length,
+              outputLength: output?.value?.length || 0,
+              pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              workspaceOverflow: workspace ? workspace.scrollWidth - workspace.clientWidth : null
+            };
+          })()`,
+          returnByValue: true
+        });
+        const stream = streamResult.result.value;
+        value.ok = value.ok && stream.present && stream.rows >= 1 && stream.outputLength > 20 && stream.pageOverflow === 0 && stream.workspaceOverflow === 0;
+        value.tcpStream = stream;
       }
       const detail = await client.send("Runtime.evaluate", {
         expression: `(() => ({
@@ -1650,6 +1895,121 @@ async function main() {
       mobile: false
     });
 
+    if (process.env.AUDIT_SCOPE === "sqlite") {
+      if (saveScreenshots) await resetScreenshotDir();
+      const loadedSqliteResult = await auditLoadedSqlite(client);
+      const accessibility = await auditNamedControls(client);
+      const check = { ...loadedSqliteResult, accessibility, ok: loadedSqliteResult.ok && accessibility.count === 0 };
+      if (saveScreenshots) {
+        await wait(3200);
+        await captureViewport(client, "sqlite-loaded.png");
+      }
+      client.close();
+      await writeFile("layout-audit-report.json", JSON.stringify({ baseUrl, width, height, themeMode: defaultThemeMode, screenshotDir, specialChecks: [check], specialAbnormal: check.ok ? [] : [check] }, null, 2));
+      if (!check.ok) throw new Error("SQLite layout audit failed.");
+      console.log("SQLite layout audit passed.");
+      return;
+    }
+
+    if (process.env.AUDIT_SCOPE === "pcap") {
+      if (saveScreenshots) await resetScreenshotDir();
+      const [loadedPcapResult] = await auditLoadedFileTools(client, ["pcap"]);
+      const saved = await waitForRuntimeValue(client, "/已保留|saved locally/.test(document.querySelector('.pcap-loaded-source')?.textContent || '')", 12000);
+      await client.send("Page.reload", { ignoreCache: true });
+      await wait(900);
+      await waitForRuntimeValue(client, "Boolean(document.querySelector('.pcap-workbench.has-pcap'))", 12000);
+      await clickRuntimeButton(
+        client,
+        `[...document.querySelectorAll('.pcap-simple-tabs button')].find((node) => /TCP streams|TCP 流/.test((node.textContent || '').trim()))?.click();`,
+        "Boolean(document.querySelector('.pcap-stream-detail'))"
+      );
+      const restoredResult = await client.send("Runtime.evaluate", {
+        expression: `(() => ({
+          restored: Boolean(document.querySelector('.pcap-workbench.has-pcap')),
+          streams: document.querySelectorAll('.pcap-stream-scroll tbody tr').length,
+          outputLength: document.querySelector('.pcap-stream-output')?.value?.length || 0,
+          overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        }))()`,
+        returnByValue: true
+      });
+      loadedPcapResult.persistence = { saved, ...restoredResult.result.value };
+      const accessibility = await auditNamedControls(client);
+      const baseOk = loadedPcapResult.ready
+        && loadedPcapResult.overflowX === 0
+        && loadedPcapResult.badWritingCellCount === 0
+        && loadedPcapResult.unnamedControlCount === 0
+        && loadedPcapResult.legacyControlCount === 0
+        && loadedPcapResult.overlaps.length === 0
+        && loadedPcapResult.overflowers.length === 0
+        && loadedPcapResult.tcpStream?.present
+        && loadedPcapResult.tcpStream.rows >= 1
+        && loadedPcapResult.tcpStream.outputLength > 20
+        && loadedPcapResult.tcpStream.pageOverflow === 0
+        && loadedPcapResult.tcpStream.workspaceOverflow === 0
+        && loadedPcapResult.persistence.saved
+        && loadedPcapResult.persistence.restored
+        && loadedPcapResult.persistence.streams >= 1
+        && loadedPcapResult.persistence.outputLength > 20
+        && loadedPcapResult.persistence.overflowX === 0;
+      const check = { ...loadedPcapResult, accessibility, ok: Boolean(baseOk && accessibility.count === 0) };
+      if (saveScreenshots) await captureViewport(client, "pcap-tcp-stream.png");
+      client.close();
+      await writeFile("layout-audit-report.json", JSON.stringify({ baseUrl, width, height, themeMode: defaultThemeMode, screenshotDir, specialChecks: [check], specialAbnormal: check.ok ? [] : [check] }, null, 2));
+      if (!check.ok) throw new Error("PCAP layout audit failed.");
+      console.log("PCAP layout audit passed.");
+      return;
+    }
+
+    if (process.env.AUDIT_SCOPE === "email") {
+      if (saveScreenshots) await resetScreenshotDir();
+      const loadedEmailResult = await auditLoadedEmail(client);
+      const saved = await waitForRuntimeValue(client, "/已保留|saved locally/.test(document.querySelector('.email-loaded-source')?.textContent || '')", 12000);
+      await client.send("Page.reload", { ignoreCache: true });
+      await wait(900);
+      const restored = await waitForRuntimeValue(client, "Boolean(document.querySelector('.email-workbench.has-email .email-summary-panel'))", 12000);
+      await client.send("Runtime.evaluate", {
+        expression: `([...document.querySelectorAll('.email-body-panel button')].find((button) => button.textContent?.trim() === 'HTML'))?.click()`
+      });
+      await waitForRuntimeValue(client, "Boolean(document.querySelector('.email-html-preview')?.getAttribute('srcdoc')?.includes('Evidence triage summary'))", 5000);
+      const restoredResult = await client.send("Runtime.evaluate", {
+        expression: `(() => ({
+          summaryRows: document.querySelectorAll('.email-summary-panel tbody tr').length,
+          attachmentRows: document.querySelectorAll('.email-attachments-panel tbody tr').length,
+          htmlReady: Boolean(document.querySelector('.email-html-preview')?.getAttribute('srcdoc')?.includes('Evidence triage summary')),
+          overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        }))()`,
+        returnByValue: true
+      });
+      const accessibility = await auditNamedControls(client);
+      const persistence = { saved, restored, ...restoredResult.result.value };
+      const check = {
+        ...loadedEmailResult,
+        persistence,
+        accessibility,
+        ok: Boolean(loadedEmailResult.ok && saved && restored && persistence.summaryRows >= 4 && persistence.htmlReady && persistence.overflowX === 0 && accessibility.count === 0)
+      };
+      if (saveScreenshots) await captureViewport(client, "email-restored.png");
+      client.close();
+      await writeFile("layout-audit-report.json", JSON.stringify({ baseUrl, width, height, themeMode: defaultThemeMode, screenshotDir, specialChecks: [check], specialAbnormal: check.ok ? [] : [check] }, null, 2));
+      if (!check.ok) throw new Error("Email layout audit failed.");
+      console.log("Email layout audit passed.");
+      return;
+    }
+
+    if (process.env.AUDIT_SCOPE === "workspaces") {
+      if (saveScreenshots) await resetScreenshotDir();
+      const workspaceResults = await auditWorkspacePersistence(client);
+      const abnormal = workspaceResults.filter((item) => !item.ok);
+      await writeFile("layout-audit-report.json", JSON.stringify({ baseUrl, width, height, themeMode: defaultThemeMode, screenshotDir, workspaceResults, abnormal }, null, 2));
+      client.close();
+      if (abnormal.length) {
+        console.error(JSON.stringify({ workspaceResults, abnormal }, null, 2));
+        throw new Error("Workspace persistence audit failed.");
+      }
+      console.log("Workspace persistence audit passed: image, browser artifacts, EVTX, and documents restored after reload.");
+      return;
+    }
+
     const results = [];
     if (saveScreenshots) await resetScreenshotDir();
 
@@ -1725,6 +2085,9 @@ async function main() {
     const loadedFileResults = await auditLoadedFileTools(client);
     const themeSwitchCheck = await auditThemeSwitch(client);
     const selectPopupCheck = await auditSelectPopup(client);
+    const hashWorkflowCheck = await auditHashWorkflow(client);
+    const reporterCheck = await auditReporter(client);
+    const fileInputAccessibilityCheck = await auditFileInputAccessibility(client);
     if (process.env.AUDIT_VERBOSE === "1") console.log("Auditing seeded states");
     const seededResults = await auditSeededToolStates(client);
 
@@ -1769,7 +2132,7 @@ async function main() {
         (width >= 900 && item.container.w < 700) ||
         item.visiblePanelCount === 0;
     });
-    const specialChecks = [consentCheck, passwordFilledCheck, collapsedToolCenterCheck, loadedSqliteCheck, loadedEmailCheck, loadedSqlCheck, themeSwitchCheck, selectPopupCheck];
+    const specialChecks = [consentCheck, passwordFilledCheck, collapsedToolCenterCheck, loadedSqliteCheck, loadedEmailCheck, loadedSqlCheck, themeSwitchCheck, selectPopupCheck, hashWorkflowCheck, reporterCheck, fileInputAccessibilityCheck];
     const specialAbnormal = specialChecks.filter((item) => !item.ok);
     const seededAbnormal = seededResults.filter((item) => !item.ready || item.overflowX !== 0 || item.overlaps.length || item.badWritingCellCount || item.unnamedControlCount || item.legacyControlCount || !item.container || item.visiblePanelCount === 0);
     const fileAbnormal = loadedFileResults.filter((item) => !item.ready || item.overflowX !== 0 || item.overlaps?.length || item.badWritingCellCount || item.unnamedControlCount || item.legacyControlCount || !item.container || item.visiblePanelCount === 0);

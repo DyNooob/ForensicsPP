@@ -29,6 +29,7 @@ import {
   type BrowserArtifactRecord
 } from "../features/browserArtifacts/analyzer";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -67,8 +68,20 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const directoryProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
+  const workspace = useToolWorkspace<BrowserArtifactAnalysis>({
+    id: "browser-artifacts",
+    version: 1,
+    isValid: (value): value is BrowserArtifactAnalysis => Boolean(value && typeof value === "object" && Array.isArray((value as BrowserArtifactAnalysis).records) && Array.isArray((value as BrowserArtifactAnalysis).files)),
+    onRestore: (value) => {
+      setAnalysis(value);
+      setView("overview");
+      setError("");
+    }
+  });
 
   const queueFiles = (files?: FileList | File[] | null) => {
+    cancel();
+    workspace.clear();
     const next = Array.from(files ?? []).filter((file) => {
       const name = file.name.toLowerCase();
       return file.size > 0 && (
@@ -142,6 +155,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
         timeoutMs: 120_000
       });
       setAnalysis(result);
+      workspace.save(result);
       if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -164,6 +178,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clear = () => {
+    workspace.clear();
     cancel();
     setSelectedFiles([]);
     setAnalysis(null);

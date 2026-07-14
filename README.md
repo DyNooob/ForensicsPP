@@ -9,7 +9,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 0.9.0" src="https://img.shields.io/badge/Version-0.9.0-4457A6?style=flat-square" />
+    <img alt="Version 1.0.0 alpha 1" src="https://img.shields.io/badge/Version-1.0.0--alpha.1-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Verify source" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
@@ -41,16 +41,17 @@ Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、�
 | 文档与时间 | PDF / OOXML / OLE、时间戳转换、时间线 |
 | 转换 | CyberChef、编码解码、进制、UUID、JWT、常见密码哈希 |
 
-应用首页列出全部 36 个入口。
+应用首页列出全部 35 个工具入口，首页本身不计入工具数量。
 
 ## 数据保存
 
 - 切换工具时，已经打开的页面会保留在当前标签页中，输入和结果不会因为切页消失。
-- 刷新或关闭标签页后，文件和大体积分析结果不会保留。
+- SQLite、流量包、邮件、图片、浏览器数据、EVTX、Office/PDF 工作区会保存在浏览器的 IndexedDB 中，刷新页面后可以继续查看；工具内的“清空”会同时删除对应工作区。
+- 其他文件型工具在刷新或关闭标签页后不会保留检材和分析结果。
 - 主题、语言、最近使用等小型设置保存在 `localStorage`。
-- 设置 → 本地数据可以查看占用量并清除本地数据。
+- 设置 → 本地数据可以查看浏览器存储占用量并清除全部工作区和设置。
 
-不要把浏览器页面当作检材保管位置。需要长期保存的内容请使用工具提供的导出功能。
+浏览器工作区用于继续当前检查，不代替检材保管和正式归档。
 
 ## 本地运行
 
@@ -104,7 +105,7 @@ npm run release:package
 输出：
 
 ```text
-release/ForensicsPP-v0.9.0-static.zip
+release/ForensicsPP-v1.0.0-alpha.1-static.zip
 release/SHA256SUMS.txt
 ```
 
@@ -120,7 +121,7 @@ ZIP 内只有已经构建的静态网站。解压后可放到 GitHub Pages、Ngi
 | `npm run build` | 构建 `dist/` |
 | `npm run verify` | 测试并构建 |
 | `npm run preview` | 预览 `dist/` |
-| `npm run audit:layout` | 检查全部工具的桌面布局和文件加载状态 |
+| `npm run audit:layout` | 检查全部工具的布局、文件加载状态和关键交互 |
 | `npm run release:package` | 生成静态 ZIP 和校验文件 |
 
 ## 目录
@@ -149,6 +150,18 @@ Publish directory: dist
 ```
 
 不要把仓库根目录、`.git` 或 `node_modules` 作为网站目录。
+
+布局审计默认访问 Vite 的 `5173` 端口；如果开发服务器使用了其他端口，请指定 `AUDIT_URL`：
+
+```bash
+AUDIT_URL=http://localhost:5174 npm run audit:layout
+```
+
+布局审计需要本机安装 Google Chrome。脚本默认使用 macOS 的 Chrome 路径；其他系统或自定义安装位置请同时指定 `CHROME_PATH`：
+
+```bash
+CHROME_PATH=/path/to/chrome AUDIT_URL=http://localhost:5173 npm run audit:layout
+```
 
 ## 其他
 

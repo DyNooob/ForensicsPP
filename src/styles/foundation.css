@@ -54,7 +54,7 @@
   --app-shadow-lg: 0 18px 42px rgba(15, 23, 42, 0.16), 0 3px 10px rgba(15, 23, 42, 0.08);
   --sidebar-width: 264px;
   --topbar-height: 78px;
-  --workbench-max: 1420px;
+  --workbench-max: 1320px;
   --workbench-readable: 1260px;
   --workbench-form: 1180px;
   --workbench-dense: 1360px;
@@ -216,8 +216,8 @@ textarea {
 }
 
 .workbench-shell.sidebar-collapsed:not(.shell-narrow) {
-  --workbench-max: 1460px;
-  --workbench-readable: 1360px;
+  --workbench-max: 1320px;
+  --workbench-readable: 1260px;
   --workbench-form: 1180px;
   --workbench-dense: 1420px;
 }

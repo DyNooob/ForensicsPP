@@ -24,6 +24,7 @@ import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, I
 import type { DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -61,9 +62,20 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const [dragActive, setDragActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<DocumentAnalysis>({
+    id: "document-forensics",
+    version: 1,
+    isValid: (value): value is DocumentAnalysis => Boolean(value && typeof value === "object" && typeof (value as DocumentAnalysis).name === "string" && Array.isArray((value as DocumentAnalysis).entries) && Array.isArray((value as DocumentAnalysis).findings)),
+    onRestore: (value) => {
+      setAnalysis(value);
+      setView("summary");
+      setError("");
+    }
+  });
 
   const choose = (next?: File) => {
     if (!next) return;
+    workspace.clear();
     abortRef.current?.abort();
     abortRef.current = null;
     setLoading(false);
@@ -88,7 +100,9 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      setAnalysis(await analyzeInWorker(file, controller.signal));
+      const result = await analyzeInWorker(file, controller.signal);
+      setAnalysis(result);
+      workspace.save(result);
       setView("summary");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -109,6 +123,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clear = () => {
+    workspace.clear();
     cancel();
     setFile(null);
     setAnalysis(null);
@@ -153,7 +168,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     return ({ metadata: "元数据", external: "外部关系", embedded: "嵌入内容", macro: "宏", action: "动作", structure: "结构" } as Record<string, string>)[category] ?? category;
   };
 
-  return <div className="tool-grid document-forensics-workbench">
+  return <div className={`tool-grid document-forensics-workbench ${analysis ? "has-document-forensics" : "empty-document-forensics"}`}>
     <section className="tool-panel wide-panel">
       <ToolPanelHeader title={english ? "Office / PDF source" : "Office / PDF 文档"} actions={<AButton variant="text" disabled={!file && !analysis && !error} onClick={clear}>{t.clear}</AButton>} />
       <input className="hidden-file-input" ref={inputRef} type="file" accept=".pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm,.dotm,.xlam" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; choose(file); }} />

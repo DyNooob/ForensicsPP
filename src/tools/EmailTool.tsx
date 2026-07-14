@@ -30,11 +30,18 @@ import { isMsgFile } from "../features/email/msg";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
 type EmailWorkerResult = { analysis: EmailAnalysis; source: string };
 type EmailWorkerRequest = { format: "eml"; source: string } | { format: "msg"; bytes: ArrayBuffer };
+type EmailWorkspace = {
+  input: string;
+  sourceFormat: "eml" | "msg";
+  sourceBytes: Uint8Array | null;
+  parsed: EmailAnalysis;
+};
 
 function safeEmailFilename(value: string, fallback: string) {
   const cleaned = value
@@ -72,6 +79,19 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const english = t.waiting === "Waiting";
+  const workspace = useToolWorkspace<EmailWorkspace>({
+    id: "email",
+    version: 1,
+    isValid: (value): value is EmailWorkspace => Boolean(value && typeof value === "object" && typeof (value as EmailWorkspace).input === "string" && (value as EmailWorkspace).parsed),
+    onRestore: (value) => {
+      setInput(value.input);
+      setSourceFormat(value.sourceFormat);
+      setSourceBytes(value.sourceBytes);
+      setParsed(value.parsed);
+      setError("");
+    }
+  });
+  const storageState = workspace.state;
 
   const parseInWorker = (request: EmailWorkerRequest, signal: AbortSignal, transfer: Transferable[] = []) => runWorkerTask<EmailWorkerRequest, EmailWorkerResult>({
     createWorker: () => new Worker(new URL("../features/email/email.worker.ts", import.meta.url), { type: "module" }),
@@ -88,6 +108,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const parseSource = async (source = input) => {
     if (!source.trim()) return;
+    workspace.clear();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -97,6 +118,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
       if (controller.signal.aborted) return;
       setParsed(next.analysis);
       setError("");
+      workspace.save({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: next.analysis });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setParsed(null);
@@ -111,6 +133,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    workspace.clear();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -140,6 +163,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         setSourceFormat("msg");
         setParsed(result.analysis);
         setError("");
+        workspace.save({ input: result.source, sourceFormat: "msg", sourceBytes: bytes, parsed: result.analysis });
       } else {
         const source = new TextDecoder().decode(bytes);
         const result = await parseInWorker({ format: "eml", source }, controller.signal);
@@ -148,6 +172,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         setSourceBytes(null);
         setSourceFormat("eml");
         setParsed(result.analysis);
+        workspace.save({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: result.analysis });
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -163,6 +188,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clearEmail = () => {
+    workspace.clear();
     abortRef.current?.abort();
     abortRef.current = null;
     setLoading(false);
@@ -222,7 +248,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   return (
     <div className={`tool-grid email-workbench ${parsed ? "has-email" : "empty-email"}`}>
       <div className="tool-panel wide-panel email-source-panel">
-        <PanelTitle title={english ? "Open email" : "打开邮件"} />
+        <PanelTitle title={parsed ? (english ? "Email" : "邮件") : (english ? "Open email" : "打开邮件")} />
         <input
           className="hidden-file-input"
           ref={inputRef}
@@ -232,7 +258,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
           onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />
-        <div
+        {parsed ? <div className="email-loaded-source"><div><strong>{emailSummaryValue(parsed, "Subject") || (english ? "Parsed email" : "已解析邮件")}</strong><span>{sourceFormat.toUpperCase()} · {formatBytes(parsed.rawSize)} · {parsed.attachments.length} {t.attachments} · {storageState === "saved" ? (english ? "saved locally" : "已保留") : storageState === "saving" ? (english ? "saving" : "正在保留") : storageState === "failed" ? (english ? "not saved" : "未保留") : ""}</span></div><div className="button-row compact-buttons"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Replace" : "更换文件"}</AButton><AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton><AButton variant="text" onClick={clearEmail}>{t.clear}</AButton></div></div> : <><div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"
           tabIndex={0}
@@ -254,8 +280,8 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
             void handleFile(event.dataTransfer.files?.[0]);
           }}
         >
-          <strong>{parsed ? emailSummaryValue(parsed, "Subject") || (english ? "Parsed email" : "已解析邮件") : t.emailDropTitle}</strong>
-          <span>{parsed ? `${formatBytes(parsed.rawSize)} · ${parsed.receivedHops.length} Received · ${parsed.attachments.length} ${t.attachments}` : t.emailDropHint}</span>
+          <strong>{t.emailDropTitle}</strong>
+          <span>{t.emailDropHint}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
@@ -263,8 +289,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>
-        {!parsed && (
-          <textarea
+        <textarea
             className="single-textarea email-source-input"
             aria-label={english ? "Raw EML source" : "原始 EML 内容"}
             value={input}
@@ -272,10 +297,10 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
               setInput(event.currentTarget.value);
               setParsed(null);
               setError("");
+              if (parsed || workspace.state !== "idle") workspace.clear();
             }}
             placeholder={t.textPlaceholder}
-          />
-        )}
+          /></>}
         {loading && <ALinearProgress />}
         {error && <pre className="result-box">{error}</pre>}
       </div>

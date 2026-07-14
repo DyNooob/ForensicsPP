@@ -22,7 +22,7 @@ For interface changes, also run the development server and full layout audit:
 
 ```bash
 npm run dev -- --port 5174
-npm run audit:layout
+AUDIT_URL=http://localhost:5174 npm run audit:layout
 ```
 
 Review the generated report and representative desktop screenshots before release.
@@ -46,11 +46,11 @@ git push origin main
 After the deployed build is verified:
 
 ```bash
-git tag -a v0.9.0 -m "Forensics++ v0.9.0"
-git push origin v0.9.0
+git tag -a v1.0.0-alpha.1 -m "Forensics++ v1.0.0-alpha.1"
+git push origin v1.0.0-alpha.1
 ```
 
-The release workflow verifies the source, builds `dist/`, creates `ForensicsPP-v0.9.0-static.zip`, writes `SHA256SUMS.txt`, and publishes both files with `docs/releases/v0.9.0.md` as the bilingual GitHub Release body.
+The release workflow verifies the source, builds `dist/`, creates `ForensicsPP-v1.0.0-alpha.1-static.zip`, writes `SHA256SUMS.txt`, and publishes both files with `docs/releases/v1.0.0-alpha.1.md` as the bilingual GitHub Release body.
 
 发布工作流会重新验证源码、构建 `dist/`、生成静态 ZIP 与 SHA-256 校验文件，并使用对应的中英文 Release Notes 创建 GitHub Release。`dist/` 和 `release/` 都不提交到 `main`。
 

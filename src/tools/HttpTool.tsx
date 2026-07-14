@@ -222,7 +222,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
           placeholder={english ? "Paste a raw HTTP request or response" : "粘贴原始 HTTP 请求或响应"}
           onChange={(event) => setText(event.currentTarget.value)}
         />
-        <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
+        <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{english ? "Open file" : "打开文件"}</AButton>
           <AButton variant="outlined" disabled={!text} onClick={() => void navigator.clipboard.writeText(text)}>{t.copy}</AButton>

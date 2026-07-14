@@ -21,17 +21,18 @@
 
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
-import { CheckCircleFilled, CodeOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
 import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField } from "./components/ui";
 import { GithubIconButton } from "./components/GithubIconButton";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsModal } from "./components/SettingsModal";
 import { ToolHost } from "./components/ToolHost";
+import { CaseReporter } from "./features/reporter/CaseReporter";
 import { getToolTitle as resolveToolTitle, legalVersion, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
 import type { ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
-import type { Lang, ThemeMode, AppCommand } from "./models";
+import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./models";
 
 function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
   return resolveToolTitle(tool, lang, copy[lang]);
@@ -100,6 +101,22 @@ function themeSoftColor(hex: string, mode: "light" | "dark") {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${mode === "dark" ? "0.15" : "0.08"})`;
 }
 
+function defaultCaseReportMeta(): CaseReportMeta {
+  return {
+    caseName: "",
+    examiner: "",
+    organization: "",
+    evidenceId: "",
+    timezone: typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC",
+    classification: "",
+    remarks: ""
+  };
+}
+
+function compactReportText(value: string, limit = 24000) {
+  const normalized = value.replace(/\n{3,}/g, "\n\n").trim();
+  return normalized.length > limit ? `${normalized.slice(0, limit)}\n\n[内容已截断]` : normalized;
+}
 
 
 
@@ -118,6 +135,9 @@ export function App() {
   const [cacheClearArmed, setCacheClearArmed] = React.useState(false);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState("");
+  const [reporterOpen, setReporterOpen] = React.useState(false);
+  const [caseNotes, setCaseNotes] = useStoredState<CaseNote[]>("report.notes", []);
+  const [caseReportMeta, setCaseReportMeta] = useStoredState<CaseReportMeta>("report.meta", defaultCaseReportMeta());
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false);
@@ -132,8 +152,11 @@ export function App() {
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const t = copy[lang];
   const resolvedThemeColor = React.useMemo(
-    () => normalizeHexColor(themeColor) ?? themePresets[0].hex,
-    [themeColor]
+    () => {
+      const normalized = normalizeHexColor(themeColor) ?? themePresets[0].hex;
+      return !themeDefaultMigrated && normalized === "#245F73" ? themePresets[0].hex : normalized;
+    },
+    [themeColor, themeDefaultMigrated]
   );
   const appliedTheme = themeMode === "auto" ? systemTheme : themeMode === "dark" ? "dark" : "light";
   const displayThemeColor = React.useMemo(
@@ -162,6 +185,52 @@ export function App() {
     writeToolHash(tool, options?.replaceHash);
     if (isNarrowShell) setSidebarCollapsed(true);
   };
+  const addCurrentToolToReport = () => {
+    if (activeTool === "home") {
+      setReporterOpen(true);
+      return;
+    }
+    const toolView = Array.from(document.querySelectorAll<HTMLElement>(".tool-retained-view"))
+      .find((element) => element.dataset.toolId === activeTool);
+    const content = compactReportText(toolView?.innerText || toolView?.textContent || "");
+    const hasFilledControl = Boolean(toolView && Array.from(toolView.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      'input:not([type="file"]), textarea'
+    )).some((control) => control.value.trim()));
+    const hasLoadedFile = Boolean(toolView && Array.from(toolView.querySelectorAll<HTMLInputElement>('input[type="file"]'))
+      .some((control) => Boolean(control.files?.length)));
+    const hasRenderedOutput = Boolean(toolView && Array.from(toolView.querySelectorAll<HTMLElement>(
+      "table tbody tr, pre, code, img, .tool-result, .result-panel, [data-report-output]"
+    )).some((element) => {
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && rect.width > 0 && rect.height > 0 && (element.textContent?.trim() || element.tagName === "IMG");
+    }));
+    if (!content || (!hasFilledControl && !hasLoadedFile && !hasRenderedOutput)) {
+      setReporterOpen(true);
+      return;
+    }
+    const createdAt = new Date().toISOString();
+    const note: CaseNote = {
+      id: `${activeTool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      tool: getToolTitle(active, lang),
+      title: `${getToolTitle(active, lang)} · ${createdAt.slice(0, 10)}`,
+      content,
+      summary: content.replace(/\s+/g, " ").slice(0, 420),
+      markdown: ["```text", content, "```"].join("\n"),
+      description: t[active.desc],
+      route: `#${activeTool}`,
+      sourceUrl: window.location.href,
+      createdAt
+    };
+    setCaseNotes((current) => [note, ...current].slice(0, 40));
+    setReporterOpen(true);
+  };
+  const updateCaseNote = (id: string, patch: Partial<CaseNote>) => {
+    setCaseNotes((current) => current.map((note) => note.id === id ? { ...note, ...patch } : note));
+  };
+  const deleteCaseNote = (id: string) => {
+    setCaseNotes((current) => current.filter((note) => note.id !== id));
+  };
+  const clearCaseNotes = () => setCaseNotes([]);
   const setToolDirty = React.useCallback((tool: ToolId, dirty: boolean) => {
     setDirtyTools((current) => dirty
       ? current.includes(tool) ? current : [...current, tool]
@@ -381,6 +450,15 @@ export function App() {
         run: () => openSettingsPanel()
       },
       {
+        id: "action:report",
+        group: t.commandGroupActions,
+        label: t.openReport,
+        hint: `${caseNotes.length} ${t.reportItems}`,
+        meta: t.commandGroupActions,
+        keywords: "report notes evidence case report 报告 笔记 案件",
+        run: () => setReporterOpen(true)
+      },
+      {
         id: "action:sidebar",
         group: t.commandGroupActions,
         label: t.toggleSidebarCommand,
@@ -405,10 +483,10 @@ export function App() {
         group: t.commandGroupActions,
         label: t.clearWorkspace,
         hint: t.localCache,
-        meta: "localStorage",
-        keywords: "clear reset cache localStorage 清空 缓存",
+        meta: lang === "zh" ? "浏览器存储" : "Browser storage",
+        keywords: "clear reset cache localStorage indexedDB 清空 缓存 本地工作区",
         run: () => {
-          clearForensicsStorage();
+          void clearForensicsStorage();
           setRecentTools([]);
           setFavoriteTools([]);
           setQuery("");
@@ -444,7 +522,7 @@ export function App() {
       }
     ];
     return [...actionCommands, ...toolCommands];
-  }, [activeTool, detailsExpanded, detailsToggleLabel, lang, openSettingsPanel, sidebarCollapsed, t]);
+  }, [activeTool, caseNotes.length, detailsExpanded, detailsToggleLabel, lang, openSettingsPanel, sidebarCollapsed, t]);
 
   const filteredCommands = React.useMemo(() => {
     const value = commandQuery.trim().toLowerCase();
@@ -494,12 +572,12 @@ export function App() {
     setThemeColor(fallback);
   };
 
-  const clearLocalWorkspace = () => {
+  const clearLocalWorkspace = async () => {
     if (!cacheClearArmed) {
       setCacheClearArmed(true);
       return;
     }
-    clearForensicsStorage();
+    await clearForensicsStorage();
     window.location.hash = "#home";
     window.location.reload();
   };
@@ -702,6 +780,17 @@ export function App() {
                     <LinkOutlined aria-hidden="true" />
                   </button>
                 )}
+                {activeTool !== "home" && (
+                  <button
+                    className="top-action-icon report-add-toggle"
+                    type="button"
+                    aria-label={t.addToReport}
+                    title={`${t.addToReport}${caseNotes.length ? ` · ${caseNotes.length}` : ""}`}
+                    onClick={addCurrentToolToReport}
+                  >
+                    <FileAddOutlined aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   className="top-action-icon settings-toggle"
                   type="button"
@@ -781,6 +870,19 @@ export function App() {
       >
         <p>{lang === "zh" ? "SQLite 中的修改只保存在当前标签页。关闭后将无法恢复。" : "SQLite changes exist only in this tab and cannot be recovered after closing."}</p>
       </Modal>
+
+      {reporterOpen && (
+        <CaseReporter
+          notes={caseNotes}
+          meta={caseReportMeta}
+          t={t}
+          onClose={() => setReporterOpen(false)}
+          onMetaChange={setCaseReportMeta}
+          onUpdateNote={updateCaseNote}
+          onDeleteNote={deleteCaseNote}
+          onClear={clearCaseNotes}
+        />
+      )}
 
       <SettingsModal
         open={settingsOpen}

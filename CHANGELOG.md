@@ -4,6 +4,42 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+暂无未发布变更。
+
+## [1.0.0-alpha.1] - 2026-07-14
+
+### Added
+
+- Started the v1.0 SQLite forensic workspace with page mapping, WAL frame provenance and printable fragments from verified free-space regions.
+- Added IndexedDB-backed SQLite session restore, including locally edited working copies within a 160 MiB storage limit.
+- Added a focused SQLite layout-audit scope for loaded database, editing, SQL, persistence and forensic-page checks.
+- Added bidirectional TCP stream reassembly with out-of-order handling, retransmission overlap removal, sequence-gap markers and wraparound support.
+- Added stream-level HTTP parsing and file extraction for messages split across TCP packets.
+- Added IndexedDB restore for parsed packet captures and EML/MSG workspaces.
+- Added versioned IndexedDB restore for image, browser-artifact, EVTX, and Office/PDF workspaces.
+- Added focused packet-capture and email audits that verify loaded and restored states.
+- Added conservative SQLite value and schema markers for sensitive columns, common identifiers, hash-like values, and external-extension actions.
+- Added a local Case Notes / Evidence Report workspace with report metadata, tool-result snapshots, integrity summaries, timeline review and export formats.
+- Added release checks for the open-source dependency inventory and the hash workflow contract.
+- Added a layout-audit check for hidden file inputs so they remain out of the keyboard and screen-reader order.
+
+### Changed
+
+- Kept incomplete WAL tails visible for review while applying only frames through the last complete commit.
+- Moved SQLite page and free-space inspection into a cancellable Worker task.
+- Compact file-selection panels after a file has been opened so results stay closer to the top of the page.
+- Combined HTTP-labelled packets into their underlying TCP conversations instead of splitting one flow by display protocol.
+- Replacing a browser-artifact file now cancels the previous parse before accepting the new selection.
+- Removed payload SHA-256 calculation from PCAP display serialization; hashes are kept for explicit evidence/report outputs only.
+- Hash input changes now remain idle until the user explicitly starts calculation; the default selection stays at SHA-256.
+- Declared both light and dark color schemes so browser-native controls follow the selected theme.
+- Kept the mandatory legal confirmation dialog within stable margins on narrow mobile screens.
+
+### Verification
+
+- 72 automated tests across eleven test files.
+- Responsive layout audit covers 36 routes, 17 populated states and 12 file-loaded states at 375 x 812, 1366 x 900, and 1920 x 1080.
+
 ## [0.9.0] - 2026-07-14
 
 ### Added
@@ -173,7 +209,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.1...HEAD
+[1.0.0-alpha.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.9.0...v1.0.0-alpha.1
 [0.9.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0

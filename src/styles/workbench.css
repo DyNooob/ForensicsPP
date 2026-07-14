@@ -4082,6 +4082,10 @@ details.tool-panel:not([open]) > :not(summary) {
 }
 
 @media (max-width: 560px) {
+  .legal-consent-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px);
+  }
   .legal-consent-modal .ant-modal-content { padding: 20px; }
   .legal-consent-actions { flex-direction: column-reverse; }
   .legal-consent-actions .ant-btn { width: 100%; }

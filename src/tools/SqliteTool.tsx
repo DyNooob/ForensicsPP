@@ -34,6 +34,7 @@ import {
   LeftOutlined,
   RightOutlined,
   SearchOutlined,
+  StopOutlined,
   UndoOutlined
 } from "@ant-design/icons";
 import { message, Modal, Popconfirm, Switch } from "antd";
@@ -79,7 +80,11 @@ import {
 } from "../features/sqlite/analyzer";
 import { previewText } from "../utils/binary";
 import { applySqliteWal, type SqliteWalInfo } from "../features/sqlite/wal";
+import type { SqliteForensicAnalysis } from "../features/sqlite/forensic";
+import { SqliteForensicPanel } from "../features/sqlite/ForensicPanel";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
+import { runWorkerTask } from "../utils/workerTask";
+import { readToolSession, removeToolSession, writeToolSession } from "../utils/toolSessions";
 
 function sqliteColumnPreferredWidth(column: string) {
   const normalized = column.toLowerCase();
@@ -104,6 +109,25 @@ function chooseSqliteDefaultTable(tables: SqliteTableInfo[], preferred = "") {
 }
 
 const SQLITE_UNDO_SNAPSHOT_LIMIT = 32 * 1024 * 1024;
+const SQLITE_SESSION_LIMIT = 160 * 1024 * 1024;
+
+type SqliteStoredSession = {
+  version: 1;
+  fileName: string;
+  fileSize: number;
+  sourceDatabase: ArrayBuffer;
+  wal?: ArrayBuffer;
+  workingDatabase?: ArrayBuffer;
+  hasShm: boolean;
+  dirty: boolean;
+  changeLog: SqliteChangeLog[];
+};
+
+function copySqliteArrayBuffer(bytes: Uint8Array) {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
 
 type SqliteUndoState = {
   bytes: Uint8Array;
@@ -119,10 +143,17 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
   const sqlRef = React.useRef<SqlJsStatic | null>(null);
   const dbRef = React.useRef<Database | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const sourceDatabaseRef = React.useRef<Uint8Array | null>(null);
+  const sourceWalRef = React.useRef<Uint8Array | null>(null);
+  const restoreStartedRef = React.useRef(false);
+  const forensicTaskRef = React.useRef<AbortController | null>(null);
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState(0);
   const [walInfo, setWalInfo] = React.useState<SqliteWalInfo | null>(null);
   const [hasShm, setHasShm] = React.useState(false);
+  const [forensicAnalysis, setForensicAnalysis] = React.useState<SqliteForensicAnalysis | null>(null);
+  const [forensicLoading, setForensicLoading] = React.useState(false);
+  const [sessionStatus, setSessionStatus] = React.useState<"" | "saved" | "too-large" | "error">("");
   const [originalBytes, setOriginalBytes] = React.useState<Uint8Array | null>(null);
   const [tables, setTables] = React.useState<SqliteTableInfo[]>([]);
   const [objects, setObjects] = React.useState<SqliteObjectInfo[]>([]);
@@ -156,7 +187,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const [error, setError] = React.useState("");
   const [isSqliteDropActive, setSqliteDropActive] = React.useState(false);
-  const [sqlitePage, setSqlitePage] = React.useState<"data" | "sql" | "schema" | "changes">("data");
+  const [sqlitePage, setSqlitePage] = React.useState<"data" | "sql" | "schema" | "forensic" | "changes">("data");
   const english = t.waiting === "Waiting";
 
   const activeTable = tables.find((table) => table.name === selectedTable) ?? null;
@@ -261,7 +292,10 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setSelectedCell(null);
   }, [data.columns, data.rowids, data.values, selectedCell]);
 
-  React.useEffect(() => () => dbRef.current?.close(), []);
+  React.useEffect(() => () => {
+    forensicTaskRef.current?.abort();
+    dbRef.current?.close();
+  }, []);
 
   const appendChange = React.useCallback((entry: Omit<SqliteChangeLog, "id" | "at">) => {
     setChangeLog((previous) => [
@@ -359,13 +393,67 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     window.addEventListener("pointerup", finish, { once: true });
   }, [resizeSqliteColumn]);
 
+  const persistSqliteSession = React.useCallback(async (options: {
+    name: string;
+    size: number;
+    shm: boolean;
+    isDirty: boolean;
+    changes: SqliteChangeLog[];
+    working?: Uint8Array;
+  }) => {
+    const source = sourceDatabaseRef.current;
+    const wal = sourceWalRef.current;
+    if (!source) return;
+    const storedBytes = source.byteLength + (wal?.byteLength ?? 0) + (options.working?.byteLength ?? 0);
+    if (storedBytes > SQLITE_SESSION_LIMIT) {
+      setSessionStatus("too-large");
+      return;
+    }
+    try {
+      await writeToolSession<SqliteStoredSession>("sqlite", {
+        version: 1,
+        fileName: options.name,
+        fileSize: options.size,
+        sourceDatabase: copySqliteArrayBuffer(source),
+        wal: wal?.byteLength ? copySqliteArrayBuffer(wal) : undefined,
+        workingDatabase: options.working ? copySqliteArrayBuffer(options.working) : undefined,
+        hasShm: options.shm,
+        dirty: options.isDirty,
+        changeLog: options.changes
+      });
+      setSessionStatus("saved");
+    } catch {
+      setSessionStatus("error");
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!dirty || !changeLog.length || !fileName || !dbRef.current) return;
+    const timer = window.setTimeout(() => {
+      const db = dbRef.current;
+      if (!db) return;
+      const exported = db.export();
+      const working = new Uint8Array(exported.byteLength);
+      working.set(exported);
+      void persistSqliteSession({ name: fileName, size: fileSize, shm: hasShm, isDirty: true, changes: changeLog, working });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [changeLog, dirty, fileName, fileSize, hasShm, persistSqliteSession]);
+
   const clearSqliteWorkspace = React.useCallback(() => {
+    forensicTaskRef.current?.abort();
+    forensicTaskRef.current = null;
     dbRef.current?.close();
     dbRef.current = null;
+    sourceDatabaseRef.current = null;
+    sourceWalRef.current = null;
     setFileName("");
     setFileSize(0);
     setWalInfo(null);
     setHasShm(false);
+    setForensicAnalysis(null);
+    setForensicLoading(false);
+    setSessionStatus("");
     setOriginalBytes(null);
     setTables([]);
     setObjects([]);
@@ -385,6 +473,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setError("");
     setSqliteDropActive(false);
     resetSqliteViewState();
+    void removeToolSession("sqlite");
   }, [resetSqliteViewState, setQueryHistory]);
 
   const confirmDiscardBefore = React.useCallback((action: () => void) => {
@@ -402,56 +491,96 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     });
   }, [dirty, english, modalApi, t.cancelEdit]);
 
-  const handleFiles = async (files: File[]) => {
-    if (!files.length) return;
-    const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
-    if (!databaseFile) { setError(english ? "Select the SQLite database together with its WAL/SHM files." : "请同时选择 SQLite 数据库主文件。"); return; }
-    const baseName = databaseFile.name.replace(/\.(?:db|sqlite|sqlite3)$/i, "");
-    const walFile = files.find((file) => /(?:-wal|\.wal)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-wal|\.wal)$/i.test(file.name));
-    const shmFile = files.find((file) => /(?:-shm|\.shm)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-shm|\.shm)$/i.test(file.name));
-    setSqliteDropActive(false);
+  const openSqliteSource = React.useCallback(async (input: {
+    name: string;
+    size: number;
+    database: Uint8Array;
+    wal: Uint8Array | null;
+    shm: boolean;
+    working?: Uint8Array | null;
+    restoredDirty?: boolean;
+    restoredChanges?: SqliteChangeLog[];
+    persist?: boolean;
+  }) => {
+    forensicTaskRef.current?.abort();
+    const controller = new AbortController();
+    forensicTaskRef.current = controller;
+    setForensicLoading(true);
+    setSessionStatus("");
+    setError("");
     try {
-      const SQL = sqlRef.current ?? await initSqlJs({ locateFile: () => sqlWasmUrl });
+      const databaseForWorker = copySqliteArrayBuffer(input.database);
+      const walForWorker = input.wal?.byteLength ? copySqliteArrayBuffer(input.wal) : undefined;
+      const transfer: Transferable[] = [databaseForWorker];
+      if (walForWorker) transfer.push(walForWorker);
+      const forensicPromise = runWorkerTask<{ database: ArrayBuffer; wal?: ArrayBuffer }, SqliteForensicAnalysis>({
+        createWorker: () => new Worker(new URL("../features/sqlite/sqlite-forensic.worker.ts", import.meta.url), { type: "module" }),
+        request: { database: databaseForWorker, wal: walForWorker },
+        transfer,
+        signal: controller.signal,
+        timeoutMs: 120000
+      });
+      const sqlPromise = sqlRef.current ? Promise.resolve(sqlRef.current) : initSqlJs({ locateFile: () => sqlWasmUrl });
+      const [SQL, analysis] = await Promise.all([sqlPromise, forensicPromise]);
+      if (controller.signal.aborted) return;
       sqlRef.current = SQL;
+
+      let baseline = input.database;
+      if (input.wal?.byteLength && analysis.wal?.info.committedFrames) baseline = applySqliteWal(input.database, input.wal).bytes;
+      const baselineCopy = new Uint8Array(baseline.byteLength);
+      baselineCopy.set(baseline);
+      const databaseBytes = input.working?.byteLength ? input.working : baselineCopy;
       dbRef.current?.close();
-      let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array(await databaseFile.arrayBuffer());
-      let nextWalInfo: SqliteWalInfo | null = null;
-      if (walFile) {
-        const merged = applySqliteWal(bytes, new Uint8Array(await walFile.arrayBuffer()));
-        bytes = merged.bytes;
-        nextWalInfo = merged.info;
-      }
-      const sourceBytes = new Uint8Array(bytes.byteLength);
-      sourceBytes.set(bytes);
-      const db = new SQL.Database(bytes);
+      const db = new SQL.Database(databaseBytes);
       dbRef.current = db;
       const nextTables = getSqliteTables(db);
       const nextObjects = getSqliteObjects(db);
       const nextPragmas = getSqlitePragmaRows(db);
-      setFileName(databaseFile.name);
-      setFileSize(files.reduce((total, file) => total + file.size, 0));
-      setWalInfo(nextWalInfo);
-      setHasShm(Boolean(shmFile));
-      setOriginalBytes(sourceBytes);
+
+      const sourceCopy = new Uint8Array(input.database.byteLength);
+      sourceCopy.set(input.database);
+      sourceDatabaseRef.current = sourceCopy;
+      if (input.wal?.byteLength) {
+        const walCopy = new Uint8Array(input.wal.byteLength);
+        walCopy.set(input.wal);
+        sourceWalRef.current = walCopy;
+      } else {
+        sourceWalRef.current = null;
+      }
+      setFileName(input.name);
+      setFileSize(input.size);
+      setWalInfo(analysis.wal?.info ?? null);
+      setHasShm(input.shm);
+      setForensicAnalysis(analysis);
+      setOriginalBytes(baselineCopy);
       setTables(nextTables);
       setObjects(nextObjects);
       setPragmaRows(nextPragmas);
       setSelectedTable(chooseSqliteDefaultTable(nextTables));
       resetSqliteViewState();
-      setDirty(false);
-      setChangeLog([]);
+      setDirty(Boolean(input.restoredDirty));
+      setChangeLog(input.restoredChanges ?? []);
       setQueryHistory([]);
       setQueryResult(sqliteEmptyDataSet());
-    setError("");
-    setEditingEnabled(false);
+      setEditingEnabled(false);
       setSqlitePage("data");
+      if (input.persist !== false) {
+        void persistSqliteSession({ name: input.name, size: input.size, shm: input.shm, isDirty: false, changes: [] });
+      } else {
+        setSessionStatus("saved");
+      }
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      dbRef.current?.close();
       dbRef.current = null;
+      sourceDatabaseRef.current = null;
+      sourceWalRef.current = null;
       setError(caught instanceof Error ? caught.message : String(caught));
       setFileName("");
       setFileSize(0);
       setWalInfo(null);
       setHasShm(false);
+      setForensicAnalysis(null);
       setTables([]);
       setObjects([]);
       setPragmaRows([]);
@@ -462,14 +591,57 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
       setQueryHistory([]);
       setQueryResult(sqliteEmptyDataSet());
       setDirty(false);
+      setSessionStatus("");
       resetSqliteViewState();
+    } finally {
+      if (forensicTaskRef.current === controller) {
+        forensicTaskRef.current = null;
+        setForensicLoading(false);
+      }
     }
+  }, [persistSqliteSession, resetSqliteViewState]);
+
+  const handleFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
+    if (!databaseFile) { setError(english ? "Select the SQLite database together with its WAL/SHM files." : "请同时选择 SQLite 数据库主文件。"); return; }
+    const baseName = databaseFile.name.replace(/\.(?:db|sqlite|sqlite3)$/i, "");
+    const walFile = files.find((file) => /(?:-wal|\.wal)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-wal|\.wal)$/i.test(file.name));
+    const shmFile = files.find((file) => /(?:-shm|\.shm)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-shm|\.shm)$/i.test(file.name));
+    setSqliteDropActive(false);
+    await openSqliteSource({
+      name: databaseFile.name,
+      size: files.reduce((total, file) => total + file.size, 0),
+      database: new Uint8Array(await databaseFile.arrayBuffer()),
+      wal: walFile ? new Uint8Array(await walFile.arrayBuffer()) : null,
+      shm: Boolean(shmFile)
+    });
   };
 
   const requestFiles = (files: File[]) => {
     if (inputRef.current) inputRef.current.value = "";
     confirmDiscardBefore(() => void handleFiles(files));
   };
+
+  React.useEffect(() => {
+    if (restoreStartedRef.current) return;
+    restoreStartedRef.current = true;
+    void (async () => {
+      const session = await readToolSession<SqliteStoredSession>("sqlite");
+      if (!session || session.version !== 1 || dbRef.current) return;
+      await openSqliteSource({
+        name: session.fileName,
+        size: session.fileSize,
+        database: new Uint8Array(session.sourceDatabase),
+        wal: session.wal ? new Uint8Array(session.wal) : null,
+        shm: session.hasShm,
+        working: session.workingDatabase ? new Uint8Array(session.workingDatabase) : null,
+        restoredDirty: session.dirty,
+        restoredChanges: session.changeLog,
+        persist: false
+      });
+    })();
+  }, [openSqliteSource]);
 
   const discardSqliteChanges = async () => {
     if (!originalBytes) return;
@@ -495,6 +667,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
       setChangeLog([]);
       setQueryResult(sqliteEmptyDataSet("Reverted to original database"));
       setError("");
+      void persistSqliteSession({ name: fileName, size: fileSize, shm: hasShm, isDirty: false, changes: [] });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -692,6 +865,7 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     setOriginalBytes(savedBytes);
     setDirty(false);
     setUndoState(null);
+    void persistSqliteSession({ name: fileName, size: fileSize, shm: hasShm, isDirty: false, changes: changeLog, working: savedBytes });
   };
 
   const exportChangeLog = () => {
@@ -807,6 +981,13 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
     if (type === "trigger") return "触发器";
     return type;
   }, [english]);
+  const sqliteSessionLabel = sessionStatus === "saved"
+    ? (english ? "saved in browser" : "已保存到浏览器")
+    : sessionStatus === "too-large"
+      ? (english ? "too large for automatic restore" : "文件过大，不自动保存")
+      : sessionStatus === "error"
+        ? (english ? "automatic restore unavailable" : "无法自动保存")
+        : "";
   const sqlitePageStatus = data.values.length
     ? `${data.values.length}${data.totalRows == null ? "" : `/${data.totalRows}`} ${sqliteLabels.rows}`
     : "--";
@@ -823,10 +1004,11 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
           onDragOver={(event) => { event.preventDefault(); setSqliteDropActive(true); }} onDragLeave={() => setSqliteDropActive(false)}
           onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); requestFiles(Array.from(event.dataTransfer.files ?? [])); }}>
           <strong>{fileName || t.dropFileTitle}</strong>
-          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${english ? "checksum verified" : "校验通过"}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${english ? "SHM detected (not used for recovery)" : "已检测 SHM（恢复不使用）"}` : ""}` : (english ? "Select the database and optional -wal/-shm files together" : "可同时选择数据库及对应的 -wal/-shm 文件")}</span>
+          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${english ? "checksum verified" : "校验通过"}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${english ? "SHM detected" : "已检测 SHM"}` : ""}${sqliteSessionLabel ? ` · ${sqliteSessionLabel}` : ""}` : (forensicLoading ? (english ? "Opening database and checking pages" : "正在打开数据库并检查页面") : (english ? "Select the database and optional -wal/-shm files together" : "可同时选择数据库及对应的 -wal/-shm 文件"))}</span>
         </div>
         <div className="action-row">
-          <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
+          <AButton variant="filled" loading={forensicLoading} disabled={forensicLoading} onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
+          {forensicLoading && <AButton variant="outlined" icon={<StopOutlined aria-hidden="true" />} onClick={() => forensicTaskRef.current?.abort()}>{english ? "Cancel" : "取消"}</AButton>}
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
           <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={() => confirmDiscardBefore(clearSqliteWorkspace)}>{t.clear}</AButton>
         </div>
@@ -845,10 +1027,11 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
           <ASegmentedGroup className="sqlite-page-tabs" value={sqlitePage} selects="single" aria-label={english ? "SQLite workspace pages" : "SQLite 页面"}>
             <ASegmentedButton value="data" onClick={() => setSqlitePage("data")}>{english ? "Browse" : "浏览"}</ASegmentedButton>
             <ASegmentedButton value="schema" onClick={() => setSqlitePage("schema")}>{english ? "Structure" : "结构"}</ASegmentedButton>
+            <ASegmentedButton value="forensic" onClick={() => setSqlitePage("forensic")}>{english ? "Forensics" : "取证"}</ASegmentedButton>
             <ASegmentedButton value="sql" onClick={() => setSqlitePage("sql")}>SQL</ASegmentedButton>
             <ASegmentedButton value="changes" onClick={() => setSqlitePage("changes")}>{english ? "Changes" : "修改"}{dirty ? " *" : ""}</ASegmentedButton>
           </ASegmentedGroup>
-          <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit mode" : "编辑模式"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>
+          {(sqlitePage === "data" || sqlitePage === "sql") && <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit mode" : "编辑模式"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>}
         </div>
 
         {sqlitePage === "data" && <div className="sqlite-data-workspace">
@@ -941,6 +1124,8 @@ export function SqliteTool({ t, onDirtyChange }: { t: (typeof copy)["zh"]; onDir
           <div className="table-scroll sqlite-object-scroll"><table className="data-table"><thead><tr><th>{sqliteLabels.type}</th><th>{sqliteLabels.name}</th><th>SQL</th></tr></thead><tbody>{visibleObjects.map((object) => <tr key={`${object.type}-${object.name}`}><td>{sqliteObjectType(object.type)}</td><td>{object.name}</td><td><code>{object.sql || "--"}</code></td></tr>)}</tbody></table></div>
           <PanelTitle title={t.sqlitePragmas} /><InfoTable rows={pragmaRows} />
         </div>}
+
+        {sqlitePage === "forensic" && forensicAnalysis && <SqliteForensicPanel analysis={forensicAnalysis} english={english} />}
 
         {sqlitePage === "changes" && <div className="tool-panel wide-panel sqlite-simple-changes-panel">
           <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="outlined" icon={<UndoOutlined aria-hidden="true" />} disabled={!undoState} onClick={undoLastChange}>{english ? "Undo last" : "撤销上一步"}</AButton><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={english ? "Discard all changes since the last export?" : "放弃上次导出后的全部修改？"} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>

@@ -25,6 +25,7 @@ import { evtxEventsToCsv, type EvtxEvent, type EvtxFileAnalysis } from "../featu
 import { parseSigmaRules, runSigmaRules, type SigmaMatch, type SigmaRule } from "../features/evtx/sigma";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
@@ -64,6 +65,16 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   const sigmaAbortRef = React.useRef<AbortController | null>(null);
   const runRef = React.useRef(0);
   const sigmaFileRef = React.useRef(0);
+  const workspace = useToolWorkspace<ParsedFile[]>({
+    id: "evtx",
+    version: 1,
+    isValid: (value): value is ParsedFile[] => Array.isArray(value) && value.every((file) => Boolean(file && typeof file === "object" && typeof (file as ParsedFile).source === "string")),
+    onRestore: (value) => {
+      setParsedFiles(value);
+      setView(value.some(isAnalysis) ? "overview" : "files");
+      setError("");
+    }
+  });
 
   const analyses = parsedFiles.filter(isAnalysis);
   const events = React.useMemo(() => analyses.flatMap((file) => file.events).sort((left, right) => left.timestamp.localeCompare(right.timestamp)), [parsedFiles]);
@@ -91,6 +102,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   React.useEffect(() => () => { parseAbortRef.current?.abort(); sigmaAbortRef.current?.abort(); }, []);
 
   const queueFiles = (files?: FileList | null) => {
+    workspace.clear();
     const next = Array.from(files ?? []).filter((file) => file.size > 0 && /\.evtx$/i.test(file.name));
     if (!next.length) {
       cancel();
@@ -160,6 +172,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
       setLoading(false);
       setProgress("");
       setView(results.some(isAnalysis) ? "overview" : "files");
+      if (results.length) workspace.save(results);
     }
     if (parseAbortRef.current === controller) parseAbortRef.current = null;
   };
@@ -176,6 +189,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const clear = () => {
+    workspace.clear();
     cancel();
     setSelectedFiles([]);
     setParsedFiles([]);
@@ -254,7 +268,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   return (
-    <div className="tool-grid evtx-workbench">
+    <div className={`tool-grid evtx-workbench ${parsedFiles.length ? "has-evtx" : "empty-evtx"}`}>
       <section className="tool-panel wide-panel">
         <ToolPanelHeader title={english ? "Windows event logs" : "Windows 事件日志"} actions={<AButton variant="text" disabled={!selectedFiles.length && !parsedFiles.length} onClick={clear}>{t.clear}</AButton>} />
         <input className="hidden-file-input" ref={inputRef} type="file" accept=".evtx" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />

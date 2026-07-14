@@ -21,6 +21,7 @@
 
 import { fileSignatureForBytes, hexPreview, previewText } from "../../utils/binary";
 import { formatBytes, limitReportText } from "../../utils/files";
+import { detectHashType } from "../../utils/hash";
 import type {
   SqliteCellSelection,
   SqliteChangeLog,
@@ -146,9 +147,26 @@ export function sqliteHexDump(value: SqliteValue, maxBytes = 4096) {
 }
 
 export function sqliteValueRisk(column: string, value: SqliteValue): string[] {
-  void column;
-  void value;
-  return [];
+  if (value === null || value instanceof Uint8Array) return [];
+  const text = String(value).trim();
+  if (!text) return [];
+
+  const findings: string[] = [];
+  const columnName = column.toLowerCase();
+  if (/(?:password|passwd|pwd|token|secret|credential|api[_-]?key|access[_-]?key|refresh[_-]?token|cookie|session|authorization)/i.test(columnName)) {
+    findings.push("sensitive column name");
+  }
+  if (/https?:\/\/[^\s"'<>]+/i.test(text)) findings.push("URL value");
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) findings.push("email value");
+  const ipv4 = text.match(/(?:^|\s)((?:\d{1,3}\.){3}\d{1,3})(?=\s|$|[:/])/i)?.[1];
+  if (ipv4 && ipv4.split(".").every((part) => Number(part) <= 255)) findings.push("IPv4 value");
+  if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(text)) findings.push("JWT-like value");
+  const hashType = detectHashType(text);
+  if (hashType) findings.push(`hash-like ${hashType}`);
+  if (/-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/i.test(text)) {
+    findings.push("known secret pattern");
+  }
+  return findings;
 }
 
 export function sqliteColumnProfiles(data: SqliteDataSet, columns: SqliteColumnInfo[]): SqliteColumnProfile[] {
@@ -248,10 +266,11 @@ export function getSqliteTables(db: { exec: (sql: string) => Array<{ columns: st
 }
 
 export function sqliteObjectRisk(type: string, name: string, sql: string) {
-  void type;
-  void name;
-  void sql;
-  return [];
+  const text = `${type} ${name} ${sql}`;
+  const findings: string[] = [];
+  if (/\bload_extension\s*\(/i.test(text)) findings.push("loads SQLite extension");
+  if (/\battach\s+(?:database\s+)?/i.test(sql)) findings.push("attaches external database");
+  return findings;
 }
 
 export function getSqliteObjects(db: { exec: (sql: string) => Array<{ columns: string[]; values: SqliteValue[][] }> }): SqliteObjectInfo[] {
@@ -539,7 +558,6 @@ export function sqliteSelectedRowData(data: SqliteDataSet, selectedCell: SqliteC
 export function sqliteReportText(info: {
   fileName: string;
   fileSize: number;
-  fileSha256: string;
   tables: SqliteTableInfo[];
   objects: SqliteObjectInfo[];
   pragmaRows: Array<[string, string]>;
@@ -558,7 +576,6 @@ export function sqliteReportText(info: {
     "## Database",
     `- Name: ${info.fileName || "--"}`,
     `- Size: ${info.fileSize ? formatBytes(info.fileSize) : "--"}`,
-    `- Source SHA256: ${info.fileSha256 || "--"}`,
     `- Tables/views: ${info.tables.length}`,
     `- Objects: ${info.objects.length}`,
     "",
@@ -648,7 +665,6 @@ export function sqliteTriageCards(info: {
 export function sqliteBriefing(info: {
   fileName: string;
   fileSize: number;
-  fileSha256: string;
   tables: SqliteTableInfo[];
   objects: SqliteObjectInfo[];
   pragmaRows: Array<[string, string]>;
@@ -672,7 +688,6 @@ export function sqliteBriefing(info: {
     "## Database",
     `- Name: ${info.fileName || "--"}`,
     `- Size: ${info.fileSize ? formatBytes(info.fileSize) : "--"}`,
-    `- Source SHA256: ${info.fileSha256 || "--"}`,
     `- Tables/views: ${info.tables.length}`,
     `- Objects: ${info.objects.length}`,
     `- Dirty/export pending: ${info.dirty ? "yes" : "no"}`,

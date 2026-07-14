@@ -24,11 +24,13 @@ import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable,
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 import type { ImageAnalysisResult, ImageRepairWorkerResult, ImageWorkerRequest } from "../features/image/image.worker";
 
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
+type ImageWorkspace = { name: string; type: string; lastModified: number; bytes: Uint8Array };
 const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024;
 
 function formatExifValue(value: unknown) {
@@ -86,10 +88,18 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   const [error, setError] = React.useState("");
   const [isImageDropActive, setIsImageDropActive] = React.useState(false);
   const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "repair">("overview");
+  const [restoredSource, setRestoredSource] = React.useState<ImageWorkspace | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
   const abortRef = React.useRef<AbortController | null>(null);
+  const restoreStartedRef = React.useRef(false);
   const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
+  const workspace = useToolWorkspace<ImageWorkspace>({
+    id: "image",
+    version: 1,
+    isValid: (value): value is ImageWorkspace => Boolean(value && typeof value === "object" && typeof (value as ImageWorkspace).name === "string" && (value as ImageWorkspace).bytes instanceof Uint8Array),
+    onRestore: setRestoredSource
+  });
 
   React.useEffect(() => () => {
     analysisIdRef.current += 1;
@@ -105,8 +115,9 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     timeoutMs: 120_000
   });
 
-  const handleImage = async (file: File | undefined) => {
+  const handleImage = async (file: File | undefined, persist = true) => {
     if (!file) return;
+    if (persist) workspace.clear();
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -191,6 +202,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         autoRevealPreviews: [],
         channelDataUrls: emptyImageChannels(placeholderDataUrl)
       });
+      if (persist) workspace.save({ name: file.name, type: file.type, lastModified: file.lastModified, bytes });
       setImagePage("overview");
     } catch (caught) {
       if (analysisId !== analysisIdRef.current) return;
@@ -204,6 +216,14 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       if (analysisId === analysisIdRef.current) setLoading(false);
     }
   };
+  React.useEffect(() => {
+    if (!restoredSource || restoreStartedRef.current) return;
+    restoreStartedRef.current = true;
+    setRestoredSource(null);
+    const bytes = restoredSource.bytes.slice();
+    const file = new File([bytes.buffer], restoredSource.name, { type: restoredSource.type, lastModified: restoredSource.lastModified });
+    void handleImage(file, false);
+  }, [restoredSource]);
   const runHiddenAnalysis = async () => {
     const source = sourceRef.current;
     if (!source || !imageInfo || advancedTask) return;
@@ -310,6 +330,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     void handleImage(event.dataTransfer.files?.[0]);
   };
   const clearImage = () => {
+    workspace.clear();
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;

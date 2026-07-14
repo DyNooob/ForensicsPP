@@ -24,7 +24,9 @@ import * as CFB from "cfb";
 import { parseMsg } from "../src/features/email/msg";
 import { parsePlist } from "../src/features/plist/analyzer";
 import { parseRegistryHive } from "../src/features/registry/analyzer";
-import { applySqliteWal } from "../src/features/sqlite/wal";
+import { inspectSqliteDatabase } from "../src/features/sqlite/forensic";
+import { sqliteObjectRisk, sqliteSensitiveHits, sqliteValueRisk } from "../src/features/sqlite/analyzer";
+import { applySqliteWal, inspectSqliteWal } from "../src/features/sqlite/wal";
 
 function writeBe32(bytes: Uint8Array, offset: number, value: number) {
   new DataView(bytes.buffer).setUint32(offset, value, false);
@@ -72,6 +74,28 @@ function sqliteWal(frameCommits: number[]) {
     writeBe32(wal, offset + 20, state[1]);
   });
   return wal;
+}
+
+function sqliteForensicDatabase() {
+  const pageSize = 512;
+  const bytes = new Uint8Array(pageSize * 3);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode("SQLite format 3\0"));
+  view.setUint16(16, pageSize, false);
+  writeBe32(bytes, 28, 3);
+  writeBe32(bytes, 32, 3);
+  writeBe32(bytes, 36, 1);
+  writeBe32(bytes, 56, 1);
+  bytes[100] = 0x0d;
+  view.setUint16(105, pageSize, false);
+  bytes[pageSize] = 0x0d;
+  view.setUint16(pageSize + 1, 300, false);
+  view.setUint16(pageSize + 5, 280, false);
+  view.setUint16(pageSize + 300, 0, false);
+  view.setUint16(pageSize + 302, 32, false);
+  bytes.set(new TextEncoder().encode("deleted-note-fragment"), pageSize + 304);
+  bytes.set(new TextEncoder().encode("freelist-text-fragment"), pageSize * 2 + 16);
+  return bytes;
 }
 
 function registryFixture(sequence2 = 1) {
@@ -144,6 +168,64 @@ describe("SQLite WAL", () => {
 
   it("rejects a commit size that cannot be produced by its frames", () => {
     expect(() => applySqliteWal(sqliteDatabase(), sqliteWal([1000]))).toThrow(/完整提交/);
+  });
+
+  it("lists committed and uncommitted frames without merging the tail", () => {
+    const inspection = inspectSqliteWal(sqliteDatabase(), sqliteWal([1, 0]));
+    expect(inspection.info.committedFrames).toBe(1);
+    expect(inspection.frames).toMatchObject([
+      { index: 1, pageNumber: 1, committed: true, latestForPage: true },
+      { index: 2, pageNumber: 1, committed: false, latestForPage: false }
+    ]);
+  });
+});
+
+describe("SQLite forensic pages", () => {
+  it("maps b-tree and freelist pages and keeps text hits tied to offsets", () => {
+    const result = inspectSqliteDatabase(sqliteForensicDatabase());
+    expect(result.header.pageSize).toBe(512);
+    expect(result.pages.map((page) => page.kind)).toEqual(["database-header", "table-leaf", "freelist-trunk"]);
+    expect(result.pages[1].firstFreeblock).toBe(300);
+    expect(result.fragments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pageNumber: 2, area: "freeblock", text: "deleted-note-fragment" }),
+      expect.objectContaining({ pageNumber: 3, area: "freelist", text: "freelist-text-fragment" })
+    ]));
+  });
+
+  it("keeps the main database available when an attached WAL is invalid", () => {
+    const result = inspectSqliteDatabase(sqliteForensicDatabase(), new Uint8Array(64));
+    expect(result.pages).toHaveLength(3);
+    expect(result.wal).toBeNull();
+    expect(result.walError).toMatch(/WAL/);
+  });
+});
+
+describe("SQLite triage markers", () => {
+  it("marks only useful high-signal values", () => {
+    expect(sqliteValueRisk("password", "secret-value")).toEqual(["sensitive column name"]);
+    expect(sqliteValueRisk("url", "https://example.test/path")).toContain("URL value");
+    expect(sqliteValueRisk("contact", "analyst@example.test")).toContain("email value");
+    expect(sqliteValueRisk("remote_ip", "192.168.1.10")).toContain("IPv4 value");
+    expect(sqliteValueRisk("token", "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.signature")).toContain("JWT-like value");
+    expect(sqliteValueRisk("digest", "900150983cd24fb0d6963f7d28e17f72")).toContain("hash-like MD5-like");
+    expect(sqliteValueRisk("notes", new Uint8Array([0x41, 0x42]))).toEqual([]);
+  });
+
+  it("reports sensitive rows and structural SQLite actions", () => {
+    const data = {
+      columns: ["id", "email", "password"],
+      values: [[1, "analyst@example.test", "secret-value"]] as Array<[number, string, string]>,
+      rowids: [7],
+      editable: true,
+      message: "1/1 rows",
+      totalRows: 1
+    };
+    expect(sqliteSensitiveHits(data)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "Email", column: "email", rowid: 7 }),
+      expect.objectContaining({ type: "Sensitive Column", column: "password", rowid: 7 })
+    ]));
+    expect(sqliteObjectRisk("trigger", "cleanup", "CREATE TRIGGER cleanup AS ATTACH DATABASE 'other.db' AS other;")).toEqual(["attaches external database"]);
+    expect(sqliteObjectRisk("view", "load", "SELECT load_extension('x')")).toEqual(["loads SQLite extension"]);
   });
 });
 

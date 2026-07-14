@@ -21,6 +21,7 @@
 
 import React from "react";
 import { storagePrefix } from "../config/app";
+import { clearToolSessions } from "./toolSessions";
 
 export function useStoredState<T>(key: string, initialValue: T) {
   const storageKey = `${storagePrefix}${key}`;
@@ -45,10 +46,11 @@ export function useStoredState<T>(key: string, initialValue: T) {
   return [value, setValue] as const;
 }
 
-export function clearForensicsStorage() {
+export async function clearForensicsStorage() {
   Object.keys(window.localStorage)
     .filter((key) => key.startsWith(storagePrefix))
     .forEach((key) => window.localStorage.removeItem(key));
+  await clearToolSessions();
 }
 
 const legacyEvidenceKeys = [

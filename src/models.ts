@@ -211,6 +211,7 @@ export type PcapInfo = {
   summary: PcapSummary | null;
   packets: PcapPacket[];
   conversations: PcapConversation[];
+  tcpStreams: PcapTcpStream[];
   endpoints: PcapEndpointStat[];
   portStats: PcapPortStat[];
   httpItems: PcapHttpItem[];
@@ -373,6 +374,39 @@ export type PcapPacket = {
   payloadPreview: string;
   hexPreview: string;
   payloadBytes: Uint8Array;
+  transportProtocol?: "TCP" | "UDP";
+  tcpSequence?: number;
+  tcpAcknowledgment?: number;
+  tcpFlags?: string;
+  tcpPayloadSequence?: number;
+  tcpPayloadLength?: number;
+  tcpStreamKey?: string;
+};
+
+export type PcapTcpStreamSegment = {
+  packetNo: number;
+  timestamp: string;
+  direction: "a-to-b" | "b-to-a";
+  sequence: number;
+  streamOffset: number;
+  gapBefore: number;
+  bytes: Uint8Array;
+};
+
+export type PcapTcpStream = {
+  key: string;
+  endpointA: string;
+  endpointB: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  packetCount: number;
+  payloadPacketCount: number;
+  bytesAtoB: number;
+  bytesBtoA: number;
+  retransmittedBytes: number;
+  gapBytesAtoB: number;
+  gapBytesBtoA: number;
+  segments: PcapTcpStreamSegment[];
 };
 
 export type PcapConversation = {

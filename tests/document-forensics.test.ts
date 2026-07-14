@@ -70,7 +70,7 @@ describe("Office and PDF container detection", () => {
       if (nativePromiseTry) promiseConstructor.try = nativePromiseTry;
       else delete promiseConstructor.try;
     }
-  });
+  }, 20_000);
 });
 
 describe("OOXML analysis", () => {

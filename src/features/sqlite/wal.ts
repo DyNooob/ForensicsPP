@@ -30,6 +30,23 @@ export type SqliteWalInfo = {
   checksumVerified: true;
 };
 
+export type SqliteWalFrameInfo = {
+  index: number;
+  offset: number;
+  pageNumber: number;
+  commitPages: number;
+  valid: boolean;
+  committed: boolean;
+  latestForPage: boolean;
+  reason: string;
+};
+
+export type SqliteWalInspection = {
+  info: SqliteWalInfo;
+  frames: SqliteWalFrameInfo[];
+  trailingBytes: number;
+};
+
 function readU32(bytes: Uint8Array, offset: number) {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, false);
 }
@@ -54,7 +71,7 @@ function updateChecksum(bytes: Uint8Array, offset: number, length: number, littl
   return [s0, s1];
 }
 
-export function applySqliteWal(database: Uint8Array, wal: Uint8Array): { bytes: Uint8Array; info: SqliteWalInfo } {
+export function inspectSqliteWal(database: Uint8Array, wal: Uint8Array): SqliteWalInspection {
   if (wal.byteLength < 32) throw new Error("WAL 文件头不完整。");
   const magic = readU32(wal, 0);
   if (magic !== 0x377f0682 && magic !== 0x377f0683) throw new Error("不是有效的 SQLite WAL 文件。");
@@ -77,49 +94,54 @@ export function applySqliteWal(database: Uint8Array, wal: Uint8Array): { bytes: 
   let validFrames = 0;
   let invalidFrame: number | null = null;
   const sourcePages = Math.ceil(database.byteLength / pageSize);
+  const frameDetails: SqliteWalFrameInfo[] = [];
 
   for (let index = 0; index < frames; index += 1) {
     const offset = 32 + index * frameSize;
     const pageNumber = readU32(wal, offset);
+    const commitPages = readU32(wal, offset + 4);
+    let reason = "";
     if (!pageNumber || readU32(wal, offset + 8) !== salt1 || readU32(wal, offset + 12) !== salt2) {
       invalidFrame = index + 1;
+      reason = !pageNumber ? "invalid page number" : "salt mismatch";
+      frameDetails.push({ index: index + 1, offset, pageNumber, commitPages, valid: false, committed: false, latestForPage: false, reason });
       break;
     }
     let nextChecksum = updateChecksum(wal, offset, 8, checksumLittleEndian, checksum);
     nextChecksum = updateChecksum(wal, offset + 24, pageSize, checksumLittleEndian, nextChecksum);
     if (nextChecksum[0] !== readU32(wal, offset + 16) || nextChecksum[1] !== readU32(wal, offset + 20)) {
       invalidFrame = index + 1;
+      frameDetails.push({ index: index + 1, offset, pageNumber, commitPages, valid: false, committed: false, latestForPage: false, reason: "checksum mismatch" });
       break;
     }
     checksum = nextChecksum;
     validFrames = index + 1;
-    const commitPages = readU32(wal, offset + 4);
+    frameDetails.push({ index: index + 1, offset, pageNumber, commitPages, valid: true, committed: false, latestForPage: false, reason: "" });
     if (commitPages) {
       // Each newly allocated database page must be represented by a frame.
       // Enforcing that bound prevents crafted commit markers from forcing huge allocations.
       if (commitPages > sourcePages + validFrames) {
         invalidFrame = index + 1;
         validFrames = index;
+        frameDetails[index] = { ...frameDetails[index], valid: false, reason: "commit size exceeds available pages" };
         break;
       }
       lastCommit = index;
       databasePages = commitPages;
     }
   }
-  if (lastCommit < 0) throw new Error("WAL 中没有完整提交，数据库未合并。");
 
-  const outputSize = databasePages * pageSize;
-  const output = new Uint8Array(outputSize);
-  output.set(database.subarray(0, Math.min(database.byteLength, outputSize)));
-  for (let index = 0; index <= lastCommit; index += 1) {
-    const offset = 32 + index * frameSize;
-    const pageNumber = readU32(wal, offset);
-    if (!pageNumber || pageNumber > databasePages) continue;
-    output.set(wal.subarray(offset + 24, offset + frameSize), (pageNumber - 1) * pageSize);
-  }
+  const latestFrameByPage = new Map<number, number>();
+  frameDetails.forEach((frame, index) => {
+    if (!frame.valid || index > lastCommit) return;
+    latestFrameByPage.set(frame.pageNumber, frame.index);
+  });
+  frameDetails.forEach((frame, index) => {
+    frame.committed = frame.valid && index <= lastCommit;
+    frame.latestForPage = frame.committed && latestFrameByPage.get(frame.pageNumber) === frame.index;
+  });
 
   return {
-    bytes: output,
     info: {
       pageSize,
       frames,
@@ -129,6 +151,30 @@ export function applySqliteWal(database: Uint8Array, wal: Uint8Array): { bytes: 
       ignoredFrames: Math.max(0, frames - lastCommit - 1),
       invalidFrame,
       checksumVerified: true
-    }
+    },
+    frames: frameDetails,
+    trailingBytes: Math.max(0, wal.byteLength - 32 - frames * frameSize)
+  };
+}
+
+export function applySqliteWal(database: Uint8Array, wal: Uint8Array): { bytes: Uint8Array; info: SqliteWalInfo } {
+  const inspection = inspectSqliteWal(database, wal);
+  const { info } = inspection;
+  if (!info.committedFrames) throw new Error("WAL 中没有完整提交，数据库未合并。");
+
+  const outputSize = info.databasePages * info.pageSize;
+  const output = new Uint8Array(outputSize);
+  output.set(database.subarray(0, Math.min(database.byteLength, outputSize)));
+  const frameSize = 24 + info.pageSize;
+  for (let index = 0; index < info.committedFrames; index += 1) {
+    const offset = 32 + index * frameSize;
+    const pageNumber = readU32(wal, offset);
+    if (!pageNumber || pageNumber > info.databasePages) continue;
+    output.set(wal.subarray(offset + 24, offset + frameSize), (pageNumber - 1) * info.pageSize);
+  }
+
+  return {
+    bytes: output,
+    info
   };
 }

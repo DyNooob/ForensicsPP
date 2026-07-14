@@ -19,7 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-const CACHE_VERSION = "forensicspp-v0.9.0-2026-07-14";
+const CACHE_VERSION = "forensicspp-v1.0.0-alpha.1-2026-07-14";
 const CORE_ASSETS = [
   "./",
   "./index.html",

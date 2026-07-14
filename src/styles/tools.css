@@ -947,13 +947,17 @@ pre.result-box {
 }
 
 .settings-sidebar-version {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
   border-top: 1px solid var(--app-line);
   color: var(--app-muted);
   padding: 12px 10px 2px;
   font-size: 12px;
+}
+
+.settings-sidebar-version > :last-child {
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .settings-main {
@@ -2191,6 +2195,57 @@ pre.result-box {
   min-width: 0;
 }
 
+/* Once a file has been opened, keep the workspace above the fold. */
+.image-workbench.has-image .image-source-panel .desktop-drop-zone,
+.archive-workbench.has-archive .archive-source-panel .desktop-drop-zone,
+.binary-workbench.has-binary .binary-source-panel .desktop-drop-zone,
+.fileid-workbench.has-fileid .fileid-source-panel .desktop-drop-zone,
+.windows-artifact-workbench.has-windows .windows-source-panel .desktop-drop-zone,
+.png-workbench.has-png .png-source-panel .desktop-drop-zone,
+.qr-workbench.has-qr .qr-preview-panel .desktop-drop-zone,
+.document-forensics-workbench.has-document-forensics > .tool-panel:first-child .desktop-drop-zone,
+.browser-artifact-workbench.has-browser-artifacts .browser-artifact-source-panel .desktop-drop-zone,
+.evtx-workbench.has-evtx > .tool-panel:first-child .desktop-drop-zone,
+.timeline-simple-workbench.has-timeline .timeline-simple-input-panel .timeline-simple-drop-zone {
+  display: none;
+}
+
+.pcap-loaded-source,
+.email-loaded-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pcap-loaded-source > div,
+.email-loaded-source > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.pcap-loaded-source strong,
+.pcap-loaded-source span,
+.email-loaded-source strong,
+.email-loaded-source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcap-loaded-source strong,
+.email-loaded-source strong {
+  color: var(--app-text);
+  font-size: 13.5px;
+}
+
+.pcap-loaded-source span,
+.email-loaded-source span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
 .pcap-simple-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2213,7 +2268,7 @@ pre.result-box {
 
 .pcap-simple-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin-bottom: 16px;
 }
 
@@ -2310,6 +2365,79 @@ pre.result-box {
 
 .pcap-simple-payload textarea { font-family: var(--app-mono); font-weight: 450; }
 
+.pcap-stream-workspace {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+
+.pcap-stream-scroll {
+  max-height: 280px;
+}
+
+.pcap-stream-scroll tbody tr {
+  cursor: pointer;
+}
+
+.pcap-stream-scroll th:first-child {
+  width: 54px;
+}
+
+.pcap-stream-scroll th:nth-child(4) {
+  width: 84px;
+}
+
+.pcap-stream-scroll th:nth-child(5),
+.pcap-stream-scroll th:nth-child(6),
+.pcap-stream-scroll th:nth-child(7) {
+  width: 110px;
+}
+
+.pcap-stream-detail {
+  min-width: 0;
+  border-top: 1px solid var(--app-line);
+  padding-top: 14px;
+}
+
+.pcap-stream-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pcap-stream-controls .app-segmented {
+  width: auto;
+}
+
+.pcap-stream-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 10px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.pcap-stream-notice {
+  margin-bottom: 10px;
+  border-inline-start: 3px solid var(--app-warn);
+  padding: 7px 10px;
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  font-size: 12.5px;
+}
+
+.pcap-stream-output {
+  min-height: 320px;
+  max-height: 52vh;
+  resize: vertical;
+  font-family: var(--app-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 @media (max-width: 720px) {
   .crypto-simple-controls,
   .crypto-simple-affine,
@@ -2383,6 +2511,17 @@ pre.result-box {
   .pcap-simple-stat-grid,
   .pcap-simple-network {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pcap-stream-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pcap-loaded-source,
+  .email-loaded-source {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .android-simple-filter-actions .ant-btn {
@@ -3168,6 +3307,106 @@ pre.result-box {
   margin: 0;
   border-top: 1px solid var(--app-line);
   padding: 10px;
+}
+
+.sqlite-forensic-workspace {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.sqlite-forensic-page-filter {
+  width: 180px;
+}
+
+.sqlite-forensic-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  min-width: 0;
+  gap: 14px;
+  align-items: start;
+}
+
+.sqlite-forensic-page-scroll,
+.sqlite-forensic-wal-scroll,
+.sqlite-forensic-fragment-scroll {
+  max-height: 440px;
+}
+
+.sqlite-forensic-table {
+  min-width: 720px;
+}
+
+.sqlite-forensic-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.sqlite-forensic-page-scroll tbody tr {
+  cursor: pointer;
+}
+
+.sqlite-forensic-table tbody tr:hover,
+.sqlite-forensic-table tbody tr.is-selected {
+  background: var(--app-primary-soft);
+}
+
+.sqlite-forensic-page-detail {
+  display: grid;
+  position: sticky;
+  top: 12px;
+  gap: 10px;
+  border-left: 1px solid var(--app-line);
+  padding-left: 14px;
+}
+
+.sqlite-forensic-page-detail > strong {
+  font-size: 14px;
+}
+
+.sqlite-source-badge {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sqlite-source-badge.wal {
+  color: var(--app-primary);
+}
+
+.sqlite-fragment-copy {
+  display: block;
+  max-width: 520px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--app-text);
+  font-family: var(--app-mono);
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+}
+
+.sqlite-fragment-copy:hover,
+.sqlite-fragment-copy:focus-visible {
+  color: var(--app-primary);
+}
+
+@media (max-width: 1180px) {
+  .sqlite-forensic-page-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sqlite-forensic-page-detail {
+    position: static;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    padding-top: 12px;
+    padding-left: 0;
+  }
 }
 
 details > summary {
