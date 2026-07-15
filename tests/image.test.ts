@@ -20,7 +20,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { revokeImagePreviewUrls } from "../src/features/image/analyzer";
+import { revokeImagePreviewUrl, revokeImagePreviewUrls } from "../src/features/image/analyzer";
 import type { ImageInfo } from "../src/models";
 
 describe("image preview resource cleanup", () => {
@@ -48,5 +48,15 @@ describe("image preview resource cleanup", () => {
 
     expect(revoke.mock.calls.map(([url]) => url)).toEqual(["blob:red", "blob:plane"]);
     expect(revoke).not.toHaveBeenCalledWith("data:image/png;base64,placeholder");
+  });
+
+  it("releases an individual generated preview URL", () => {
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    revokeImagePreviewUrl("blob:repair-preview");
+    revokeImagePreviewUrl("data:image/png;base64,placeholder");
+
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("blob:repair-preview");
   });
 });

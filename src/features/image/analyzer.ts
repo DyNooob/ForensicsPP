@@ -810,6 +810,10 @@ function revokeGeneratedImageUrl(url: string) {
   imageObjectUrls.delete(url);
 }
 
+function revokeImagePreviewUrl(url: string) {
+  revokeGeneratedImageUrl(url);
+}
+
 function revokeImagePreviewUrls(channels: ImageInfo["channelDataUrls"]) {
   [
     channels.red,
@@ -1347,4 +1351,4 @@ function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntr
   return null;
 }
 
-export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, revokeImagePreviewUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, revokeImagePreviewUrl, revokeImagePreviewUrls, tryRebuildPngContainer, decodePngTextChunk };

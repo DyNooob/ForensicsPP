@@ -74,6 +74,7 @@ export type ImageToolServices = {
   imagePlaceholderDataUrl: ImageService;
   loadBrowserImage: ImageService;
   revokeImageObjectUrls: ImageService;
+  revokeImagePreviewUrl: ImageService;
   revokeImagePreviewUrls: ImageService;
 };
 
@@ -82,7 +83,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels,
     detectImageFormat, emptyImageChannels, guessImageDimensions,
     imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl,
-    loadBrowserImage
+    loadBrowserImage, revokeImagePreviewUrl
   } = services;
   const isEnglish = t.waiting === "Waiting";
   const [imageInfo, setImageInfo] = React.useState<ImageInfo | null>(null);
@@ -338,6 +339,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     abortRef.current = controller;
     setAdvancedTask("repair");
     setError("");
+    const previewUrls: string[] = [];
+    let committed = false;
     try {
       const workerBytes = source.bytes.slice();
       const repair = await runImageWorker<ImageRepairWorkerResult>({ action: "repair", bytes: workerBytes.buffer, format: source.format }, [workerBytes.buffer], controller.signal);
@@ -349,12 +352,19 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       for (const candidate of candidates) {
         if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
         const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
+        previewUrls.push(src);
         try { await loadBrowserImage(src); previews.push({ label: candidate.label, src, detail: candidate.note }); rows.push([candidate.label, "decoded"]); }
         catch { rows.push([candidate.label, "failed"]); }
       }
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
-      setImageInfo((current) => current ? {
-        ...current,
+      const retained = new Set(previews.map((item) => item.src));
+      previewUrls.filter((url) => !retained.has(url)).forEach(revokeImagePreviewUrl);
+      setImageInfo((current) => {
+        if (!current) return current;
+        if (current.repairedDataUrl) revokeImagePreviewUrl(current.repairedDataUrl);
+        current.repairPreviewItems.forEach((item) => revokeImagePreviewUrl(item.src));
+        return {
+          ...current,
         repairedDataUrl: previews[0]?.src || "",
         repairedContainerBytes: rebuiltPng?.bytes ?? null,
         repairStatus: previews.length
@@ -365,10 +375,13 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         recoveryRows: rows,
         repairPreviewItems: previews,
         repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
-      } : current);
+        };
+      });
+      committed = true;
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
+      if (!committed) previewUrls.forEach(revokeImagePreviewUrl);
       if (abortRef.current === controller) abortRef.current = null;
       if (analysisId === analysisIdRef.current) setAdvancedTask("");
     }
