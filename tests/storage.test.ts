@@ -19,7 +19,8 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { clearToolSessions, writeToolSession } from "../src/utils/toolSessions";
 import { isStoredValueCompatible, parseStoredState, shouldUseIndexedState } from "../src/utils/storage";
 
 describe("browser state persistence", () => {
@@ -48,5 +49,19 @@ describe("browser state persistence", () => {
     expect(isStoredValueCompatible({}, [])).toBe(false);
     expect(isStoredValueCompatible([], [])).toBe(true);
     expect(isStoredValueCompatible({ value: "ready" }, { value: "" })).toBe(true);
+  });
+
+  it("does not permanently disable IndexedDB writes after clearing without IndexedDB", async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+    Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: undefined });
+    await clearToolSessions();
+
+    const open = vi.fn();
+    Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: { open } });
+    await expect(writeToolSession("storage-test", { value: "after-clear" })).rejects.toThrow();
+    expect(open).toHaveBeenCalledTimes(1);
+
+    if (originalDescriptor) Object.defineProperty(globalThis, "indexedDB", originalDescriptor);
+    else delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 });

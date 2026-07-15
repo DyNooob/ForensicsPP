@@ -160,6 +160,24 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
     setProgress({ done: 0, total: 0, name: "" });
   }, [active]);
 
+  const changeMode = (nextMode: "file" | "text") => {
+    if (nextMode === mode) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    textRunRef.current += 1;
+    workspace.clear();
+    setMode(nextMode);
+    setSelectedFiles([]);
+    setBatchRows([]);
+    setTextHashes(null);
+    setResultAlgorithms([]);
+    setFilter("");
+    setPage(0);
+    setError("");
+    setIsHashing(false);
+    setProgress({ done: 0, total: 0, name: "" });
+  };
+
   const queueFiles = (files: FileList | File[] | null | undefined) => {
     if (!active) return;
     const fileArray = Array.from(files ?? []);
@@ -330,8 +348,8 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
           title={english ? "Hash input" : "哈希输入"}
           actions={<>
             <ASegmentedGroup className="hash-simple-mode" value={mode} selects="single">
-              <ASegmentedButton value="file" onClick={() => setMode("file")}>{english ? "Files" : "文件"}</ASegmentedButton>
-              <ASegmentedButton value="text" onClick={() => setMode("text")}>{english ? "Text" : "文本"}</ASegmentedButton>
+              <ASegmentedButton value="file" onClick={() => changeMode("file")}>{english ? "Files" : "文件"}</ASegmentedButton>
+              <ASegmentedButton value="text" onClick={() => changeMode("text")}>{english ? "Text" : "文本"}</ASegmentedButton>
             </ASegmentedGroup>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}

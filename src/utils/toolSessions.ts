@@ -129,8 +129,16 @@ export async function removeToolSession(id: string) {
 export function clearToolSessions() {
   sessionWritesDisabled = true;
   sessionClearGeneration += 1;
-  if (typeof indexedDB === "undefined") return Promise.resolve();
+  if (typeof indexedDB === "undefined") {
+    sessionWritesDisabled = false;
+    return Promise.resolve();
+  }
   // Clear records inside the existing store instead of deleting the database.
   // Database deletion can be blocked by another open tab and falsely report success.
-  return enqueueSessionOperation(() => runSessionRequest<undefined>("readwrite", (store) => store.clear())).then(() => undefined);
+  return enqueueSessionOperation(() => runSessionRequest<undefined>("readwrite", (store) => store.clear()))
+    .then(() => undefined)
+    .finally(() => {
+      // Clearing is a one-time operation; later workspace writes must work again.
+      sessionWritesDisabled = false;
+    });
 }
