@@ -106,7 +106,7 @@ release/ForensicsPP-v1.0.0-alpha.4-static.zip
 release/SHA256SUMS.txt
 ```
 
-ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。解压后可以部署到 Nginx、Apache、GitHub Pages、对象存储或其他静态托管平台。
+ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。解压后可以部署到 Nginx、Apache、对象存储或其他静态托管平台。
 
 ## 数据与隐私
 
