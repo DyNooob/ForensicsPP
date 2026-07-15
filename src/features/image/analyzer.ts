@@ -810,7 +810,28 @@ function revokeGeneratedImageUrl(url: string) {
   imageObjectUrls.delete(url);
 }
 
+function revokeImagePreviewUrls(channels: ImageInfo["channelDataUrls"]) {
+  [
+    channels.red,
+    channels.green,
+    channels.blue,
+    channels.alpha,
+    channels.lsb,
+    channels.lsbRed,
+    channels.lsbGreen,
+    channels.lsbBlue,
+    channels.lowBitHeatmap,
+    channels.noiseMap,
+    ...channels.bitPlanes.map((plane) => plane.src)
+  ].forEach(revokeGeneratedImageUrl);
+}
+
 async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () => boolean = () => false) {
+  const generatedUrls: string[] = [];
+  const cancel = () => {
+    generatedUrls.forEach(revokeGeneratedImageUrl);
+    return null;
+  };
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("Canvas is not available");
@@ -821,7 +842,7 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const source = context.getImageData(0, 0, canvas.width, canvas.height);
   await yieldToBrowser();
-  if (shouldCancel()) return null;
+  if (shouldCancel()) return cancel();
 
   const makeChannel = async (channel: "red" | "green" | "blue" | "alpha" | "lsb" | "lsbRed" | "lsbGreen" | "lsbBlue" | "lowBitHeatmap" | "noiseMap") => {
     const output = context.createImageData(source.width, source.height);
@@ -867,7 +888,14 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
       output.data[index + 3] = 255;
     }
     context.putImageData(output, 0, 0);
-    return canvasToPngUrl(canvas);
+    try {
+      const url = await canvasToPngUrl(canvas);
+      generatedUrls.push(url);
+      return url;
+    } catch (caught) {
+      generatedUrls.forEach(revokeGeneratedImageUrl);
+      throw caught;
+    }
   };
 
   const makeBitPlane = async (channelIndex: 0 | 1 | 2 | 3, bit: number) => {
@@ -880,7 +908,14 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
       output.data[index + 3] = 255;
     }
     context.putImageData(output, 0, 0);
-    return canvasToPngUrl(canvas);
+    try {
+      const url = await canvasToPngUrl(canvas);
+      generatedUrls.push(url);
+      return url;
+    } catch (caught) {
+      generatedUrls.forEach(revokeGeneratedImageUrl);
+      throw caught;
+    }
   };
 
   const channels: ImageInfo["channelDataUrls"] = {
@@ -901,11 +936,10 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   ];
   for (const channel of channelNames) {
     await yieldToBrowser();
-    if (shouldCancel()) return null;
+    if (shouldCancel()) return cancel();
     const src = await makeChannel(channel);
     if (shouldCancel()) {
-      revokeGeneratedImageUrl(src);
-      return null;
+      return cancel();
     }
     channels[channel] = src;
   }
@@ -915,11 +949,10 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   ];
   for (const [label, channelIndex, bit] of bitPlanes) {
     await yieldToBrowser();
-    if (shouldCancel()) return null;
+    if (shouldCancel()) return cancel();
     const src = await makeBitPlane(channelIndex, bit);
     if (shouldCancel()) {
-      revokeGeneratedImageUrl(src);
-      return null;
+      return cancel();
     }
     channels.bitPlanes.push({ label, src });
   }
@@ -1314,4 +1347,4 @@ function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntr
   return null;
 }
 
-export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, revokeImagePreviewUrls, tryRebuildPngContainer, decodePngTextChunk };

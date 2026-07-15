@@ -74,6 +74,7 @@ export type ImageToolServices = {
   imagePlaceholderDataUrl: ImageService;
   loadBrowserImage: ImageService;
   revokeImageObjectUrls: ImageService;
+  revokeImagePreviewUrls: ImageService;
 };
 
 export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: ImageToolServices; active?: boolean }) {
@@ -315,7 +316,11 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           if (!active || analysisId !== analysisIdRef.current) return;
           const channels = await createChannelPreviews(source.image!, () => analysisId !== analysisIdRef.current);
           if (!active || !channels || analysisId !== analysisIdRef.current) return;
-          setImageInfo((current) => current ? { ...current, channelDataUrls: channels, autoRevealPreviews: buildAutoRevealPreviews(channels, false) } : current);
+          setImageInfo((current) => {
+            if (!current) return current;
+            services.revokeImagePreviewUrls(current.channelDataUrls);
+            return { ...current, channelDataUrls: channels, autoRevealPreviews: buildAutoRevealPreviews(channels, false) };
+          });
         } catch (caught) {
           setError(caught instanceof Error ? caught.message : String(caught));
         } finally {
