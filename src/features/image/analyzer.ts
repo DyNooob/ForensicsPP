@@ -804,6 +804,12 @@ function canvasToPngUrl(canvas: HTMLCanvasElement) {
   });
 }
 
+function revokeGeneratedImageUrl(url: string) {
+  if (!url.startsWith("blob:")) return;
+  URL.revokeObjectURL(url);
+  imageObjectUrls.delete(url);
+}
+
 async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () => boolean = () => false) {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -896,7 +902,12 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   for (const channel of channelNames) {
     await yieldToBrowser();
     if (shouldCancel()) return null;
-    channels[channel] = await makeChannel(channel);
+    const src = await makeChannel(channel);
+    if (shouldCancel()) {
+      revokeGeneratedImageUrl(src);
+      return null;
+    }
+    channels[channel] = src;
   }
   const bitPlanes: Array<[string, 0 | 1 | 2 | 3, number]> = [
     ["R bit 0", 0, 0], ["G bit 0", 1, 0], ["B bit 0", 2, 0], ["A bit 0", 3, 0],
@@ -905,7 +916,12 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   for (const [label, channelIndex, bit] of bitPlanes) {
     await yieldToBrowser();
     if (shouldCancel()) return null;
-    channels.bitPlanes.push({ label, src: await makeBitPlane(channelIndex, bit) });
+    const src = await makeBitPlane(channelIndex, bit);
+    if (shouldCancel()) {
+      revokeGeneratedImageUrl(src);
+      return null;
+    }
+    channels.bitPlanes.push({ label, src });
   }
   return channels;
 }
