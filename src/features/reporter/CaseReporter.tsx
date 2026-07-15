@@ -48,9 +48,9 @@ function caseNoteDigest(note: CaseNote) {
   return note.contentSha256 || sha256Bytes(new TextEncoder().encode(note.markdown || note.content));
 }
 
-function caseNoteRiskLevel(note: CaseNote): CaseRiskLevel {
+export function caseNoteRiskLevel(note: CaseNote): CaseRiskLevel {
   const text = [note.title, note.tool, note.summary, note.content, note.markdown].filter(Boolean).join("\n");
-  if (/(confirmed malware|confirmed credential leak|已确认恶意|已确认泄露|password\s*[:=]|passwd\s*[:=]|secret\s*[:=]|token\s*[:=]|api[_-]?key\s*[:=]|credential leak|malware|zip slip|crc mismatch|hash mismatch|signature mismatch|extension\/header mismatch|policy fail|dkim[^.\n]{0,40}fail|dmarc[^.\n]{0,40}fail|spf[^.\n]{0,40}fail|需进一步复核|需要复核|认证失败记录|泄露|恶意|凭据泄露|口令泄露)/i.test(text)) {
+  if (/(confirmed malware|confirmed credential leak|已确认恶意|已确认泄露|zip slip|crc mismatch|hash mismatch|signature mismatch|extension\/header mismatch|policy fail|dkim[^.\n]{0,40}fail|dmarc[^.\n]{0,40}fail|spf[^.\n]{0,40}fail|需进一步复核|需要复核|认证失败记录)/i.test(text)) {
     return "review";
   }
   return "normal";

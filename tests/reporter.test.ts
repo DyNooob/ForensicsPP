@@ -21,7 +21,7 @@
 
 import { File } from "node:buffer";
 import { describe, expect, it } from "vitest";
-import { buildReportHtml, buildReportMarkdown } from "../src/features/reporter/CaseReporter";
+import { buildReportHtml, buildReportMarkdown, caseNoteRiskLevel } from "../src/features/reporter/CaseReporter";
 import { rememberedTimelineEvents, rememberTimelineEvents, timelineBounds } from "../src/features/reporter/timeline";
 import { normalizeCaseBundle } from "../src/features/reporter/importer";
 import { verifyEvidenceRegister } from "../src/features/reporter/verification";
@@ -29,6 +29,19 @@ import { copy } from "../src/i18n";
 import { evidenceFileKey, fingerprintEvidenceFiles } from "../src/features/reporter/evidence";
 
 describe("report evidence registration", () => {
+  it("does not promote ordinary evidence text to a review item", () => {
+    const note = {
+      id: "note-risk-normal",
+      tool: "邮件解析",
+      title: "邮件内容",
+      content: "The message mentions a password and a token, but contains no failed check.",
+      createdAt: "2026-07-14T10:00:00.000Z"
+    } satisfies Parameters<typeof caseNoteRiskLevel>[0];
+
+    expect(caseNoteRiskLevel(note)).toBe("normal");
+    expect(caseNoteRiskLevel({ ...note, content: "DKIM=fail; DMARC=fail" })).toBe("review");
+  });
+
   it("deduplicates selected files and records a deliberate SHA-256 fingerprint", async () => {
     const first = new File([new TextEncoder().encode("evidence")], "sample.bin", { type: "application/octet-stream", lastModified: 1_700_000_000_000 });
     const duplicate = new File([new TextEncoder().encode("evidence")], "sample.bin", { type: "application/octet-stream", lastModified: 1_700_000_000_000 });
