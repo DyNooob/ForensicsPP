@@ -129,9 +129,9 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     setVerification({ status: "checking", detail: english ? "Checking..." : "正在校验..." });
     try {
       const result = await verifyJwtAsymmetricSignature(activeToken, verifyKey.trim());
-      if (requestId === verificationRequestRef.current) setVerification(result);
+      if (active && requestId === verificationRequestRef.current) setVerification(result);
     } catch (caught) {
-      if (requestId === verificationRequestRef.current) setVerification({ status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
+      if (active && requestId === verificationRequestRef.current) setVerification({ status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
     }
   };
 

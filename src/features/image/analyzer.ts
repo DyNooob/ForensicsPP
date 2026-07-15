@@ -786,6 +786,24 @@ function yieldToBrowser() {
   return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+function canvasToPngUrl(canvas: HTMLCanvasElement) {
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        try {
+          resolve(canvas.toDataURL("image/png"));
+        } catch (caught) {
+          reject(caught);
+        }
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      imageObjectUrls.add(url);
+      resolve(url);
+    }, "image/png");
+  });
+}
+
 async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () => boolean = () => false) {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -799,7 +817,7 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   await yieldToBrowser();
   if (shouldCancel()) return null;
 
-  const makeChannel = (channel: "red" | "green" | "blue" | "alpha" | "lsb" | "lsbRed" | "lsbGreen" | "lsbBlue" | "lowBitHeatmap" | "noiseMap") => {
+  const makeChannel = async (channel: "red" | "green" | "blue" | "alpha" | "lsb" | "lsbRed" | "lsbGreen" | "lsbBlue" | "lowBitHeatmap" | "noiseMap") => {
     const output = context.createImageData(source.width, source.height);
     const luminanceAt = (pixel: number) => {
       const base = pixel * 4;
@@ -843,10 +861,10 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
       output.data[index + 3] = 255;
     }
     context.putImageData(output, 0, 0);
-    return canvas.toDataURL("image/png");
+    return canvasToPngUrl(canvas);
   };
 
-  const makeBitPlane = (channelIndex: 0 | 1 | 2 | 3, bit: number) => {
+  const makeBitPlane = async (channelIndex: 0 | 1 | 2 | 3, bit: number) => {
     const output = context.createImageData(source.width, source.height);
     for (let index = 0; index < source.data.length; index += 4) {
       const value = ((source.data[index + channelIndex] >> bit) & 1) ? 255 : 0;
@@ -856,7 +874,7 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
       output.data[index + 3] = 255;
     }
     context.putImageData(output, 0, 0);
-    return canvas.toDataURL("image/png");
+    return canvasToPngUrl(canvas);
   };
 
   const channels: ImageInfo["channelDataUrls"] = {
@@ -878,7 +896,7 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   for (const channel of channelNames) {
     await yieldToBrowser();
     if (shouldCancel()) return null;
-    channels[channel] = makeChannel(channel);
+    channels[channel] = await makeChannel(channel);
   }
   const bitPlanes: Array<[string, 0 | 1 | 2 | 3, number]> = [
     ["R bit 0", 0, 0], ["G bit 0", 1, 0], ["B bit 0", 2, 0], ["A bit 0", 3, 0],
@@ -887,7 +905,7 @@ async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () =
   for (const [label, channelIndex, bit] of bitPlanes) {
     await yieldToBrowser();
     if (shouldCancel()) return null;
-    channels.bitPlanes.push({ label, src: makeBitPlane(channelIndex, bit) });
+    channels.bitPlanes.push({ label, src: await makeBitPlane(channelIndex, bit) });
   }
   return channels;
 }

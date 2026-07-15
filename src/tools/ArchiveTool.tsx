@@ -274,6 +274,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
   };
 
   const loadEntry = async (entry: ArchiveEntry) => {
+    if (!active) return null;
     const bytes = archiveBytesRef.current;
     if (entry.data) return entry.data;
     if (!bytes || entry.name.endsWith("/") || entry.encrypted || loadingEntry) return null;
@@ -284,6 +285,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     }
     setLoadingEntry(entry.name);
     setError("");
+    const requestId = requestRef.current;
     const controller = new AbortController();
     entryAbortRef.current = controller;
     try {
@@ -295,12 +297,12 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (controller.signal.aborted) return null;
+      if (!active || controller.signal.aborted || requestId !== requestRef.current) return null;
       const data = new Uint8Array(extracted);
       setArchive((current) => current ? { ...current, entries: current.entries.map((item) => item.name === entry.name ? { ...item, data } : item) } : current);
       return data;
     } catch (caught) {
-      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
       return null;
     } finally {
       if (entryAbortRef.current === controller) entryAbortRef.current = null;
@@ -318,7 +320,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
   };
 
   const hashSelectedEntry = async () => {
-    if (!selected || selected.name.endsWith("/") || selected.encrypted || entryHashingKey) return;
+    if (!active || !selected || selected.name.endsWith("/") || selected.encrypted || entryHashingKey) return;
     const key = selected.name;
     if (entryHashes[key]) return;
     const requestId = requestRef.current;
@@ -333,11 +335,11 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       const dataCopy = new Uint8Array(data.length);
       dataCopy.set(data);
       const result = await hashBytesInWorker(dataCopy, ["sha256"], { signal: controller.signal });
-      if (controller.signal.aborted || requestId !== requestRef.current) return;
+      if (!active || controller.signal.aborted || requestId !== requestRef.current) return;
       if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
       setEntryHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
     } catch (caught) {
-      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (entryHashAbortRef.current === controller) entryHashAbortRef.current = null;
       if (requestId === requestRef.current) setEntryHashingKey("");

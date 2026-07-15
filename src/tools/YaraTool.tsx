@@ -86,6 +86,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
   };
 
   const runTextScan = async () => {
+    if (!active) return;
     const bytes = sampleName === "text sample" ? new TextEncoder().encode(sample) : sampleBytes;
     setSampleBytes(bytes);
     const controller = new AbortController();
@@ -95,13 +96,13 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
     setError("");
     try {
       const next = await scanSample(bytes, sampleName, controller.signal);
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
       setResult(next);
       setSelectedRule(next.results.find((item) => item.matched)?.rule.name ?? "");
       setBatchRows([]);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (active) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
