@@ -25,7 +25,7 @@ import { parseMsg } from "../src/features/email/msg";
 import { parsePlist } from "../src/features/plist/analyzer";
 import { parseRegistryHive } from "../src/features/registry/analyzer";
 import { inspectSqliteDatabase } from "../src/features/sqlite/forensic";
-import { sqliteObjectRisk, sqliteSensitiveHits, sqliteValueRisk } from "../src/features/sqlite/analyzer";
+import { runSqliteQuery, sqliteObjectRisk, sqliteSensitiveHits, sqliteValueRisk } from "../src/features/sqlite/analyzer";
 import { applySqliteWal, inspectSqliteWal } from "../src/features/sqlite/wal";
 
 function writeBe32(bytes: Uint8Array, offset: number, value: number) {
@@ -201,6 +201,33 @@ describe("SQLite forensic pages", () => {
 });
 
 describe("SQLite triage markers", () => {
+  it("bounds large read-only query results before they reach the UI", () => {
+    const calls: string[] = [];
+    const result = runSqliteQuery({
+      exec: (sql) => {
+        calls.push(sql);
+        return [{ columns: ["id"], values: Array.from({ length: 2000 }, (_, index) => [index]) }];
+      }
+    }, "SELECT id FROM evidence ORDER BY id;");
+
+    expect(calls[0]).toBe("SELECT * FROM (SELECT id FROM evidence ORDER BY id) LIMIT 2000");
+    expect(result.values).toHaveLength(2000);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("does not rewrite modifying CTE statements", () => {
+    const calls: string[] = [];
+    const sql = "WITH changed AS (SELECT id FROM evidence) DELETE FROM evidence WHERE id IN (SELECT id FROM changed)";
+    runSqliteQuery({
+      exec: (statement) => {
+        calls.push(statement);
+        return [];
+      }
+    }, sql);
+
+    expect(calls[0]).toBe(sql);
+  });
+
   it("marks only useful high-signal values", () => {
     expect(sqliteValueRisk("password", "secret-value")).toEqual(["sensitive column name"]);
     expect(sqliteValueRisk("url", "https://example.test/path")).toContain("URL value");

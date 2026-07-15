@@ -38,7 +38,7 @@ import {
   StopOutlined,
   UndoOutlined
 } from "@ant-design/icons";
-import { message, Modal, Popconfirm, Switch } from "antd";
+import { Alert, message, Modal, Popconfirm, Switch } from "antd";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type {
@@ -1196,6 +1196,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
           </details>
           <textarea className="single-textarea sqlite-query-input" value={sql} onChange={(event) => setSql(event.currentTarget.value)} />
           <div className="panel-heading-row"><PanelTitle title={t.sqliteQueryResult} /><div className="button-row compact-buttons"><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => copyDataCsv(queryResult)}>{t.copyCsv}</AButton><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => downloadDataCsv(queryResult, "sqlite-query")}>{t.exportCsv}</AButton></div></div>
+          {queryResult.truncated && <Alert type="info" showIcon message={english ? "Read-only query results are limited to 2,000 rows in the browser." : "浏览器中的只读查询结果最多展示 2,000 行。"} />}
           <div className="table-scroll sqlite-query-scroll">{queryResult.columns.length ? <table className="data-table sqlite-data-table sqlite-query-table" style={{ "--sqlite-table-width": `${sqliteQueryMinWidth}px` } as React.CSSProperties}><colgroup>{queryResult.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteQueryColumnWidths[index] }} key={column} />)}</colgroup><thead><tr>{queryResult.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{queryResult.values.map((row, rowIndex) => <tr key={rowIndex}>{queryResult.columns.map((column, columnIndex) => <td key={column}>{displaySqliteValue(row[columnIndex] ?? null)}</td>)}</tr>)}</tbody></table> : <div className="empty-state">{queryResult.message || "--"}</div>}</div>
         </div>}
 

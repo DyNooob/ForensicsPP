@@ -450,9 +450,22 @@ export function loadSqliteTableRows(
 export function runSqliteQuery(db: { exec: (sql: string) => Array<{ columns: string[]; values: SqliteValue[][] }> }, sql: string): SqliteDataSet {
   const trimmed = sql.trim();
   if (!trimmed) return sqliteEmptyDataSet();
-  const results = db.exec(trimmed);
+  const singleStatement = trimmed.replace(/;\s*$/, "");
+  const boundedRead = /^(?:SELECT|WITH)\b/i.test(singleStatement)
+    && !sqliteSqlIsMutating(singleStatement)
+    && !singleStatement.includes(";");
+  const query = boundedRead ? "SELECT * FROM (" + singleStatement + ") LIMIT 2000" : trimmed;
+  const results = db.exec(query);
   const last = results[results.length - 1];
-  if (last) return { columns: last.columns, values: last.values, rowids: [], editable: false, message: `${last.values.length} rows`, totalRows: last.values.length };
+  if (last) return {
+    columns: last.columns,
+    values: last.values,
+    rowids: [],
+    editable: false,
+    message: String(last.values.length) + " rows",
+    totalRows: last.values.length,
+    truncated: boundedRead && last.values.length >= 2000
+  };
   return sqliteEmptyDataSet("Statement executed");
 }
 

@@ -956,6 +956,7 @@ export type SqliteDataSet = {
   editable: boolean;
   message: string;
   totalRows: number | null;
+  truncated?: boolean;
 };
 
 export type SqliteCellSelection = {
