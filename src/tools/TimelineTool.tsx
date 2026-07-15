@@ -34,6 +34,7 @@ import { runWorkerTask } from "../utils/workerTask";
 const PAGE_SIZE = 100;
 const MAX_TIMELINE_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_TIMELINE_TOTAL_BYTES = 64 * 1024 * 1024;
+const MAX_TIMELINE_TEXT_BYTES = 32 * 1024 * 1024;
 
 type TimelineSource = {
   name: string;
@@ -111,6 +112,12 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     if (!parsedSources.length) {
       setEvents([]);
       setParsing(false);
+      return () => controller.abort();
+    }
+    if (parsedSources.some((item) => item.size > MAX_TIMELINE_TEXT_BYTES)) {
+      setEvents([]);
+      setParsing(false);
+      setError(english ? "Timeline text is limited to 32 MiB." : "时间线文本不能超过 32 MiB。" );
       return () => controller.abort();
     }
     setParsing(true);
@@ -255,6 +262,10 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
             value={input}
             onChange={(event) => {
               requestRef.current += 1;
+              if (new TextEncoder().encode(event.currentTarget.value).byteLength > MAX_TIMELINE_TEXT_BYTES) {
+                setError(english ? "Timeline text is limited to 32 MiB." : "时间线文本不能超过 32 MiB。" );
+                return;
+              }
               setSources([]);
               setInput(event.currentTarget.value);
               setError("");

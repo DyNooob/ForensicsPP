@@ -30,6 +30,9 @@ import { runWorkerTask } from "../utils/workerTask";
 
 type RuleTemplate = { id: string; label: string; rule: string };
 
+const MAX_YARA_RULE_BYTES = 2 * 1024 * 1024;
+const MAX_YARA_TEXT_SAMPLE_BYTES = 32 * 1024 * 1024;
+
 export type YaraToolServices = {
   yaraRuleTemplates: RuleTemplate[];
   defaultYaraSample: string;
@@ -87,7 +90,15 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
 
   const runTextScan = async () => {
     if (!active) return;
+    if (new TextEncoder().encode(rules).byteLength > MAX_YARA_RULE_BYTES) {
+      setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" );
+      return;
+    }
     const bytes = sampleName === "text sample" ? new TextEncoder().encode(sample) : sampleBytes;
+    if (bytes.byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) {
+      setError(english ? "Text samples are limited to 32 MiB." : "文本样本不能超过 32 MiB。" );
+      return;
+    }
     setSampleBytes(bytes);
     const controller = new AbortController();
     abortRef.current?.abort();
@@ -113,6 +124,10 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
 
   const handleFiles = async (files?: FileList | null) => {
     if (!active || !files?.length) return;
+    if (new TextEncoder().encode(rules).byteLength > MAX_YARA_RULE_BYTES) {
+      setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" );
+      return;
+    }
     setScanning(true);
     setDropActive(false);
     setError("");
@@ -215,7 +230,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
             <AButton key={template.id} variant="outlined" onClick={() => { setRules(template.rule); invalidate(); }}>{template.label}</AButton>
           ))}
         </div>
-        <textarea className="single-textarea yara-simple-editor" aria-label={english ? "YARA rules" : "YARA 规则"} value={rules} onChange={(event) => { setRules(event.target.value); invalidate(); }} placeholder={english ? "Paste one or more YARA rules" : "粘贴一条或多条 YARA 规则"} />
+        <textarea className="single-textarea yara-simple-editor" aria-label={english ? "YARA rules" : "YARA 规则"} value={rules} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_RULE_BYTES) { setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" ); return; } setRules(next); invalidate(); }} placeholder={english ? "Paste one or more YARA rules" : "粘贴一条或多条 YARA 规则"} />
 
         <div className="yara-simple-divider" />
         <div className="yara-simple-section-heading"><strong>{t.yaraSample}</strong></div>
@@ -238,7 +253,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
           <strong>{sampleName === "text sample" ? (english ? "Text sample" : "文本样本") : sampleName}</strong>
           <span>{sampleBytes.length ? formatBytes(sampleBytes.length) : (english ? "Drop up to 25 files" : "拖入最多 25 个文件")}</span>
         </div>
-        <textarea className="single-textarea yara-simple-sample" aria-label={english ? "YARA text sample" : "YARA 文本样本"} value={sample} onChange={(event) => { setSampleName("text sample"); setSample(event.target.value); invalidate(); }} placeholder={t.textPlaceholder} />
+        <textarea className="single-textarea yara-simple-sample" aria-label={english ? "YARA text sample" : "YARA 文本样本"} value={sample} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) { setError(english ? "Text samples are limited to 32 MiB." : "文本样本不能超过 32 MiB。" ); return; } setSampleName("text sample"); setSample(next); invalidate(); }} placeholder={t.textPlaceholder} />
         <div className="yara-simple-primary-action">
           <AButton variant="filled" disabled={scanning || !rules.trim() || !sample.trim()} onClick={() => void runTextScan()}>{t.run}</AButton>
           <AButton variant="outlined" disabled={scanning || !rules.trim()} onClick={() => inputRef.current?.click()}>{t.uploadSample}</AButton>

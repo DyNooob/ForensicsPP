@@ -36,6 +36,7 @@ import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
+const MAX_EMAIL_TEXT_INPUT_BYTES = 16 * 1024 * 1024;
 const MAX_PERSISTED_EMAIL_BYTES = 8 * 1024 * 1024;
 const MAX_PERSISTED_EMAIL_BODY_CHARS = 512 * 1024;
 export const MAX_EMAIL_HTML_PREVIEW_CHARS = 2 * 1024 * 1024;
@@ -160,6 +161,11 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
 
   const parseSource = async (source = input) => {
     if (!source.trim() || !active) return;
+    if (new TextEncoder().encode(source).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
+      setParsed(null);
+      setError(english ? "Pasted email text is limited to 16 MiB." : "粘贴的邮件内容不能超过 16 MiB。" );
+      return;
+    }
     workspace.clear();
     const controller = new AbortController();
     abortRef.current?.abort();
@@ -396,7 +402,12 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
             aria-label={english ? "Raw EML source" : "原始 EML 内容"}
             value={input}
             onChange={(event) => {
-              setInput(event.currentTarget.value);
+              const next = event.currentTarget.value;
+              if (new TextEncoder().encode(next).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
+                setError(english ? "Pasted email text is limited to 16 MiB." : "粘贴的邮件内容不能超过 16 MiB。" );
+                return;
+              }
+              setInput(next);
               setParsed(null);
               setError("");
               if (parsed || workspace.state !== "idle") workspace.clear();
