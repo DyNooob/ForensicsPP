@@ -23,18 +23,19 @@ import React from "react";
 import { AButton } from "../components/ui";
 import type { Translation } from "../i18n";
 
-export function CyberChefTool({ t }: { t: Translation }) {
+export function CyberChefTool({ t, active = true }: { t: Translation; active?: boolean }) {
   const cyberChefUrl = "./cyberchef/CyberChef_v10.19.4.html";
   const [loaded, setLoaded] = React.useState(false);
   const [showFallback, setShowFallback] = React.useState(false);
   const [frameKey, setFrameKey] = React.useState(0);
 
   React.useEffect(() => {
+    if (!active) return;
     const timeout = window.setTimeout(() => {
       if (!loaded) setShowFallback(true);
     }, 6500);
     return () => window.clearTimeout(timeout);
-  }, [loaded]);
+  }, [active, loaded]);
 
   return (
     <div className="cyberchef-panel">

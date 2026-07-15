@@ -123,7 +123,7 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, 
       ) : (
         <ToolWorkspaceFrame>
           <React.Suspense fallback={<div className="tool-loading-state" role="status" aria-live="polite"><Spin size="small" /><span>{t.loadingTool}</span></div>}>
-            {toolId === "cyberchef" && <CyberChefTool t={t} />}
+            {toolId === "cyberchef" && <CyberChefTool t={t} active={active} />}
             {toolId === "image" && <ImageTool t={t} active={active} />}
             {toolId === "codec" && <CodecTool t={t} active={active} />}
             {toolId === "crypto" && <CryptoTool t={t} active={active} />}
