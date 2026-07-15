@@ -136,7 +136,11 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
   const handleImage = async (file: File | undefined, persist = true) => {
     if (!file || !active) return;
-    if (persist) workspace.clear();
+    if (persist) {
+      restoreStartedRef.current = true;
+      setRestoredSource(null);
+      workspace.clear();
+    }
     if (persist) setStorageNotice("");
     analysisIdRef.current += 1;
     abortRef.current?.abort();
@@ -370,6 +374,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     void handleImage(event.dataTransfer.files?.[0]);
   };
   const clearImage = () => {
+    restoreStartedRef.current = true;
+    setRestoredSource(null);
     workspace.clear();
     analysisIdRef.current += 1;
     abortRef.current?.abort();
@@ -379,6 +385,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       channelTimerRef.current = null;
     }
     services.revokeImageObjectUrls();
+    sourceRef.current = null;
     setImageInfo(null);
     setStorageNotice("");
     setError("");

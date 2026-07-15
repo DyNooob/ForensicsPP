@@ -45,6 +45,7 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
   const pendingSaveRef = React.useRef<{ generation: number; sequence: number; value: T } | null>(null);
   const mountedRef = React.useRef(true);
   const restoreStartedRef = React.useRef(false);
+  const restoreCancelledRef = React.useRef(false);
   const onRestoreRef = React.useRef(onRestore);
   const isValidRef = React.useRef(isValid);
   onRestoreRef.current = onRestore;
@@ -78,6 +79,7 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
   }, [persistPendingSave]);
 
   const clear = React.useCallback(() => {
+    restoreCancelledRef.current = true;
     generationRef.current += 1;
     saveSequenceRef.current += 1;
     pendingSaveRef.current = null;
@@ -90,6 +92,7 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
   }, [id, queue]);
 
   const save = React.useCallback((value: T) => {
+    restoreCancelledRef.current = true;
     const generation = generationRef.current;
     const sequence = ++saveSequenceRef.current;
     pendingSaveRef.current = { generation, sequence, value };
@@ -122,7 +125,7 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
     restoreStartedRef.current = true;
     const generation = generationRef.current;
     void readToolSessionResult<WorkspaceEnvelope<unknown>>(id).then(({ value: session, error }) => {
-      if (!mountedRef.current || generationRef.current !== generation) return;
+      if (!mountedRef.current || generationRef.current !== generation || restoreCancelledRef.current) return;
       if (error) {
         setState("failed");
         return;
