@@ -115,7 +115,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
   }, [active]);
 
   const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestIdRef.current;
     let pendingPreviewUrl = "";
     setDropActive(false);
@@ -137,7 +137,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         next.onerror = () => reject(new Error(english ? "The image could not be decoded." : "图片无法解码。"));
         next.src = previewUrl;
       });
-      if (requestId !== requestIdRef.current) {
+      if (!active || requestId !== requestIdRef.current) {
         URL.revokeObjectURL(previewUrl);
         return;
       }
@@ -158,7 +158,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       canvas.width = 1;
       canvas.height = 1;
-      if (requestId !== requestIdRef.current) {
+      if (!active || requestId !== requestIdRef.current) {
         URL.revokeObjectURL(previewUrl);
         return;
       }

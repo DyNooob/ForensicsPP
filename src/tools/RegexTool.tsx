@@ -120,7 +120,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
   }, [result.matches, selectedKey, visibleMatches]);
 
   const loadFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     setSource("");
     setFileError("");
@@ -132,9 +132,9 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
     }
     try {
       const value = await file.text();
-      if (requestId === requestRef.current) setSource(value);
+      if (active && requestId === requestRef.current) setSource(value);
     } catch (caught) {
-      if (requestId === requestRef.current) setFileError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current) setFileError(caught instanceof Error ? caught.message : String(caught));
     }
   };
   const applyPreset = (value: string) => {

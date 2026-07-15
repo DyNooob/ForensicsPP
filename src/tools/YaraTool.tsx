@@ -111,7 +111,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
   };
 
   const handleFiles = async (files?: FileList | null) => {
-    if (!files?.length) return;
+    if (!active || !files?.length) return;
     setScanning(true);
     setDropActive(false);
     setError("");

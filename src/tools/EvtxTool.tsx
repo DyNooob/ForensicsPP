@@ -102,6 +102,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   React.useEffect(() => () => { parseAbortRef.current?.abort(); sigmaAbortRef.current?.abort(); }, []);
 
   const queueFiles = (files?: FileList | null) => {
+    if (!active) return;
     workspace.clear();
     const next = Array.from(files ?? []).filter((file) => file.size > 0 && /\.evtx$/i.test(file.name));
     if (!next.length) {
@@ -139,7 +140,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   };
 
   const analyze = async () => {
-    if (!selectedFiles.length || loading) return;
+    if (!active || !selectedFiles.length || loading) return;
     const run = runRef.current + 1;
     runRef.current = run;
     const controller = new AbortController();
@@ -150,7 +151,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setError("");
     const results: ParsedFile[] = [];
     for (let index = 0; index < selectedFiles.length; index += 1) {
-      if (runRef.current !== run) break;
+      if (!active || runRef.current !== run) break;
       const file = selectedFiles[index];
       setProgress(english ? `Parsing ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在解析 ${index + 1}/${selectedFiles.length}：${file.name}`);
       try {
@@ -166,9 +167,10 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         if (caught instanceof DOMException && caught.name === "AbortError") break;
         results.push({ source: file.name, size: file.size, error: caught instanceof Error ? caught.message : String(caught) });
       }
+      if (!active || runRef.current !== run) break;
       setParsedFiles([...results]);
     }
-    if (runRef.current === run) {
+    if (active && runRef.current === run) {
       setLoading(false);
       setProgress("");
       setView(results.some(isAnalysis) ? "overview" : "files");
@@ -216,7 +218,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   };
 
   const openSigmaFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++sigmaFileRef.current;
     setSigmaRules([]);
     setSigmaMatches([]);
@@ -227,11 +229,11 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     }
     try {
       const value = await file.text();
-      if (requestId !== sigmaFileRef.current) return;
+      if (!active || requestId !== sigmaFileRef.current) return;
       setSigmaText(value);
       setSigmaErrors([]);
     } catch (caught) {
-      if (requestId === sigmaFileRef.current) setSigmaErrors([caught instanceof Error ? caught.message : String(caught)]);
+      if (active && requestId === sigmaFileRef.current) setSigmaErrors([caught instanceof Error ? caught.message : String(caught)]);
     }
   };
 
@@ -252,7 +254,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         signal: controller.signal,
         timeoutMs: 60_000
       });
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
       setSigmaMatches(result.matches);
       setSigmaErrors([...parsed.errors, ...result.errors]);
     } catch (caught) {

@@ -201,7 +201,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
   React.useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl); }, [imageUrl]);
 
   const loadFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     entryAbortRef.current?.abort();
     entryHashAbortRef.current?.abort();
@@ -227,7 +227,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     setLoading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       const parsed = parseArchiveEntries(bytes);
       if (!parsed.entries.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
       archiveBytesRef.current = bytes;
@@ -241,13 +241,13 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       setSortBy("path");
       workspace.save({ archive: nextArchive, selectedName: firstFile?.name ?? "", query: "", entryType: "all", sortBy: "path" });
     } catch (caught) {
-      if (requestId === requestRef.current) {
+      if (active && requestId === requestRef.current) {
         setArchive(null);
         archiveBytesRef.current = null;
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
-      if (requestId === requestRef.current) setLoading(false);
+      if (active && requestId === requestRef.current) setLoading(false);
     }
   };
 

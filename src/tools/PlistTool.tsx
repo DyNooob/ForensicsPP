@@ -80,7 +80,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   const children = React.useMemo(() => current ? plistChildren(current.value, current.path).filter((entry) => !query.trim() || `${entry.key} ${entry.preview} ${entry.type}`.toLowerCase().includes(query.trim().toLowerCase())) : [], [current, query]);
 
   const open = async (next: File | undefined) => {
-    if (!next) return;
+    if (!next || !active) return;
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
     workspace.clear();
@@ -102,7 +102,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const bytes = new Uint8Array(await next.arrayBuffer());
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       const workerBytes = bytes.slice();
       const parsed = await runWorkerTask<PlistWorkerRequest, { format: string; value: PlistValue }>({
         createWorker: () => new Worker(new URL("../features/plist/plist.worker.ts", import.meta.url), { type: "module" }),
@@ -111,7 +111,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (requestId !== requestRef.current || controller.signal.aborted) return;
+      if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       const nextStack = [{ path: "$", value: parsed.value }];
       setFormat(parsed.format); setRoot(parsed.value); setStack(nextStack); setQuery("");
       if (next.size <= MAX_PERSISTED_PLIST_BYTES) workspace.save({ format: parsed.format, root: parsed.value, stack: nextStack, query: "", fileName: next.name, fileSize: next.size });

@@ -187,7 +187,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
   };
 
   const handleFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     cancelAnalysis();
     workspace.clear();
     const requestId = ++fileReadRef.current;
@@ -199,7 +199,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
       : "");
     try {
       const nextBytes = new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer());
-      if (requestId !== fileReadRef.current) return;
+      if (!active || requestId !== fileReadRef.current) return;
       setSourceName(file.name);
       setSourceSize(file.size);
       setPendingBytes(nextBytes);
@@ -207,9 +207,9 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
       setAnalysis(services.extractPrintableStrings(new Uint8Array(), minLength));
       resetReview();
     } catch (caught) {
-      if (requestId === fileReadRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === fileReadRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (requestId === fileReadRef.current) setLoading(false);
+      if (active && requestId === fileReadRef.current) setLoading(false);
     }
   };
 
@@ -231,7 +231,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
   };
 
   const analyze = async () => {
-    if (!pendingBytes.length) return;
+    if (!active || !pendingBytes.length) return;
     cancelAnalysis();
     const controller = new AbortController();
     abortRef.current = controller;

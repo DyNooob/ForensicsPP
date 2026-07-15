@@ -92,7 +92,7 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
   const hexRows = React.useMemo(() => binaryHexDumpRows(bytes, offset, viewLength), [binaryHexDumpRows, bytes, offset, viewLength]);
 
   const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
     setDropActive(false);
@@ -128,7 +128,7 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
         signal: controller.signal,
         timeoutMs: 180_000
       });
-      if (requestId !== requestRef.current || controller.signal.aborted) return;
+      if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       setBytes(nextBytes);
       setFileName(file.name);
       setOffsetInput("0");

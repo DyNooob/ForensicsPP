@@ -81,7 +81,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   }, [previewUrl]);
 
   const loadFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
     setDropActive(false);
@@ -101,7 +101,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       const workerBytes = bytes.slice();
       const next = await runWorkerTask<PngWorkerRequest, PngAnalysis>({
         createWorker: () => new Worker(new URL("../features/png/png.worker.ts", import.meta.url), { type: "module" }),
@@ -110,7 +110,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (requestId !== requestRef.current || controller.signal.aborted) return;
+      if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       setPreviewUrl(URL.createObjectURL(file));
       setAnalysis(next);
       setStorageNotice(file.size > MAX_PERSISTED_PNG_PREVIEW_BYTES

@@ -72,7 +72,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   }, [active]);
 
   const loadFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
     setDropActive(false);
@@ -90,7 +90,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       const workerBytes = bytes.slice();
       const nextAnalysis = await runWorkerTask<WindowsWorkerRequest, WindowsArtifactAnalysis>({
         createWorker: () => new Worker(new URL("../features/windows/windows.worker.ts", import.meta.url), { type: "module" }),
@@ -99,7 +99,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (requestId !== requestRef.current || controller.signal.aborted) return;
+      if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       setAnalysis(nextAnalysis);
       workspace.save({ analysis: nextAnalysis });
     } catch (caught) {

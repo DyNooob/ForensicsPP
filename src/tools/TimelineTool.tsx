@@ -171,6 +171,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
   };
 
   const loadFiles = async (files: FileList | File[] | null | undefined) => {
+    if (!active) return;
     const fileArray = Array.from(files ?? []);
     if (!fileArray.length) return;
     const requestId = ++requestRef.current;
@@ -196,14 +197,14 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
         size: file.size,
         lastModified: file.lastModified
       })));
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       setSources((current) => {
         const byKey = new Map(current.map((item) => [`${item.name}\u0000${item.size}\u0000${item.lastModified}`, item]));
         loaded.forEach((item) => byKey.set(`${item.name}\u0000${item.size}\u0000${item.lastModified}`, item));
         return Array.from(byKey.values());
       });
     } catch (caught) {
-      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
 

@@ -78,7 +78,7 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     return (selected?.values ?? []).filter((value) => !needle || `${value.name} ${value.type} ${value.value}`.toLowerCase().includes(needle));
   }, [selected, valueFilter]);
   const open = async (next: File | undefined) => {
-    if (!next) return;
+    if (!next || !active) return;
     abortRef.current?.abort();
     abortRef.current = null;
     workspace.clear();
@@ -102,7 +102,7 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     abortRef.current = controller;
     try {
       const bytes = await next.arrayBuffer();
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
       const result = await runWorkerTask<{ bytes: ArrayBuffer }, RegistryHive>({
         createWorker: () => new Worker(new URL("../features/registry/registry.worker.ts", import.meta.url), { type: "module" }),
         request: { bytes },
@@ -110,7 +110,7 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
         signal: controller.signal,
         timeoutMs: 180_000
       });
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
       setHive(result);
       setSelectedId(result.rootId);
       setQuery("");

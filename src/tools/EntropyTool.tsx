@@ -212,7 +212,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
   };
 
   const handleFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++inputRequestRef.current;
     workspace.clear();
     restoredAnalysisRef.current = false;
@@ -224,15 +224,15 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
       : "");
     try {
       const nextBytes = new Uint8Array(await file.slice(0, 64 * 1024 * 1024).arrayBuffer());
-      if (requestId !== inputRequestRef.current) return;
+      if (!active || requestId !== inputRequestRef.current) return;
       setSourceName(file.name);
       setSourceSize(file.size);
       setBytes(nextBytes);
       resetReview();
     } catch (caught) {
-      if (requestId === inputRequestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === inputRequestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (requestId === inputRequestRef.current) setLoading(false);
+      if (active && requestId === inputRequestRef.current) setLoading(false);
     }
   };
 

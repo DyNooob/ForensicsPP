@@ -132,7 +132,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
   const hasInput = Boolean(analyzedInput.trim());
 
   const openFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     setInput("");
     setAnalyzedInput("");
@@ -145,11 +145,11 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
     }
     try {
       const value = await file.text();
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       setInput(value);
       setError("");
     } catch (caught) {
-      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
   const clear = () => {
@@ -164,6 +164,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
     setError("");
   };
   const analyze = () => {
+    if (!active) return;
     if (new TextEncoder().encode(input).byteLength > MAX_JSON_BYTES) {
       setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
       return;

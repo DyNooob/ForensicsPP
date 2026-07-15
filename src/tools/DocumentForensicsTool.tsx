@@ -74,7 +74,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
   });
 
   const choose = (next?: File) => {
-    if (!next) return;
+    if (!next || !active) return;
     workspace.clear();
     abortRef.current?.abort();
     abortRef.current = null;
@@ -94,18 +94,19 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
   };
 
   const analyze = async () => {
-    if (!file || loading) return;
+    if (!active || !file || loading) return;
     setLoading(true);
     setError("");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
       const result = await analyzeInWorker(file, controller.signal);
+      if (!active || controller.signal.aborted) return;
       setAnalysis(result);
       workspace.save(persistableDocumentAnalysis(result));
       setView("summary");
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (!active || (caught instanceof DOMException && caught.name === "AbortError")) return;
       setAnalysis(null);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
