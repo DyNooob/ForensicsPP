@@ -65,7 +65,7 @@ const operations: Operation[] = [
 const MAX_CRYPTO_INPUT_CHARS = 2 * 1024 * 1024;
 const MAX_BRUTEFORCE_INPUT_CHARS = 512 * 1024;
 
-export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: CryptoToolServices }) {
+export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: CryptoToolServices; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [input, setInput] = useStoredState("crypto.input.v2", "");
   const [output, setOutput] = useStoredState("crypto.output.v2", "");
@@ -101,7 +101,7 @@ export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: 
   }, [affineA, affineB, key, operation, rails, services, shift]);
 
   const run = () => {
-    if (inputTooLarge) return;
+    if (!active || inputTooLarge) return;
     setOutput(transform(input));
   };
   const clear = () => {
@@ -109,11 +109,11 @@ export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: 
     setOutput("");
   };
   const useResultAsInput = () => {
-    if (!output) return;
+    if (!active || !output) return;
     setInput(output);
     setOutput("");
   };
-  const caesarRows = operation === "caesar-all"
+  const caesarRows = active && operation === "caesar-all"
     ? Array.from({ length: 26 }, (_, index) => ({ shift: index, value: services.caesar(input, index) }))
     : [];
 

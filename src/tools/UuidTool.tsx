@@ -127,7 +127,10 @@ function uuidAnalysesToCsv(items: UuidAnalysis[]) {
   ].join("\n");
 }
 
-export function UuidTool({ t }: { t: Translation }) {
+const MAX_UUID_INPUT_CHARS = 2 * 1024 * 1024;
+const MAX_UUID_VALUES = 10000;
+
+export function UuidTool({ t, active = true }: { t: Translation; active?: boolean }) {
   const [value, setValue] = useStoredState("uuid.value.v2", "");
   const [query, setQuery] = useStoredState("uuid.query.v2", "");
   const [sortMode, setSortMode] = useStoredState<"input" | "time" | "version">("uuid.sortMode.v2", "input");
@@ -135,10 +138,16 @@ export function UuidTool({ t }: { t: Translation }) {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(value.trim());
+  const inputTooLarge = value.length > MAX_UUID_INPUT_CHARS;
+  const uuidMatches = React.useMemo(() => {
+    if (!active || inputTooLarge) return [];
+    return value.match(/[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}/g) ?? [];
+  }, [active, inputTooLarge, value]);
+  const tooManyValues = uuidMatches.length > MAX_UUID_VALUES;
   const analyses = React.useMemo(() => {
-    const matches = value.match(/[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}/g);
-    return (matches?.length ? matches : [value]).map(analyzeUuid);
-  }, [value]);
+    if (!active || inputTooLarge || tooManyValues) return [];
+    return (uuidMatches.length ? uuidMatches : [value]).map(analyzeUuid);
+  }, [active, inputTooLarge, tooManyValues, uuidMatches, value]);
   const selected = analyses[Math.min(selectedIndex, Math.max(0, analyses.length - 1))] ?? analyzeUuid("");
   const selectedRows = React.useMemo<Array<[string, string]>>(() => {
     if (english) return selected.rows;
@@ -185,6 +194,8 @@ export function UuidTool({ t }: { t: Translation }) {
       <div className="tool-panel wide-panel uuid-simple-input-panel">
         <ToolPanelHeader title={english ? "UUID input" : "UUID 输入"} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
         <textarea className="single-textarea uuid-simple-input" aria-label={english ? "UUID input" : "UUID 输入"} value={value} placeholder={english ? "Paste one or more UUID values" : "粘贴一个或多个 UUID"} onChange={(event) => { setValue(event.currentTarget.value); setSelectedIndex(0); }} />
+        {inputTooLarge && <div className="empty-state error-state" role="alert">{english ? "Input is limited to 2 MiB." : "输入内容不能超过 2 MiB。"}</div>}
+        {tooManyValues && <div className="empty-state error-state" role="alert">{english ? "Batch parsing is limited to 10,000 UUID values." : "批量解析最多支持 10,000 个 UUID。"}</div>}
         <div className="action-row">
           <AButton variant="filled" onClick={() => replaceWithGenerated(4)}>{t.generate} v4</AButton>
           <AButton variant="outlined" onClick={() => replaceWithGenerated(7)}>{english ? "Generate v7" : "生成 v7"}</AButton>

@@ -41,10 +41,11 @@ function safeDecode(value: string) {
   try { return decodeURIComponent(value); } catch { return value; }
 }
 
-export function UrlTool({ t }: { t: (typeof copy)["zh"] }) {
+export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [input, setInput] = useStoredState("url.input.v4", "");
   const parsed = React.useMemo(() => {
+    if (!active) return { url: null as URL | null, normalized: "", error: "" };
     const raw = refang(input);
     if (!raw) return { url: null as URL | null, normalized: "", error: "" };
     try {
@@ -54,7 +55,7 @@ export function UrlTool({ t }: { t: (typeof copy)["zh"] }) {
     } catch (caught) {
       return { url: null, normalized: "", error: caught instanceof Error ? caught.message : String(caught) };
     }
-  }, [input]);
+  }, [active, input]);
 
   const url = parsed.url;
   const params = url ? Array.from(url.searchParams.entries()) : [];

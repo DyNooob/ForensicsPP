@@ -4,7 +4,7 @@
   </a>
 
   <h1>Forensics++ Workbench</h1>
-  <p>浏览器端电子数据取证工具箱</p>
+  <p>浏览器端电子数据取证工作台 · Browser-local DFIR tools</p>
 
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
@@ -18,56 +18,43 @@
   <p>
     <a href="https://www.forensicspp.com/">在线使用</a>
     · <a href="https://github.com/DyNooob/ForensicsPP">源码仓库</a>
-    · <a href="#本地运行">本地运行</a>
+    · <a href="#快速开始">快速开始</a>
     · <a href="#生产构建">生产构建</a>
     · <a href="./CONTRIBUTING.md">参与开发</a>
   </p>
 </div>
 
-## 这是什么
+## Forensics++ 是什么
 
-Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、日志等工具直接在浏览器中运行，不需要 Forensics++ 服务器。
+Forensics++ 是一个面向取证初筛、CTF/MISC、安全研究和日常证据整理的浏览器端工作台。它把常用的文件、图片、邮件、数据库、日志、网络和编码工具放在一个统一界面中，打开浏览器即可使用。
 
-仓库包含 React / TypeScript 源码、Worker、构建脚本、测试和页面资源。构建结果在 `dist/`，不提交到 `main`。
+核心定位很简单：**工具要直接、结果要可复核、界面要适合长时间工作。**
 
-## 工具
+常见分析在浏览器本地完成，不依赖 Forensics++ 后端服务。项目完全开源，源码、构建脚本、测试和发布资源均在本仓库中。
 
-| 类别 | 工具 |
+## 能做什么
+
+| 方向 | 主要能力 |
 | --- | --- |
-| 文件 | 文件哈希、文件头、字符串、熵、PE / ELF / Mach-O、YARA |
-| 图片与压缩包 | 图片工作台、PNG、二维码、ZIP / APK / JAR / OOXML；压缩包条目按需预览、保存和计算 SHA-256 |
-| 数据库与结构化数据 | SQLite（含 WAL / SHM）、SQL 转储、JSON、Plist、浏览器数据 |
-| 邮件与网络 | EML / MSG、HTTP、URL、IOC、PCAP / PCAPNG |
-| 系统记录 | Registry Hive、EVTX、LNK、Prefetch、REG、AndroidManifest |
-| 文档与时间 | PDF / OOXML / OLE、时间戳转换、多源时间线 |
-| 转换 | CyberChef、编码解码、进制、UUID、JWT、常见密码哈希 |
+| 文件与证据 | 文件哈希、文件类型识别、文件头解析、字符串提取、熵分析、二进制结构查看 |
+| 图片与附件 | 图片预览、EXIF、PNG 结构、通道查看、隐写线索、损坏图片修复尝试、二维码识别、压缩包目录 |
+| 数据库 | SQLite 表浏览、分页、排序、列宽调整、单元格编辑、插入与删除、SQL 查询、WAL/SHM 检查、导出 |
+| 邮件与网络 | EML/MSG 解析、HTML 正文查看、邮件头与认证结果、附件查看、HTTP、URL、IOC、PCAP/PCAPNG 摘要 |
+| 系统记录 | AndroidManifest、Windows Registry、EVTX、浏览器历史与下载记录、Prefetch、LNK、REG 等常见结构 |
+| 文档与时间 | PDF、OOXML、OLE、时间戳转换、时间线整理、多源事件合并 |
+| 编码与安全 | 编码解码、进制转换、UUID、JSON、正则、JWT、常见密码哈希、YARA、CyberChef |
 
-应用首页列出全部 35 个工具入口，首页本身不计入工具数量。
+工具之间使用统一的输入、结果、复制、下载和清空交互。需要保存的工作区可以在切换工具或刷新页面后继续查看，也可以加入案件报告统一整理。
 
-## 数据保存
+## 快速开始
 
-- 切换工具时，已经打开的页面会保留在当前标签页中，输入和结果不会因为切页消失。
-- SQLite、流量包、邮件、图片、浏览器数据、EVTX、Office/PDF、SQL Dump、Android Manifest、压缩包目录、Windows Artifact、Registry、Plist、二进制分析、文件识别、PNG 和二维码工作区会保存在浏览器的 IndexedDB 中，刷新页面后可以继续查看；工具内的“清空”会同时删除对应工作区。
-- 对大文件工具，工作区保存解析结果和受控大小的预览数据，不会无限保存原始检材；例如压缩包重新打开条目预览仍需要重新选择原文件。
-- 主题、语言、最近使用等小型设置保存在 `localStorage`。
-- URL、编码、古典密码、JSON、正则、时间戳、UUID 和进制转换的文本输入会保存在浏览器工作区，重新打开工具后可以继续处理；点击工具内的“清空”或全局清理会删除这些内容。
-- 哈希文本和比对值、IOC、原始 HTTP 报文、时间线源文本、字符串提取文本、熵分析文本和 YARA 文本样本也会恢复。密码、JWT 密钥/私钥以及原始 `File` 对象不会持久化。
-- 设置 → 本地数据可以查看浏览器存储占用量并清除全部工作区和设置。
+### 在线使用
 
-浏览器工作区用于继续当前检查，不代替检材保管和正式归档。
+打开 [forensicspp.com](https://www.forensicspp.com/)，从首页或左侧工具目录选择工具即可。
 
-在工具页点击“加入报告”时，当前仍可读取的文件会登记到报告清单：文件名、大小、类型、修改时间和 SHA-256。只有这个明确动作会计算源文件 SHA-256；普通分析和切换工具不会额外计算。
-邮件附件的 SHA-256 也只在附件行中明确点击计算时生成，可复制结果；解析邮件本身不会自动为所有附件计算哈希。
-PCAP 中提取出的 HTTP 文件同样支持按需计算 SHA-256，避免对未选择的输出做额外计算。
-较大的报告和工作区状态会自动使用 IndexedDB 保存，避免超过 localStorage 限制后静默丢失。
-报告窗口支持导出 Markdown、可直接双击打开的自包含 HTML、JSON、CSV 和 Bundle JSON；Bundle 导入前会校验结构，并在确认后替换当前案件记录。
-在报告的证据清单中可以主动选择本地源文件进行 SHA-256 核验，结果不会在未点击核验前自动计算。
-复制按钮优先使用浏览器剪贴板；在静态 `file://` 包或剪贴板权限不可用时，会尝试使用浏览器兼容的降级方式。
-输入状态的写入经过短暂合并，长文本编辑时不会每次按键都写入浏览器存储。
+### 本地开发
 
-## 本地运行
-
-需要：
+环境要求：
 
 - Node.js `22.13` 或更高版本
 - npm `10` 或更高版本
@@ -79,105 +66,107 @@ npm ci
 npm run dev
 ```
 
-Vite 会打印访问地址，默认通常是 `http://localhost:5173/`。
+Vite 会启动开发服务器并输出访问地址，默认通常为 `http://localhost:5173/`。
 
 ## 生产构建
+
+构建完整的静态网站：
 
 ```bash
 npm run build
 ```
 
-该命令会：
-
-1. 清理旧的 `dist/`。
-2. 检查源码版权头。
-3. 执行 TypeScript 类型检查。
-4. 使用 Vite 构建静态文件。
-5. 检查 `dist/` 是否缺文件、混入源码或超过体积限制。
-
-本地预览：
+构建完成后，`dist/` 即为可部署的静态站点。预览生产构建：
 
 ```bash
 npm run preview
 ```
 
-完整测试和构建：
+发布前建议执行完整校验：
 
 ```bash
 npm run verify
 ```
 
+该命令会运行测试、TypeScript 类型检查、生产构建和构建产物校验。
+
 ## 静态发布包
+
+生成可直接交给静态服务器或文件分发的 ZIP：
 
 ```bash
 npm run build
 npm run release:package
 ```
 
-输出：
+输出文件：
 
 ```text
 release/ForensicsPP-v1.0.0-alpha.4-static.zip
 release/SHA256SUMS.txt
 ```
 
-ZIP 内只有已经构建的静态网站。解压后可放到 Nginx、Apache、对象存储或其他静态托管服务。
+ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。解压后可以部署到 Nginx、Apache、GitHub Pages、对象存储或其他静态托管平台。
+
+## 数据与隐私
+
+Forensics++ 不要求后端服务。文件和文本通常在当前浏览器中处理；界面设置和可恢复的工作区由浏览器保存。原始文件不会因为打开工具而自动上传到 Forensics++ 服务器。
+
+浏览器存储只用于提升连续使用体验，不替代正式的检材保管、只读镜像、证据登记或报告归档。处理敏感数据前，请确认当前浏览器配置、扩展和运行环境符合你的工作要求。
+
+你可以在 **设置 → 本地数据** 查看存储占用，并清除 Forensics++ 保存的设置和工作区。
+
+## 项目结构
+
+```text
+src/components/   通用界面与工作台组件
+src/config/       工具目录、版本与开源依赖
+src/features/     解析器、分析器与 Web Worker
+src/tools/        工具页面
+src/utils/        存储、文件、复制和通用辅助函数
+tests/            单元测试与解析器测试
+scripts/          构建、发布、产物校验和布局审计
+public/           网站资源、法律说明和内置静态工具
+docs/             发布和开发文档
+```
 
 ## 常用命令
 
-| 命令 | 作用 |
+| 命令 | 用途 |
 | --- | --- |
 | `npm run dev` | 启动开发服务器 |
-| `npm test` | 运行测试 |
-| `npm run typecheck` | TypeScript 类型检查 |
-| `npm run build` | 构建 `dist/` |
+| `npm run test` | 运行测试 |
+| `npm run typecheck` | 执行 TypeScript 类型检查 |
+| `npm run build` | 构建生产静态文件 |
 | `npm run verify` | 测试并构建 |
-| `npm run preview` | 预览 `dist/` |
-| `npm run audit:layout` | 检查全部工具的布局、文件加载状态和关键交互 |
-| `npm run release:package` | 生成静态 ZIP 和校验文件 |
+| `npm run preview` | 预览生产构建 |
+| `npm run audit:layout` | 检查工具布局和关键交互 |
+| `npm run release:package` | 生成静态发布 ZIP 和校验文件 |
 
-## 目录
-
-```text
-src/components/   通用界面组件
-src/config/       工具列表、版本、开源依赖
-src/features/     解析器和业务逻辑
-src/tools/        工具页面
-src/utils/        下载、存储等通用代码
-tests/            自动测试
-scripts/          构建、打包和布局审计
-public/           图标、法律页面、CyberChef 等静态文件
-docs/releases/    双语版本发布说明
-```
-
-## 部署
-
-源码仓库使用 GitHub 作为当前发布入口。源码推送前应先在本地执行 `npm run verify`，再按 [`docs/RELEASE.md`](./docs/RELEASE.md) 的 GitHub 流程发布。
-
-其他平台使用：
-
-```text
-Build command: npm ci && npm run build
-Publish directory: dist
-```
-
-不要把仓库根目录、`.git` 或 `node_modules` 作为网站目录。
-
-布局审计默认访问 Vite 的 `5173` 端口；如果开发服务器使用了其他端口，请指定 `AUDIT_URL`：
+布局审计默认使用本机 Chrome，并访问 `5173` 端口。如开发服务器使用其他端口：
 
 ```bash
 AUDIT_URL=http://localhost:5174 npm run audit:layout
 ```
 
-布局审计需要本机安装 Google Chrome。脚本默认使用 macOS 的 Chrome 路径；其他系统或自定义安装位置请同时指定 `CHROME_PATH`：
+## 参与开发
 
-```bash
-CHROME_PATH=/path/to/chrome AUDIT_URL=http://localhost:5173 npm run audit:layout
-```
+1. Fork 仓库并创建功能分支。
+2. 保持工具输入、结果、错误和清空操作与现有工作台一致。
+3. 为解析逻辑或边界行为补充测试。
+4. 提交前运行 `npm run verify`。
+5. 提交问题时不要上传真实检材、凭据、个人信息或未经授权的数据。
 
-## 其他
+更完整的开发约定见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)，发布流程见 [`docs/RELEASE.md`](./docs/RELEASE.md)。
 
-- 开源依赖及仓库地址见 [`src/config/openSource.ts`](./src/config/openSource.ts)。
-- 发布步骤见 [`docs/RELEASE.md`](./docs/RELEASE.md)。
-- 安全问题请按 [`SECURITY.md`](./SECURITY.md) 中的方式联系，不要在公开 Issue 上传真实检材或凭据。
-- 项目许可证见 [`LICENSE`](./LICENSE)。
+## 安全问题
+
+请通过 [`SECURITY.md`](./SECURITY.md) 中公布的邮箱联系维护者。请不要在公开 Issue、Pull Request 或邮件首条消息中附上真实检材、密码、访问令牌或完整利用细节。
+
+## 许可证与联系
+
+本项目使用 [MIT License](./LICENSE)。
+
+- 项目仓库：[DyNooob/ForensicsPP](https://github.com/DyNooob/ForensicsPP)
+- 产品网站：[forensicspp.com](https://www.forensicspp.com/)
+- 产品反馈：`toolab@digiforensics.cn`

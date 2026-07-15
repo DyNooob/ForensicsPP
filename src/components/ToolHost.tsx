@@ -126,7 +126,7 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, 
             {toolId === "cyberchef" && <CyberChefTool t={t} />}
             {toolId === "image" && <ImageTool t={t} active={active} />}
             {toolId === "codec" && <CodecTool t={t} active={active} />}
-            {toolId === "crypto" && <CryptoTool t={t} />}
+            {toolId === "crypto" && <CryptoTool t={t} active={active} />}
             {toolId === "jwt" && <JwtTool t={t} active={active} />}
             {toolId === "password" && <PasswordTool t={t} active={active} />}
             {toolId === "sql" && <SqlTool t={t} active={active} />}
@@ -139,7 +139,7 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, 
             {toolId === "android" && <AndroidManifestTool t={t} active={active} />}
             {toolId === "ioc" && <IocTool t={t} active={active} />}
             {toolId === "email" && <EmailTool t={t} active={active} />}
-            {toolId === "urltool" && <UrlTool t={t} />}
+            {toolId === "urltool" && <UrlTool t={t} active={active} />}
             {toolId === "http" && <HttpTool t={t} active={active} />}
             {toolId === "qr" && <QrTool t={t} active={active} />}
             {toolId === "fileid" && <FileIdTool t={t} active={active} />}
@@ -152,8 +152,8 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, 
             {toolId === "hash" && <HashTool t={t} active={active} />}
             {toolId === "timestamp" && <TimestampTool t={t} active={active} />}
             {toolId === "timeline" && <TimelineTool t={t} active={active} />}
-            {toolId === "baseconvert" && <BaseConvertTool t={t} />}
-            {toolId === "uuid" && <UuidTool t={t} />}
+            {toolId === "baseconvert" && <BaseConvertTool t={t} active={active} />}
+            {toolId === "uuid" && <UuidTool t={t} active={active} />}
             {toolId === "json" && <JsonTool t={t} active={active} />}
             {toolId === "regex" && <RegexTool t={t} active={active} />}
             {toolId === "pcap" && <PcapTool t={t} active={active} />}

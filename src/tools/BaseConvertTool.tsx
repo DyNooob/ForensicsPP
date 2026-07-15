@@ -114,16 +114,17 @@ function rowsToCsv(items: BaseConvertRow[]) {
 const MAX_BASE_CONVERT_INPUT_CHARS = 1_000_000;
 const MAX_BASE_CONVERT_ROWS = 10_000;
 
-export function BaseConvertTool({ t }: { t: Translation }) {
+export function BaseConvertTool({ t, active = true }: { t: Translation; active?: boolean }) {
   const [value, setValue] = useStoredState("baseconvert.value.v3", "");
   const [base, setBase] = useStoredState("baseconvert.base", 16);
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(value.trim());
   const inputTooLarge = value.length > MAX_BASE_CONVERT_INPUT_CHARS;
   const rowCount = React.useMemo(() => {
+    if (!active) return 0;
     if (inputTooLarge) return MAX_BASE_CONVERT_ROWS + 1;
     return value.split(/\r?\n|,\s*/).filter((item) => item.trim()).length;
-  }, [inputTooLarge, value]);
+  }, [active, inputTooLarge, value]);
   const rowsTooMany = rowCount > MAX_BASE_CONVERT_ROWS;
   const conversionError = inputTooLarge
     ? (english ? "Input is limited to 1,000,000 characters." : "输入内容不能超过 1,000,000 个字符。")
@@ -131,9 +132,9 @@ export function BaseConvertTool({ t }: { t: Translation }) {
       ? (english ? "Batch conversion is limited to 10,000 values." : "批量转换最多支持 10,000 个数值。")
       : "";
   const items = React.useMemo(() => {
-    if (conversionError) return [];
+    if (!active || conversionError) return [];
     return value.split(/\r?\n|,\s*/).map((item) => item.trim()).filter(Boolean).map((item) => analyzeValue(item, base));
-  }, [base, conversionError, value]);
+  }, [active, base, conversionError, value]);
   const single = items.length === 1 ? items[0] : null;
   const resultRows = React.useMemo<Array<[string, string]>>(() => single ? [
     [english ? "Detected input" : "识别输入", single.detectedBase],
