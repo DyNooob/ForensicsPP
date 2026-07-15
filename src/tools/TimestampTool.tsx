@@ -30,6 +30,7 @@ import {
   generalizedTime,
   GPS_EPOCH_MS,
   HFS_EPOCH_OFFSET_MS,
+  MAX_TIMESTAMP_BATCH_CHARS,
   parseTimestampRows,
   timestampCandidateKey,
   timestampCandidateRows,
@@ -80,6 +81,7 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
   const conversionMap = React.useMemo(() => new Map(conversions), [conversions]);
 
   const batchFormats = React.useMemo(() => Array.from(new Set(batchEvents.map((event) => event.format))).sort(), [batchEvents]);
+  const batchInputTooLarge = batchInput.length > MAX_TIMESTAMP_BATCH_CHARS;
   const visibleBatchEvents = React.useMemo(() => {
     const query = batchFilter.trim().toLowerCase();
     return batchEvents.filter((event) => {
@@ -112,7 +114,9 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
     }).catch((caught) => {
       if (!controller.signal.aborted) {
         setBatchEvents([]);
-        setBatchError(caught instanceof Error ? caught.message : String(caught));
+        setBatchError(caught instanceof RangeError && caught.message.startsWith("TIMESTAMP_BATCH_TOO_LARGE:")
+          ? (english ? "The batch input exceeds the 32 MiB limit." : "批量输入超过 32 MiB 限制。")
+          : caught instanceof Error ? caught.message : String(caught));
       }
     }).finally(() => {
       if (!controller.signal.aborted) setBatchParsing(false);
@@ -207,11 +211,12 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
           subtitle={`${visibleBatchEvents.length}/${batchEvents.length}`}
           actions={<>
             <AButton variant="outlined" disabled={!batchEvents.length} onClick={() => downloadTextFile(`timestamp-batch-${Date.now()}.csv`, timelineToCsv(visibleBatchEvents.length ? visibleBatchEvents : batchEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
-              <AButton variant="filled" disabled={!batchInput.trim()} onClick={() => { setSubmittedBatchInput(batchInput); setBatchFilter(""); setBatchFormat(""); }}>{english ? "Extract" : "提取"}</AButton>
+              <AButton variant="filled" disabled={!batchInput.trim() || batchInputTooLarge} onClick={() => { setSubmittedBatchInput(batchInput); setBatchFilter(""); setBatchFormat(""); }}>{english ? "Extract" : "提取"}</AButton>
               <AButton variant="text" disabled={!batchInput && !submittedBatchInput} onClick={() => { setBatchInput(""); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }}>{t.clear}</AButton>
           </>}
         />
         <textarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
+        {batchInputTooLarge && <div className="empty-state error-state">{english ? "The batch input exceeds the 32 MiB limit." : "批量输入超过 32 MiB 限制。"}</div>}
         <div className="timestamp-simple-batch-filter">
           <input className="text-input" aria-label={english ? "Filter extracted timestamps" : "筛选提取的时间戳"} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={english ? "Filter raw value, ISO, or context" : "筛选原值、ISO 或上下文"} />
           <ASelect aria-label={english ? "Batch result format" : "批量结果格式"} value={batchFormat} onChange={(value) => setBatchFormat(String(value))} options={[{ value: "", label: english ? "All formats" : "全部格式" }, ...batchFormats.map((format) => ({ value: format, label: format }))]} />

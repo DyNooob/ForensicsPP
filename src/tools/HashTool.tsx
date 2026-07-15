@@ -37,6 +37,7 @@ export type HashToolServices = {
 };
 
 const PAGE_SIZE = 100;
+const MAX_HASH_TEXT_BYTES = 16 * 1024 * 1024;
 const ALGORITHMS = [
   { id: "md5", label: "MD5" },
   { id: "sha1", label: "SHA-1" },
@@ -246,6 +247,10 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
     setIsHashing(true);
     try {
       const bytes = new TextEncoder().encode(text);
+      if (bytes.byteLength > MAX_HASH_TEXT_BYTES) {
+        setError(english ? "Text input exceeds the 16 MiB limit." : "文本输入超过 16 MiB 限制。");
+        return;
+      }
       const values = await hashBytesInWorker(bytes, algorithms, { signal: controller.signal });
       if (!active || controller.signal.aborted || runId !== textRunRef.current) return;
       setTextHashes(Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]))));

@@ -34,6 +34,7 @@ const TWITTER_SNOWFLAKE_EPOCH_MS = 1288834974657n;
 export const DAY_MS = 86400000;
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const KSUID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+export const MAX_TIMESTAMP_BATCH_CHARS = 32 * 1024 * 1024;
 
 export function formatTimelineDuration(seconds: number) {
   const safe = Math.max(0, Math.floor(seconds));
@@ -487,6 +488,9 @@ export function timelineContextRisks(context: string) {
 }
 
 export function parseTimestampCandidates(raw: string, source = "pasted text"): TimelineEvent[] {
+  if (raw.length > MAX_TIMESTAMP_BATCH_CHARS) {
+    throw new RangeError(`TIMESTAMP_BATCH_TOO_LARGE:${MAX_TIMESTAMP_BATCH_CHARS}`);
+  }
   const patterns = [
     /\b[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
     /\b[0-9a-f]{24}\b/gi,

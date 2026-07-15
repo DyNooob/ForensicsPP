@@ -24,7 +24,7 @@ import { zipSync } from "fflate";
 import { analyzeIocs } from "../src/features/ioc/analyzer";
 import { parseSqlDump } from "../src/features/sql/analyzer";
 import { coerceSqliteEditValue, loadSqliteTableRows, quoteSqlIdentifier, quoteSqlLiteral, sqliteFilterWhere, sqliteHexDump, sqliteInternalRowidIdentifier, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
-import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseTimestampCandidates, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
+import { MAX_TIMESTAMP_BATCH_CHARS, parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseTimestampCandidates, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
 import { parseArchiveEntries } from "../src/tools/ArchiveTool";
 
 describe("forensic timestamp identifiers", () => {
@@ -48,6 +48,10 @@ describe("forensic timestamp identifiers", () => {
     expect(first?.source).toBe("auth.log");
     expect(second?.source).toBe("system.log");
     expect(first?.id).not.toBe(second?.id);
+  });
+
+  it("rejects oversized batch input before scanning it", () => {
+    expect(() => parseTimestampCandidates("x".repeat(MAX_TIMESTAMP_BATCH_CHARS + 1))).toThrow("TIMESTAMP_BATCH_TOO_LARGE");
   });
 });
 
