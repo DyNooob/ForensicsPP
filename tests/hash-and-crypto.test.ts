@@ -22,6 +22,7 @@
 import { describe, expect, it } from "vitest";
 import { atbash, caesar, morseDecode, morseEncode, railFence, railFenceDecode, vigenere } from "../src/features/crypto/algorithms";
 import { annotateBatchHashMatches, parseExpectedHashSet } from "../src/features/hash/matching";
+import { extractJwtTokens, MAX_JWT_TOKEN_CHARS } from "../src/features/jwt/analyzer";
 import { detectHashType, formatHashCase, hashBytes, hashSelectedFile, normalizeHashAlgorithms, SM3_FILE_SIZE_LIMIT } from "../src/utils/hash";
 
 describe("standard digest vectors", () => {
@@ -126,5 +127,14 @@ describe("classical cipher round trips", () => {
     const encrypted = railFence("WEAREDISCOVEREDFLEEATONCE", 3);
     expect(encrypted).toBe("WECRLTEERDSOEEFEAOCAIVDEN");
     expect(railFenceDecode(encrypted, 3)).toBe("WEAREDISCOVEREDFLEEATONCE");
+  });
+});
+
+describe("JWT input bounds", () => {
+  it("ignores an oversized embedded token instead of parsing it", () => {
+    const oversized = `eyJ${"a".repeat(MAX_JWT_TOKEN_CHARS)}.eyJx`;
+    const valid = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature";
+
+    expect(extractJwtTokens(`${oversized}\n${valid}`)).toEqual([valid]);
   });
 });

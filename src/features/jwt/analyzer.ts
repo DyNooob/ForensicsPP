@@ -23,6 +23,9 @@ import CryptoJS from "crypto-js";
 import { uniqueValues } from "../../utils/collections";
 import { base64UrlDecode, base64UrlEncode, base64UrlToBytes } from "../../utils/base64";
 
+export const MAX_JWT_INPUT_CHARS = 8 * 1024 * 1024;
+export const MAX_JWT_TOKEN_CHARS = 2 * 1024 * 1024;
+
 export function signJwtHS256(header: string, payload: string, secret: string) {
   const encodedHeader = base64UrlEncode(header);
   const encodedPayload = base64UrlEncode(payload);
@@ -274,5 +277,8 @@ export function inspectJwtToken(token: string, secret: string) {
 }
 
 export function extractJwtTokens(text: string) {
-  return uniqueValues(text.match(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?\b/g) ?? [], 200);
+  return uniqueValues(
+    text.match(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?\b/g)?.filter((token) => token.length <= MAX_JWT_TOKEN_CHARS) ?? [],
+    200
+  );
 }

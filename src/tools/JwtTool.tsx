@@ -23,6 +23,7 @@ import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, APasswordField, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
+import { MAX_JWT_INPUT_CHARS, MAX_JWT_TOKEN_CHARS } from "../features/jwt/analyzer";
 
 type Finding = { level: string; title: string; detail: string };
 type JwtInspection = {
@@ -77,7 +78,8 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     setVerification({ status: "idle", detail: "" });
   }, [active]);
 
-  const tokens = React.useMemo(() => extractJwtTokens(tokenInput).slice(0, 200), [extractJwtTokens, tokenInput]);
+  const inputTooLarge = tokenInput.length > MAX_JWT_INPUT_CHARS;
+  const tokens = React.useMemo(() => active && !inputTooLarge ? extractJwtTokens(tokenInput).slice(0, 200) : [], [active, extractJwtTokens, inputTooLarge, tokenInput]);
   const tokenRows = React.useMemo<JwtListRow[]>(() => tokens.map((token) => {
     const inspection = inspectJwtToken(token, secret);
     const rowMap = new Map(inspection.rows);
@@ -102,7 +104,11 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
   const isHmac = /^HS(?:256|384|512)$/i.test(activeAlg);
   const multiToken = tokenRows.length > 1;
   const hasInput = Boolean(tokenInput || secret || verifyKey || generatedToken);
-  const parseError = tokenInput.trim() && !tokens.length ? (activeInspection.result || (english ? "No valid JWT found" : "未找到有效 JWT")) : "";
+  const parseError = inputTooLarge
+    ? (english ? `Input exceeds ${Math.round(MAX_JWT_INPUT_CHARS / 1024 / 1024)} MiB.` : `输入超过 ${Math.round(MAX_JWT_INPUT_CHARS / 1024 / 1024)} MiB。`)
+    : tokenInput.trim() && !tokens.length
+      ? (activeInspection.result || (english ? `No valid JWT found (single token limit: ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB)` : `未找到有效 JWT（单个 Token 上限 ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB）`))
+      : "";
   const summaryRows = React.useMemo<Array<[string, string]>>(() => activeRow ? [
     ["alg", activeAlg],
     ["typ", activeRows.get("typ") ?? "--"],

@@ -170,7 +170,7 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     if (active) return;
     requestRef.current += 1;
   }, [active]);
-  const parsed = React.useMemo(() => parseHttpMessage(text), [text]);
+  const parsed = React.useMemo(() => active ? parseHttpMessage(text) : parseHttpMessage(""), [active, text]);
   const hasInput = Boolean(text.trim());
 
   const examples = {
