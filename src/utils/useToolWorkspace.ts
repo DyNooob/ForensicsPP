@@ -43,6 +43,8 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
   const saveTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const saveSequenceRef = React.useRef(0);
   const pendingSaveRef = React.useRef<{ generation: number; sequence: number; value: T } | null>(null);
+  const removalQueuedRef = React.useRef(false);
+  const removalTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const mountedRef = React.useRef(true);
   const restoreStartedRef = React.useRef(false);
   const restoreCancelledRef = React.useRef(false);
@@ -67,6 +69,21 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
     });
   }, [id, queue, version]);
 
+  const removePersistedSession = React.useCallback(() => {
+    if (removalQueuedRef.current) return;
+    removalQueuedRef.current = true;
+    void queue(() => removeToolSession(id))
+      .catch(() => undefined)
+      .finally(() => { removalQueuedRef.current = false; });
+  }, [id, queue]);
+
+  const flushPendingRemoval = React.useCallback(() => {
+    if (removalTimerRef.current === null) return;
+    window.clearTimeout(removalTimerRef.current);
+    removalTimerRef.current = null;
+    removePersistedSession();
+  }, [removePersistedSession]);
+
   const flushPendingSave = React.useCallback(() => {
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
@@ -88,11 +105,21 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
       saveTimerRef.current = null;
     }
     if (mountedRef.current) setState("idle");
-    void queue(() => removeToolSession(id)).catch(() => undefined);
-  }, [id, queue]);
+    if (removalQueuedRef.current || removalTimerRef.current !== null) return;
+    // Text tools can clear on every keystroke; coalesce those deletes into one I/O operation.
+    removalTimerRef.current = window.setTimeout(() => {
+      removalTimerRef.current = null;
+      if (removalQueuedRef.current) return;
+      removePersistedSession();
+    }, 120);
+  }, [removePersistedSession]);
 
   const save = React.useCallback((value: T) => {
     restoreCancelledRef.current = true;
+    if (removalTimerRef.current !== null) {
+      window.clearTimeout(removalTimerRef.current);
+      removalTimerRef.current = null;
+    }
     const generation = generationRef.current;
     const sequence = ++saveSequenceRef.current;
     pendingSaveRef.current = { generation, sequence, value };
@@ -106,18 +133,26 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
 
   React.useEffect(() => {
     const flushWhenHidden = () => {
-      if (document.visibilityState === "hidden") flushPendingSave();
+      if (document.visibilityState === "hidden") {
+        flushPendingSave();
+        flushPendingRemoval();
+      }
+    };
+    const flushOnPageHide = () => {
+      flushPendingSave();
+      flushPendingRemoval();
     };
     document.addEventListener("visibilitychange", flushWhenHidden);
-    window.addEventListener("pagehide", flushPendingSave);
+    window.addEventListener("pagehide", flushOnPageHide);
     return () => {
       // Route changes can unmount a tool before the debounce timer fires.
       // Flush the latest workspace so switching tools does not lose work.
       flushPendingSave();
+      flushPendingRemoval();
       document.removeEventListener("visibilitychange", flushWhenHidden);
-      window.removeEventListener("pagehide", flushPendingSave);
+      window.removeEventListener("pagehide", flushOnPageHide);
     };
-  }, [flushPendingSave]);
+  }, [flushPendingRemoval, flushPendingSave]);
 
   React.useEffect(() => {
     mountedRef.current = true;

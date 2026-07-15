@@ -46,6 +46,23 @@ import type { TimestampWorkerRequest, TimestampWorkerResult } from "../features/
 
 type TimestampPage = "single" | "batch";
 
+function currentTimePresetRows(nowMs: number) {
+  const current = BigInt(nowMs);
+  return [
+    { id: "unix", label: "Unix seconds", value: Math.floor(nowMs / 1000).toString() },
+    { id: "unix-ms", label: "Unix milliseconds", value: nowMs.toString() },
+    { id: "filetime", label: "Windows FILETIME", value: ((current + FILETIME_EPOCH_OFFSET_MS) * 10000n).toString() },
+    { id: "chrome", label: "Chrome/WebKit", value: ((current + FILETIME_EPOCH_OFFSET_MS) * 1000n).toString() },
+    { id: "dotnet", label: ".NET ticks", value: ((current + DOTNET_EPOCH_OFFSET_MS) * 10000n).toString() },
+    { id: "ole", label: "OLE / Excel days", value: (nowMs / DAY_MS + 25569).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") },
+    { id: "cocoa", label: "Cocoa / CoreData", value: ((nowMs - COCOA_EPOCH_MS) / 1000).toFixed(3).replace(/\.000$/, "") },
+    { id: "hfs", label: "HFS+ seconds", value: Math.floor((nowMs + HFS_EPOCH_OFFSET_MS) / 1000).toString() },
+    { id: "gps", label: "GPS seconds", value: Math.floor((nowMs - GPS_EPOCH_MS) / 1000).toString() },
+    { id: "ldap", label: "LDAP GeneralizedTime", value: generalizedTime(new Date(nowMs)) },
+    { id: "iso", label: "ISO 8601", value: new Date(nowMs).toISOString() }
+  ];
+}
+
 export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const [input, setInput] = useStoredState("timestamp.input.v3", "");
   const [batchInput, setBatchInput] = useStoredState("timestamp.batchInput.v3", "");
@@ -130,26 +147,11 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
     setSelectedCandidateKey("");
     setPage("single");
   };
-  const currentTimePresets = React.useMemo(() => {
-    const currentMs = Date.now();
-    const current = BigInt(currentMs);
-    return [
-      { id: "unix", label: "Unix seconds", value: Math.floor(currentMs / 1000).toString() },
-      { id: "unix-ms", label: "Unix milliseconds", value: currentMs.toString() },
-      { id: "filetime", label: "Windows FILETIME", value: ((current + FILETIME_EPOCH_OFFSET_MS) * 10000n).toString() },
-      { id: "chrome", label: "Chrome/WebKit", value: ((current + FILETIME_EPOCH_OFFSET_MS) * 1000n).toString() },
-      { id: "dotnet", label: ".NET ticks", value: ((current + DOTNET_EPOCH_OFFSET_MS) * 10000n).toString() },
-      { id: "ole", label: "OLE / Excel days", value: (currentMs / DAY_MS + 25569).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") },
-      { id: "cocoa", label: "Cocoa / CoreData", value: ((currentMs - COCOA_EPOCH_MS) / 1000).toFixed(3).replace(/\.000$/, "") },
-      { id: "hfs", label: "HFS+ seconds", value: Math.floor((currentMs + HFS_EPOCH_OFFSET_MS) / 1000).toString() },
-      { id: "gps", label: "GPS seconds", value: Math.floor((currentMs - GPS_EPOCH_MS) / 1000).toString() },
-      { id: "ldap", label: "LDAP GeneralizedTime", value: generalizedTime(new Date(currentMs)) },
-      { id: "iso", label: "ISO 8601", value: new Date(currentMs).toISOString() }
-    ];
-  }, []);
+  const currentTimePresets = React.useMemo(() => currentTimePresetRows(Date.now()), []);
   const [preset, setPreset] = React.useState("unix");
   const applyPreset = () => {
-    const item = currentTimePresets.find((candidate) => candidate.id === preset) ?? currentTimePresets[0];
+    const freshPresets = currentTimePresetRows(Date.now());
+    const item = freshPresets.find((candidate) => candidate.id === preset) ?? freshPresets[0];
     setSingleValue(item.value);
   };
   const clearSingle = () => {
