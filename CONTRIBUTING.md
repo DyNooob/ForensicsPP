@@ -14,7 +14,7 @@ The project favors practical, browser-local tools with clear inputs, explicit ex
 ## Local Development
 
 ```bash
-git clone https://git.loken.cn/dynooob/ForensicsPP.git
+git clone https://github.com/DyNooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
 npm run dev

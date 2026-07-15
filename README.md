@@ -12,12 +12,12 @@
     <img alt="Version 1.0.0 alpha 4" src="https://img.shields.io/badge/Version-1.0.0--alpha.4-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
-    <a href="https://git.loken.cn/dynooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-loken-52606D?style=flat-square" /></a>
+    <a href="https://github.com/DyNooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-GitHub-52606D?style=flat-square" /></a>
   </p>
 
   <p>
     <a href="https://www.forensicspp.com/">在线使用</a>
-    · <a href="https://git.loken.cn/dynooob/ForensicsPP">源码仓库</a>
+    · <a href="https://github.com/DyNooob/ForensicsPP">源码仓库</a>
     · <a href="#本地运行">本地运行</a>
     · <a href="#生产构建">生产构建</a>
     · <a href="./CONTRIBUTING.md">参与开发</a>
@@ -73,7 +73,7 @@ PCAP 中提取出的 HTTP 文件同样支持按需计算 SHA-256，避免对未�
 - npm `10` 或更高版本
 
 ```bash
-git clone https://git.loken.cn/dynooob/ForensicsPP.git
+git clone https://github.com/DyNooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
 npm run dev
@@ -152,7 +152,7 @@ docs/releases/    双语版本发布说明
 
 ## 部署
 
-源码仓库使用 loken 作为当前发布入口。源码推送前应先在本地执行 `npm run verify`，再按 [`docs/RELEASE.md`](./docs/RELEASE.md) 的 loken 流程发布。
+源码仓库使用 GitHub 作为当前发布入口。源码推送前应先在本地执行 `npm run verify`，再按 [`docs/RELEASE.md`](./docs/RELEASE.md) 的 GitHub 流程发布。
 
 其他平台使用：
 

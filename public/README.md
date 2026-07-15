@@ -2,12 +2,12 @@
 
 Forensics++ is a browser-based digital forensics toolkit. Source code:
 
-https://git.loken.cn/dynooob/ForensicsPP
+https://github.com/DyNooob/ForensicsPP
 
 ## Build
 
 ```sh
-git clone https://git.loken.cn/dynooob/ForensicsPP.git
+git clone https://github.com/DyNooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
 npm run dev

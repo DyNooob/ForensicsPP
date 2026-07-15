@@ -4,9 +4,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 import { defineConfig, type Plugin } from "vite";
@@ -25,8 +25,8 @@ import react from "@vitejs/plugin-react";
 const copyrightBanner = `/*!
  * Forensics++ (ForensicsPP.com)
  * Copyright (c) 2026 DyNooob. All rights reserved.
- * Author: DyNooob | Website: https://www.loken.cn | Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Author: DyNooob | Website: https://www.forensicspp.com | Platform: DigiForensics.cn
+ * Project: https://github.com/DyNooob/ForensicsPP
  * Licensed under the MIT License. Use only for lawful and authorized purposes.
  */`;
 

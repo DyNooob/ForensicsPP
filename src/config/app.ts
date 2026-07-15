@@ -4,9 +4,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 const toolDefinitions = [
@@ -81,7 +81,7 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
   return toolTitleOverrides[tool.id]?.[lang] ?? translations[tool.name];
 }
 
-export const projectLinks = { repo: "https://git.loken.cn/dynooob/ForensicsPP" } as const;
+export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
 export const appVersion = "1.0.0-alpha.4";

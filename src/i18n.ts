@@ -4,9 +4,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 export const copy = {
@@ -599,7 +599,7 @@ export const copy = {
     localCacheDesc: "清除工具输入、最近使用、收藏和界面偏好。",
     confirmClearCache: "再次点击确认清除",
     aboutProject: "关于项目",
-    aboutProjectDesc: "Forensics++ 是一个在浏览器中使用的电子数据取证工具箱，全部源码托管在 Loken。",
+    aboutProjectDesc: "Forensics++ 是一个在浏览器中使用的电子数据取证工具箱，全部源码托管在 GitHub。",
     localFirst: "本地优先",
     toolsReady: "工具就绪",
     cacheEnabled: "偏好可清除",
@@ -1404,7 +1404,7 @@ export const copy = {
     localCacheDesc: "Clear tool inputs, recent tools, favorites, and interface preferences.",
     confirmClearCache: "Click again to confirm",
     aboutProject: "About Project",
-    aboutProjectDesc: "Forensics++ is a browser-based digital forensics toolkit. The complete source is hosted on Loken.",
+    aboutProjectDesc: "Forensics++ is a browser-based digital forensics toolkit. The complete source is hosted on GitHub.",
     localFirst: "Local First",
     toolsReady: "Tools Ready",
     cacheEnabled: "Clearable Prefs",

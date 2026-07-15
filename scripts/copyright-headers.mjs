@@ -5,9 +5,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -34,9 +34,9 @@ const lines = [
   "",
   "Copyright (c) 2026 DyNooob. All rights reserved.",
   "Author: DyNooob",
-  "Website: https://www.loken.cn",
+  "Website: https://www.forensicspp.com",
   "Platform: DigiForensics.cn",
-  "Project: https://git.loken.cn/dynooob/ForensicsPP",
+  "Project: https://github.com/DyNooob/ForensicsPP",
   "",
   "Forensics++ is an open-source, browser-side toolkit for CTF/MISC,",
   "lightweight forensic triage, encoding/decoding, metadata inspection,",
@@ -46,7 +46,7 @@ const lines = [
   "privacy infringement, or unlawful activity.",
   "",
   "Released under the MIT License.",
-  "Full source code: https://git.loken.cn/dynooob/ForensicsPP"
+  "Full source code: https://github.com/DyNooob/ForensicsPP"
 ];
 
 const cHeader = `/**\n${lines.map((line) => ` *${line ? ` ${line}` : ""}`).join("\n")}\n */\n\n`;
@@ -93,7 +93,7 @@ function stripExistingHeader(body, style) {
   }
   if (style === "hash" && body.startsWith(`# ${projectMarker}`)) {
     const sourceLines = [
-      "# Full source code: https://git.loken.cn/dynooob/ForensicsPP"
+      "# Full source code: https://github.com/DyNooob/ForensicsPP"
     ];
     for (const sourceLine of sourceLines) {
       const end = body.indexOf(sourceLine);

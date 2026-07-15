@@ -4,11 +4,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://git.loken.cn/dynooob/ForensicsPP.git"
+    "url": "https://github.com/DyNooob/ForensicsPP.git"
   },
-  "homepage": "https://git.loken.cn/dynooob/ForensicsPP",
+  "homepage": "https://www.forensicspp.com/",
   "bugs": {
-    "url": "https://git.loken.cn/dynooob/ForensicsPP/issues"
+    "url": "https://github.com/DyNooob/ForensicsPP/issues"
   },
   "type": "module",
   "engines": {

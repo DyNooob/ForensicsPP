@@ -259,7 +259,7 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - The repository now publishes the complete React and TypeScript source instead of only compiled HTML, CSS and JavaScript.
 - Rebuilt the interface around React 19 and Ant Design 5 with a shared workbench layout.
-- The historical build workflow installs locked dependencies, verifies the source and builds `dist/`; site publishing is handled through Loken.
+- The historical build workflow installs locked dependencies, verifies the source and builds `dist/`; site publishing is handled through GitHub.
 - Added project copyright headers to first-party source and generated assets.
 
 ### Added
@@ -270,21 +270,21 @@ Forensics++ follows semantic versioning where practical. This file records user-
 ### Notes
 
 - `dist/` is generated output and is no longer committed to `main`.
-- Static deployments should use the generated `dist/` package through Loken or another configured static host.
+- Static deployments should use the generated `dist/` package through GitHub or another configured static host.
 
 ## [0.2.0]
 
 - Historical compiled-site release.
 
-[Unreleased]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.4...HEAD
-[1.0.0-alpha.4]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
-[1.0.0-alpha.3]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
-[1.0.0-alpha.2]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
-[1.0.0-alpha.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.9.0...v1.0.0-alpha.1
-[0.9.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.8.1...v0.9.0
-[0.8.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.8.0...v0.8.1
-[0.8.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.7.1...v0.8.0
-[0.7.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.7.0...v0.7.1
-[0.7.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.6.0...v0.7.0
-[0.6.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.5.0...v0.6.0
-[0.5.0]: https://git.loken.cn/dynooob/ForensicsPP/releases/tag/v0.5.0
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.4...HEAD
+[1.0.0-alpha.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
+[1.0.0-alpha.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
+[1.0.0-alpha.2]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
+[1.0.0-alpha.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.9.0...v1.0.0-alpha.1
+[0.9.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/DyNooob/ForensicsPP/releases/tag/v0.5.0

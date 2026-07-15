@@ -5,9 +5,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 import { spawn } from "node:child_process";
@@ -382,7 +382,7 @@ async function createFileToolFixtures() {
   const png = Buffer.concat([createAuditPng(), Buffer.from("\nFPP_TRAILER_TEST\n", "utf8")]);
   await writeFile(pngPath, png);
 
-  const qr = QrCode.encodeText("https://git.loken.cn/dynooob/ForensicsPP", Ecc.MEDIUM);
+  const qr = QrCode.encodeText("https://github.com/DyNooob/ForensicsPP", Ecc.MEDIUM);
   const quietZone = 4;
   const viewSize = qr.size + quietZone * 2;
   const modules = [];

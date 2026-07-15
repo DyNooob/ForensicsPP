@@ -5,9 +5,9 @@
  *
  * Copyright (c) 2026 DyNooob. All rights reserved.
  * Author: DyNooob
- * Website: https://www.loken.cn
+ * Website: https://www.forensicspp.com
  * Platform: DigiForensics.cn
- * Project: https://git.loken.cn/dynooob/ForensicsPP
+ * Project: https://github.com/DyNooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://git.loken.cn/dynooob/ForensicsPP
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
 import { access, readFile, readdir, stat } from "node:fs/promises";
@@ -55,6 +55,8 @@ const forbiddenNames = new Set([
   "vite.config.ts",
   "vitest.config.ts"
 ]);
+
+const textExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt", ".webmanifest", ".xml"]);
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -112,6 +114,11 @@ for (const path of files) {
   if (segments.some((segment) => forbiddenNames.has(segment))) errors.push(`forbidden release path: ${outputPath}`);
   if ([".map", ".log", ".ts", ".tsx"].includes(extname(path))) errors.push(`forbidden release extension: ${outputPath}`);
   if (fileStat.size > 50 * 1024 * 1024) errors.push(`file exceeds 50 MiB: ${outputPath}`);
+
+  if (textExtensions.has(extname(path).toLowerCase())) {
+    const content = await readFile(path, "utf8");
+    if (/GitHub\.cn/i.test(content)) errors.push(`release asset contains forbidden publisher domain: ${outputPath}`);
+  }
 }
 
 if (totalBytes > 100 * 1024 * 1024) errors.push("release artifact exceeds 100 MiB");
