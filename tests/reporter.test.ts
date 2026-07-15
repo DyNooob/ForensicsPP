@@ -59,6 +59,15 @@ describe("report evidence registration", () => {
     expect(records[0].sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("stops fingerprinting when the report flow is cancelled", async () => {
+    const file = new File([new TextEncoder().encode("evidence")], "sample.bin");
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(fingerprintEvidenceFiles([file], { signal: controller.signal }))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("puts source file metadata into the report register", () => {
     const markdown = buildReportMarkdown([
       {

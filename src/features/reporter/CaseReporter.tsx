@@ -462,6 +462,7 @@ export function CaseReporter({
   const [verificationError, setVerificationError] = React.useState("");
   const importInputRef = React.useRef<HTMLInputElement | null>(null);
   const verificationInputRef = React.useRef<HTMLInputElement | null>(null);
+  const verificationAbortRef = React.useRef<AbortController | null>(null);
   const markdown = buildReportMarkdown(notes, t, meta);
   const htmlReport = React.useMemo(() => buildReportHtml(notes, t, meta), [meta, notes, t]);
   const summaryCards = React.useMemo(() => caseReportSummaryCards(notes, t), [notes, t]);
@@ -479,6 +480,10 @@ export function CaseReporter({
   React.useEffect(() => {
     if (!selectedId || !notes.some((note) => note.id === selectedId)) setSelectedId(notes[0]?.id ?? "");
   }, [notes, selectedId]);
+
+  React.useEffect(() => () => {
+    verificationAbortRef.current?.abort();
+  }, []);
 
   const updateMetaField = (field: keyof CaseReportMeta, value: string) => {
     onMetaChange({ ...meta, [field]: value });
@@ -512,15 +517,24 @@ export function CaseReporter({
     if (!selected.length) return;
     const registered = caseReportSourceFiles(notes).map(({ file }) => file);
     if (!registered.length) return;
+    verificationAbortRef.current?.abort();
+    const controller = new AbortController();
+    verificationAbortRef.current = controller;
     setVerificationBusy(true);
     setVerificationError("");
     try {
-      const uploaded = await fingerprintEvidenceFiles(selected);
+      const uploaded = await fingerprintEvidenceFiles(selected, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setVerification(verifyEvidenceRegister(registered, uploaded));
     } catch (error) {
-      setVerificationError(error instanceof Error ? error.message : String(error));
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setVerificationError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setVerificationBusy(false);
+      if (verificationAbortRef.current === controller) {
+        verificationAbortRef.current = null;
+        setVerificationBusy(false);
+      }
       if (verificationInputRef.current) verificationInputRef.current.value = "";
     }
   };

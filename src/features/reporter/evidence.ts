@@ -50,17 +50,28 @@ export function rememberedEvidenceFiles(root: HTMLElement) {
   ).values());
 }
 
-export async function fingerprintEvidenceFiles(files: File[]): Promise<CaseEvidenceFile[]> {
+export type EvidenceFingerprintOptions = {
+  signal?: AbortSignal;
+};
+
+export async function fingerprintEvidenceFiles(
+  files: File[],
+  options: EvidenceFingerprintOptions = {}
+): Promise<CaseEvidenceFile[]> {
   const uniqueFiles = Array.from(new Map(files.map((file) => [evidenceFileKey(file), file])).values());
   const records: CaseEvidenceFile[] = [];
   for (const file of uniqueFiles) {
+    if (options.signal?.aborted) throw new DOMException("Evidence fingerprinting cancelled", "AbortError");
     let sha256 = "";
     try {
       const result = typeof Worker === "undefined"
-        ? await hashSelectedFile(file, ["sha256"])
-        : await hashFileInWorker(file, ["sha256"]);
+        ? await hashSelectedFile(file, ["sha256"], { signal: options.signal })
+        : await hashFileInWorker(file, ["sha256"], { signal: options.signal });
       sha256 = result.sha256 ?? "";
-    } catch {
+    } catch (error) {
+      if (options.signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+        throw new DOMException("Evidence fingerprinting cancelled", "AbortError");
+      }
       // Keep the metadata record when the browser refuses a later read.
     }
     records.push({

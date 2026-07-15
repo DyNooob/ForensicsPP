@@ -168,8 +168,12 @@ export function App() {
   const [commandQuery, setCommandQuery] = React.useState("");
   const [reporterOpen, setReporterOpen] = React.useState(false);
   const [reportAddBusy, setReportAddBusy] = React.useState(false);
+  const reportAddAbortRef = React.useRef<AbortController | null>(null);
   const [caseNotes, setCaseNotes] = useStoredState<CaseNote[]>("report.notes", [], isCaseNotesValue);
   const [caseReportMeta, setCaseReportMeta] = useStoredState<CaseReportMeta>("report.meta", defaultCaseReportMeta(), isCaseReportMetaValue);
+  React.useEffect(() => () => {
+    reportAddAbortRef.current?.abort();
+  }, []);
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false, isBooleanValue);
@@ -266,13 +270,17 @@ export function App() {
       return;
     }
     setReportAddBusy(true);
+    reportAddAbortRef.current?.abort();
+    const controller = new AbortController();
+    reportAddAbortRef.current = controller;
     try {
       const selectedFiles = Array.from(toolView?.querySelectorAll<HTMLInputElement>('input[type="file"]') ?? [])
         .flatMap((input) => Array.from(input.files ?? []));
       const evidenceFiles = await fingerprintEvidenceFiles([
         ...selectedFiles,
         ...(toolView ? rememberedEvidenceFiles(toolView) : [])
-      ]);
+      ], { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const timelineEvents = toolView ? rememberedTimelineEvents(toolView) : [];
       const createdAt = new Date().toISOString();
       const note: CaseNote = {
@@ -291,8 +299,15 @@ export function App() {
       };
       setCaseNotes((current) => [note, ...current].slice(0, 40));
       setReporterOpen(true);
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        setToolLinkMessage(t.reportAddFailed);
+      }
     } finally {
-      setReportAddBusy(false);
+      if (reportAddAbortRef.current === controller) {
+        reportAddAbortRef.current = null;
+        setReportAddBusy(false);
+      }
     }
   };
   const updateCaseNote = (id: string, patch: Partial<CaseNote>) => {
@@ -957,7 +972,12 @@ export function App() {
             notes={caseNotes}
             meta={caseReportMeta}
             t={t}
-            onClose={() => setReporterOpen(false)}
+            onClose={() => {
+              reportAddAbortRef.current?.abort();
+              reportAddAbortRef.current = null;
+              setReportAddBusy(false);
+              setReporterOpen(false);
+            }}
             onMetaChange={setCaseReportMeta}
             onUpdateNote={updateCaseNote}
             onDeleteNote={deleteCaseNote}
