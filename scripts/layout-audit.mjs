@@ -787,6 +787,7 @@ async function stopChrome(chrome) {
 async function auditConsentBar(client) {
   await client.send("Runtime.evaluate", {
     expression: `new Promise((resolve) => {
+      window.dispatchEvent(new Event("forensicspp:storage-cleared"));
       const request = indexedDB.open("forensicspp-workspaces", 1);
       request.onerror = () => resolve(false);
       request.onsuccess = () => {
@@ -1176,6 +1177,11 @@ async function auditExplicitResultInvalidation(client) {
     awaitPromise: true
   });
   await wait(500);
+  await waitForRuntimeValue(
+    client,
+    "Boolean(document.querySelector('.timestamp-simple-input-panel input[aria-label=\\'时间戳数值\\'], .timestamp-simple-input-panel input[aria-label=\\'Timestamp value\\']'))",
+    8000
+  );
   await setValue(".timestamp-simple-input-panel input[aria-label='时间戳数值'], .timestamp-simple-input-panel input[aria-label='Timestamp value']", "1719705600", "HTMLInputElement.prototype");
   await clickRuntimeButton(
     client,

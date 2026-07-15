@@ -26,6 +26,8 @@ import { clearToolSessions, readToolSessionResult, removeToolSession, writeToolS
 const INDEXED_STATE_THRESHOLD = 128 * 1024;
 const indexedStateKeys = new Set<string>();
 const indexedStateQueues = new Map<string, Promise<unknown>>();
+const storageClearedEvent = "forensicspp:storage-cleared";
+let storageClearGeneration = 0;
 
 type IndexedStateEnvelope<T> = {
   version: 1;
@@ -87,6 +89,8 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
   });
   const [hydrated, setHydrated] = React.useState(false);
   const userInteractedRef = React.useRef(false);
+  const persistenceEnabledRef = React.useRef(true);
+  const storageClearGenerationRef = React.useRef(storageClearGeneration);
   const persistValueRef = React.useRef<() => void>(() => undefined);
   const storageKeyRef = React.useRef(storageKey);
   if (storageKeyRef.current !== storageKey) {
@@ -127,7 +131,7 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
   }, [storageKey, validateStoredValue]);
 
   const persistValue = React.useCallback(() => {
-    if (!hydrated) return;
+    if (!hydrated || !persistenceEnabledRef.current || storageClearGenerationRef.current !== storageClearGeneration) return;
     const indexedId = indexedStateId(storageKey);
     let serialized = "";
     try {
@@ -180,8 +184,19 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
 
   React.useEffect(() => () => persistValueRef.current(), []);
 
+  React.useEffect(() => {
+    const handleStorageCleared = () => {
+      storageClearGenerationRef.current = storageClearGeneration;
+      persistenceEnabledRef.current = false;
+      userInteractedRef.current = false;
+    };
+    window.addEventListener(storageClearedEvent, handleStorageCleared);
+    return () => window.removeEventListener(storageClearedEvent, handleStorageCleared);
+  }, []);
+
   const updateValue = React.useCallback<React.Dispatch<React.SetStateAction<T>>>((nextValue) => {
     userInteractedRef.current = true;
+    persistenceEnabledRef.current = true;
     setValue(nextValue);
   }, []);
 
@@ -189,6 +204,8 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
 }
 
 export async function clearForensicsStorage() {
+  storageClearGeneration += 1;
+  window.dispatchEvent(new Event(storageClearedEvent));
   Object.keys(window.localStorage)
     .filter((key) => key.startsWith(storagePrefix))
     .forEach((key) => window.localStorage.removeItem(key));
