@@ -37,6 +37,12 @@ import { runWorkerTask } from "../utils/workerTask";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
 const MAX_PERSISTED_EMAIL_BYTES = 8 * 1024 * 1024;
+const MAX_PERSISTED_EMAIL_BODY_CHARS = 512 * 1024;
+export const MAX_EMAIL_HTML_PREVIEW_CHARS = 2 * 1024 * 1024;
+
+export function limitEmailHtmlPreview(value: string) {
+  return value.slice(0, MAX_EMAIL_HTML_PREVIEW_CHARS);
+}
 type EmailWorkerResult = { analysis: EmailAnalysis; source: string };
 type EmailWorkerRequest = { format: "eml"; source: string } | { format: "msg"; bytes: ArrayBuffer };
 type EmailWorkspace = {
@@ -58,7 +64,13 @@ function persistableEmailWorkspace(value: EmailWorkspace): EmailWorkspace {
     }
     return { ...attachment, content: new Uint8Array() };
   });
-  return { ...value, input, sourceBytes, parsed: { ...value.parsed, attachments } };
+  const bodyText = value.parsed.bodyText.length > MAX_PERSISTED_EMAIL_BODY_CHARS
+    ? `${value.parsed.bodyText.slice(0, MAX_PERSISTED_EMAIL_BODY_CHARS)}\n\n[preview truncated for local storage]`
+    : value.parsed.bodyText;
+  const bodyHtml = value.parsed.bodyHtml.length > MAX_PERSISTED_EMAIL_BODY_CHARS
+    ? `${value.parsed.bodyHtml.slice(0, MAX_PERSISTED_EMAIL_BODY_CHARS)}<!-- preview truncated for local storage -->`
+    : value.parsed.bodyHtml;
+  return { ...value, input, sourceBytes, parsed: { ...value.parsed, bodyText, bodyHtml, attachments } };
 }
 
 function safeEmailFilename(value: string, fallback: string) {
@@ -72,7 +84,8 @@ function safeEmailFilename(value: string, fallback: string) {
 
 function sanitizeEmailHtml(value: string) {
   if (!value.trim()) return "";
-  const document = new DOMParser().parseFromString(value, "text/html");
+  const truncated = value.length > MAX_EMAIL_HTML_PREVIEW_CHARS;
+  const document = new DOMParser().parseFromString(limitEmailHtmlPreview(value), "text/html");
   document.querySelectorAll("script, iframe, object, embed, form, input, button, link, meta, style").forEach((node) => node.remove());
   document.querySelectorAll<HTMLElement>("*").forEach((node) => {
     for (const attribute of Array.from(node.attributes)) {
@@ -82,6 +95,12 @@ function sanitizeEmailHtml(value: string) {
       if (attribute.name === "href" && !/^(?:#|mailto:|tel:)/i.test(attribute.value.trim())) node.setAttribute("href", "#");
     }
   });
+  if (truncated) {
+    const notice = document.createElement("p");
+    notice.textContent = "[HTML preview truncated]";
+    notice.setAttribute("data-preview-limit", "true");
+    document.body.append(notice);
+  }
   const baseStyle = "body{margin:0;padding:18px;color:#182230;background:#fff;font:14px/1.65 system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}td,th{padding:6px;border:1px solid #d9e0e8}";
   return `<!doctype html><html><head><meta charset="utf-8"><style>${baseStyle}</style></head><body>${document.body.innerHTML}</body></html>`;
 }

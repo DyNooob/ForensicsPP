@@ -21,6 +21,7 @@
 
 import { describe, expect, it } from "vitest";
 import { base32Decode, base32Encode, parseEmail } from "../src/features/email/workbench";
+import { limitEmailHtmlPreview, MAX_EMAIL_HTML_PREVIEW_CHARS } from "../src/tools/EmailTool";
 
 describe("email encoding helpers", () => {
   it("round-trips UTF-8 through Base32", () => {
@@ -30,6 +31,11 @@ describe("email encoding helpers", () => {
 });
 
 describe("EML parsing", () => {
+  it("keeps oversized HTML previews bounded", () => {
+    const oversized = "x".repeat(MAX_EMAIL_HTML_PREVIEW_CHARS + 100);
+    expect(limitEmailHtmlPreview(oversized)).toHaveLength(MAX_EMAIL_HTML_PREVIEW_CHARS);
+  });
+
   it("extracts identity, authentication and Received hops", async () => {
     const raw = [
       "From: Forensics++ Alerts <alerts@example.org>",
