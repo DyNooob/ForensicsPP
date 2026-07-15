@@ -93,9 +93,10 @@ export function parsePcap(bytes: Uint8Array, name: string, size: number, sha256:
     .sort((left, right) => left.packetNo - right.packetNo);
   const endpoints = buildPcapEndpointStats(parsed.packets);
   const portStats = buildPcapPortStats(parsed.packets);
+  const packetsByNumber = new Map(parsed.packets.map((packet) => [packet.no, packet]));
   const packetFiles = parsed.httpItems
     .map((item) => {
-      const packet = parsed.packets.find((candidate) => candidate.no === item.packetNo);
+      const packet = packetsByNumber.get(item.packetNo);
       return packet ? buildPcapExtractedFile(item, packet.payloadBytes) : null;
     })
     .filter(Boolean) as PcapExtractedFile[];
