@@ -161,6 +161,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
   const sourceWalRef = React.useRef<Uint8Array | null>(null);
   const restoreStartedRef = React.useRef(false);
   const forensicTaskRef = React.useRef<AbortController | null>(null);
+  const sqliteFileRequestRef = React.useRef(0);
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState(0);
   const [walInfo, setWalInfo] = React.useState<SqliteWalInfo | null>(null);
@@ -313,6 +314,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
 
   React.useEffect(() => {
     if (active) return;
+    sqliteFileRequestRef.current += 1;
     forensicTaskRef.current?.abort();
     forensicTaskRef.current = null;
     setForensicLoading(false);
@@ -468,6 +470,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
   }, [changeLog, dirty, fileName, fileSize, hasShm, originalBytes, persistSqliteSession]);
 
   const clearSqliteWorkspace = React.useCallback(() => {
+    sqliteFileRequestRef.current += 1;
     forensicTaskRef.current?.abort();
     forensicTaskRef.current = null;
     dbRef.current?.close();
@@ -632,6 +635,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
 
   const handleFiles = async (files: File[]) => {
     if (!active || !files.length) return;
+    const requestId = ++sqliteFileRequestRef.current;
     const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
     if (!databaseFile) { setError(english ? "Select the SQLite database together with its WAL/SHM files." : "请同时选择 SQLite 数据库主文件。"); return; }
     const baseName = databaseFile.name.replace(/\.(?:db|sqlite|sqlite3)$/i, "");
@@ -646,17 +650,23 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       return;
     }
     setSqliteDropActive(false);
-    const database = new Uint8Array(await databaseFile.arrayBuffer());
-    if (!active) return;
-    const wal = walFile ? new Uint8Array(await walFile.arrayBuffer()) : null;
-    if (!active) return;
-    await openSqliteSource({
-      name: databaseFile.name,
-      size: totalSize,
-      database,
-      wal,
-      shm: Boolean(shmFile)
-    });
+    try {
+      const database = new Uint8Array(await databaseFile.arrayBuffer());
+      if (!active || requestId !== sqliteFileRequestRef.current) return;
+      const wal = walFile ? new Uint8Array(await walFile.arrayBuffer()) : null;
+      if (!active || requestId !== sqliteFileRequestRef.current) return;
+      await openSqliteSource({
+        name: databaseFile.name,
+        size: totalSize,
+        database,
+        wal,
+        shm: Boolean(shmFile)
+      });
+    } catch (caught) {
+      if (active && requestId === sqliteFileRequestRef.current) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }
   };
 
   const requestFiles = (files: File[]) => {
