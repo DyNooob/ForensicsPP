@@ -54,11 +54,26 @@ export function analyzeRegex(pattern: string, flags: string, source: string, rep
   try {
     const normalizedFlags = normalizeFlags(flags);
     const expression = new RegExp(pattern, normalizedFlags);
+    const lineStarts = [0];
+    for (let index = 0; index < source.length; index += 1) {
+      if (source[index] === "\n") lineStarts.push(index + 1);
+      else if (source[index] === "\r" && source[index + 1] !== "\n") lineStarts.push(index + 1);
+    }
+    const lineForIndex = (index: number) => {
+      let low = 0;
+      let high = lineStarts.length;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (lineStarts[middle] <= index) low = middle + 1;
+        else high = middle;
+      }
+      return low;
+    };
     const matches = Array.from(source.matchAll(expression)).slice(0, 1000).map((match, index) => {
       const start = match.index ?? 0;
       const value = match[0];
       const end = start + value.length;
-      const line = source.slice(0, start).split(/\r\n|\r|\n/).length;
+      const line = lineForIndex(start);
       return {
         order: index + 1,
         index: start,

@@ -30,6 +30,7 @@ import { runWorkerTask } from "../utils/workerTask";
 import { useStoredState } from "../utils/storage";
 
 const PAGE_SIZE = 200;
+export const MAX_IOC_ANALYSIS_BYTES = 16 * 1024 * 1024;
 
 function recordsToCsv(records: IocRecord[]) {
   const escape = (value: string | number) => {
@@ -163,7 +164,11 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     setError("");
     setDropActive(false);
     try {
-      const value = await file.slice(0, 32 * 1024 * 1024).text();
+      if (file.size > MAX_IOC_ANALYSIS_BYTES) {
+        setError(english ? "The file exceeds the 16 MiB analysis limit." : "文件超过 16 MiB 分析上限。");
+        return;
+      }
+      const value = await file.text();
       if (!active || requestId !== fileReadRef.current) return;
       setSource(file.name);
       setSourceSize(file.size);
@@ -195,7 +200,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
 
   const analyze = async () => {
     if (!active || !text.trim() || analyzing) return;
-    if (new TextEncoder().encode(text).length > 16 * 1024 * 1024) {
+    if (new TextEncoder().encode(text).length > MAX_IOC_ANALYSIS_BYTES) {
       setError(english ? "IOC text exceeds the 16 MiB analysis limit." : "IOC 文本超过 16 MiB 分析上限。");
       return;
     }
@@ -265,7 +270,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{source === "pasted text" ? t.dropFileTitle : source}</strong>
-          <span>{source === "pasted text" ? t.dropFileHint : `${formatBytes(Math.min(sourceSize, 32 * 1024 * 1024))} / ${formatBytes(sourceSize)}`}</span>
+          <span>{source === "pasted text" ? t.dropFileHint : formatBytes(sourceSize)}</span>
         </div>
         <div className="ioc-simple-source-actions">
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadIocText}</AButton>

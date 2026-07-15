@@ -41,6 +41,7 @@ type DirectOperation = {
 };
 
 const MAX_CODEC_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_CODEC_INPUT_BYTES = 2 * 1024 * 1024;
 
 export type CodecToolServices = {
   transformText: (operation: string, input: string) => string;
@@ -99,6 +100,11 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
   const hasContent = Boolean(input || output);
 
   const run = (nextOperation: string) => {
+    if (new TextEncoder().encode(input).byteLength > MAX_CODEC_INPUT_BYTES) {
+      setOutput("");
+      setError(english ? "Input is limited to 2 MiB for this operation." : "此操作最多处理 2 MiB 输入。");
+      return;
+    }
     try {
       setOperation(nextOperation);
       setOutput(services.transformText(nextOperation, input));
