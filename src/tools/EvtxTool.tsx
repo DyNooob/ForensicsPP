@@ -103,10 +103,12 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
   const queueFiles = (files?: FileList | null) => {
     if (!active) return;
+    // Replacing the selection must stop an in-flight parse before its partial
+    // results can be committed to the new workspace.
+    cancel();
     workspace.clear();
     const next = Array.from(files ?? []).filter((file) => file.size > 0 && /\.evtx$/i.test(file.name));
     if (!next.length) {
-      cancel();
       setSelectedFiles([]);
       setParsedFiles([]);
       setSelectedEventId("");
@@ -119,7 +121,6 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (tooLarge || total > MAX_TOTAL_BYTES) {
-      cancel();
       setSelectedFiles([]);
       setParsedFiles([]);
       setSelectedEventId("");

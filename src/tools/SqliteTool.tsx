@@ -469,6 +469,14 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     return () => window.clearTimeout(timer);
   }, [changeLog, dirty, fileName, fileSize, hasShm, originalBytes, persistSqliteSession]);
 
+  React.useEffect(() => {
+    if (active) return;
+    sqliteFileRequestRef.current += 1;
+    forensicTaskRef.current?.abort();
+    forensicTaskRef.current = null;
+    setForensicLoading(false);
+  }, [active]);
+
   const clearSqliteWorkspace = React.useCallback(() => {
     sqliteFileRequestRef.current += 1;
     forensicTaskRef.current?.abort();
@@ -679,17 +687,19 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     if (restoreStartedRef.current) return;
     restoreStartedRef.current = true;
     void (async () => {
+      const restoreRequestId = sqliteFileRequestRef.current;
       const { value: session, error: restoreError } = await readToolSessionResult<SqliteStoredSession>("sqlite");
       if (restoreError) {
         setSessionStatus("error");
         setError(english ? "The saved SQLite workspace could not be restored." : "保存的 SQLite 工作区无法恢复，请重新选择数据库文件。");
         return;
       }
-      if (!session || dbRef.current) return;
+      if (!session || dbRef.current || sqliteFileRequestRef.current !== restoreRequestId) return;
       if (session.version !== 2) {
         await removeToolSession("sqlite").catch(() => undefined);
         return;
       }
+      if (sqliteFileRequestRef.current !== restoreRequestId || dbRef.current) return;
       await openSqliteSource({
         name: session.fileName,
         size: session.fileSize,
