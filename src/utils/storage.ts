@@ -58,6 +58,14 @@ function enqueueIndexedState<T>(storageKey: string, task: () => Promise<T>) {
   return next;
 }
 
+function enqueueIndexedStateAtCurrentGeneration<T>(storageKey: string, task: () => Promise<T>) {
+  const generation = storageClearGeneration;
+  return enqueueIndexedState(storageKey, () => {
+    if (generation !== storageClearGeneration) return Promise.resolve(undefined as T);
+    return task();
+  });
+}
+
 export function shouldUseIndexedState(serialized: string) {
   return serialized.length > INDEXED_STATE_THRESHOLD;
 }
@@ -118,7 +126,7 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
         indexedStateKeys.add(storageKey);
       } else if (stored && !validStored) {
         // Do not keep an obsolete workspace that will fail validation on every load.
-        void enqueueIndexedState(storageKey, () => removeToolSession(indexedStateId(storageKey))).catch(() => undefined);
+        void enqueueIndexedStateAtCurrentGeneration(storageKey, () => removeToolSession(indexedStateId(storageKey))).catch(() => undefined);
         try {
           window.localStorage.removeItem(indexedStateMarkerKey(storageKey));
         } catch {
@@ -140,14 +148,14 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
         window.localStorage.removeItem(storageKey);
         window.localStorage.setItem(indexedStateMarkerKey(storageKey), "1");
         indexedStateKeys.add(storageKey);
-        void enqueueIndexedState(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
+        void enqueueIndexedStateAtCurrentGeneration(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
         return;
       }
       const hadIndexedState = indexedStateKeys.has(storageKey) || window.localStorage.getItem(indexedStateMarkerKey(storageKey)) === "1";
       window.localStorage.setItem(storageKey, serialized);
       window.localStorage.removeItem(indexedStateMarkerKey(storageKey));
       indexedStateKeys.delete(storageKey);
-      if (hadIndexedState) void enqueueIndexedState(storageKey, () => removeToolSession(indexedId)).catch(() => undefined);
+      if (hadIndexedState) void enqueueIndexedStateAtCurrentGeneration(storageKey, () => removeToolSession(indexedId)).catch(() => undefined);
     } catch {
       // A quota failure can leave an older localStorage value behind. Remove it
       // before using IndexedDB, otherwise the next load will prefer stale data.
@@ -158,7 +166,7 @@ export function useStoredState<T>(key: string, initialValue: T, isValid?: Stored
         // Continue with the IndexedDB fallback.
       }
       indexedStateKeys.add(storageKey);
-      void enqueueIndexedState(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
+      void enqueueIndexedStateAtCurrentGeneration(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
     }
   }, [hydrated, storageKey, value]);
   persistValueRef.current = persistValue;
@@ -209,7 +217,9 @@ export async function clearForensicsStorage() {
   Object.keys(window.localStorage)
     .filter((key) => key.startsWith(storagePrefix))
     .forEach((key) => window.localStorage.removeItem(key));
+  await Promise.allSettled(indexedStateQueues.values());
   await clearToolSessions();
+  indexedStateKeys.clear();
 }
 
 const legacyEvidenceKeys = [

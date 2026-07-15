@@ -503,7 +503,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     setError("");
     setSqliteDropActive(false);
     resetSqliteViewState();
-    void removeToolSession("sqlite");
+    void removeToolSession("sqlite").catch(() => undefined);
   }, [resetSqliteViewState, setQueryHistory]);
 
   const confirmDiscardBefore = React.useCallback((action: () => void) => {

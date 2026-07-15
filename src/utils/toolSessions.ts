@@ -22,6 +22,9 @@
 const databaseName = "forensicspp-workspaces";
 const databaseVersion = 1;
 const sessionStore = "tool-sessions";
+let sessionQueue: Promise<unknown> = Promise.resolve();
+let sessionClearGeneration = 0;
+let sessionWritesDisabled = false;
 
 type StoredToolSession<T> = {
   id: string;
@@ -85,13 +88,19 @@ function runSessionRequest<T>(mode: IDBTransactionMode, operation: (store: IDBOb
   }));
 }
 
+function enqueueSessionOperation<T>(task: () => Promise<T>) {
+  const next = sessionQueue.catch(() => undefined).then(task);
+  sessionQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 export async function readToolSession<T>(id: string) {
   return (await readToolSessionResult<T>(id)).value;
 }
 
 export async function readToolSessionResult<T>(id: string): Promise<{ value: T | null; error: Error | null }> {
   try {
-    const stored = await runSessionRequest<StoredToolSession<T> | undefined>("readonly", (store) => store.get(id));
+    const stored = await enqueueSessionOperation(() => runSessionRequest<StoredToolSession<T> | undefined>("readonly", (store) => store.get(id)));
     return { value: stored?.value ?? null, error: null };
   } catch (caught) {
     return {
@@ -102,16 +111,26 @@ export async function readToolSessionResult<T>(id: string): Promise<{ value: T |
 }
 
 export async function writeToolSession<T>(id: string, value: T) {
-  await runSessionRequest<IDBValidKey>("readwrite", (store) => store.put({ id, savedAt: new Date().toISOString(), value } satisfies StoredToolSession<T>));
+  const generation = sessionClearGeneration;
+  await enqueueSessionOperation(() => {
+    if (sessionWritesDisabled || generation !== sessionClearGeneration) return Promise.resolve(undefined as unknown as IDBValidKey);
+    return runSessionRequest<IDBValidKey>("readwrite", (store) => store.put({ id, savedAt: new Date().toISOString(), value } satisfies StoredToolSession<T>));
+  });
 }
 
 export async function removeToolSession(id: string) {
-  await runSessionRequest<undefined>("readwrite", (store) => store.delete(id));
+  const generation = sessionClearGeneration;
+  await enqueueSessionOperation(() => {
+    if (generation !== sessionClearGeneration) return Promise.resolve(undefined);
+    return runSessionRequest<undefined>("readwrite", (store) => store.delete(id));
+  });
 }
 
 export function clearToolSessions() {
+  sessionWritesDisabled = true;
+  sessionClearGeneration += 1;
   if (typeof indexedDB === "undefined") return Promise.resolve();
   // Clear records inside the existing store instead of deleting the database.
   // Database deletion can be blocked by another open tab and falsely report success.
-  return runSessionRequest<undefined>("readwrite", (store) => store.clear()).then(() => undefined);
+  return enqueueSessionOperation(() => runSessionRequest<undefined>("readwrite", (store) => store.clear())).then(() => undefined);
 }
