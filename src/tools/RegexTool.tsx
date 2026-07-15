@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,30 +16,21 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASelect, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
+import { analyzeRegex, type RegexAnalysis, type RegexMatch } from "../features/regex/analyzer";
 import type { Translation } from "../i18n";
 import { downloadTextFile } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
 type RegexToolProps = {
   t: Translation;
   classifyIocRisk: (type: string, value: string) => string[];
-};
-
-type RegexMatch = {
-  order: number;
-  index: number;
-  end: number;
-  line: number;
-  length: number;
-  value: string;
-  groups: string[];
-  namedGroups: Record<string, string>;
-  context: string;
 };
 
 const presets = [
@@ -53,45 +44,6 @@ const presets = [
   { label: "Header", pattern: "^([A-Za-z0-9-]+):\\s*(.+)$", flags: "gim" }
 ];
 
-function normalizeFlags(flags: string) {
-  const allowed = new Set(["d", "g", "i", "m", "s", "u", "v", "y"]);
-  const normalized: string[] = [];
-  for (const flag of flags.trim()) {
-    if (!allowed.has(flag)) throw new Error(`Unsupported regex flag: ${flag}`);
-    if (!normalized.includes(flag)) normalized.push(flag);
-  }
-  if (!normalized.includes("g")) normalized.push("g");
-  return normalized.join("");
-}
-
-function analyze(pattern: string, flags: string, source: string, replacement: string) {
-  if (!pattern.trim()) return { matches: [] as RegexMatch[], replaced: source, error: "", flags: "" };
-  try {
-    const normalizedFlags = normalizeFlags(flags);
-    const expression = new RegExp(pattern, normalizedFlags);
-    const matches = Array.from(source.matchAll(expression)).slice(0, 1000).map((match, index) => {
-      const start = match.index ?? 0;
-      const value = match[0];
-      const end = start + value.length;
-      const line = source.slice(0, start).split(/\r\n|\r|\n/).length;
-      return {
-        order: index + 1,
-        index: start,
-        end,
-        line,
-        length: value.length,
-        value,
-        groups: match.slice(1).map((item) => item ?? ""),
-        namedGroups: Object.fromEntries(Object.entries(match.groups ?? {}).map(([key, item]) => [key, item ?? ""])),
-        context: source.slice(Math.max(0, start - 80), Math.min(source.length, end + 80)).replace(/\s+/g, " ").trim()
-      };
-    });
-    return { matches, replaced: source.replace(expression, replacement), error: "", flags: normalizedFlags };
-  } catch (error) {
-    return { matches: [] as RegexMatch[], replaced: source, error: error instanceof Error ? error.message : String(error), flags: "" };
-  }
-}
-
 function matchesToCsv(matches: RegexMatch[]) {
   const escape = (value: string | number) => {
     const text = String(value);
@@ -104,20 +56,59 @@ function matchesToCsv(matches: RegexMatch[]) {
 }
 
 const MAX_REGEX_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_REGEX_SOURCE_CHARS = 16 * 1024 * 1024;
 
-export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolProps) {
-  const [pattern, setPattern] = useStoredState("regex.pattern", "");
-  const [flags, setFlags] = useStoredState("regex.flags", "gi");
-  const [source, setSource] = React.useState("");
+export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true }: RegexToolProps & { active?: boolean }) {
+  const [pattern, setPattern] = useStoredState("regex.pattern.v3", "");
+  const [flags, setFlags] = useStoredState("regex.flags.v3", "gi");
+  const [source, setSource] = useStoredState("regex.source.v3", "");
   const [replacement, setReplacement] = useStoredState("regex.replacement", "[REDACTED]");
   const [filter, setFilter] = React.useState("");
   const [selectedKey, setSelectedKey] = React.useState("");
   const [preset, setPreset] = React.useState("");
   const [fileError, setFileError] = React.useState("");
+  const [analyzing, setAnalyzing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
   const english = t.waiting === "Waiting";
-  const result = React.useMemo(() => analyze(pattern, flags, source, replacement), [flags, pattern, replacement, source]);
+  const [result, setResult] = React.useState<RegexAnalysis>(() => analyzeRegex("", "", "", replacement));
+  const sourceTooLarge = source.length > MAX_REGEX_SOURCE_CHARS;
+  React.useEffect(() => {
+    const controller = new AbortController();
+    if (!active) {
+      setAnalyzing(false);
+      return () => controller.abort();
+    }
+    if (sourceTooLarge) {
+      setAnalyzing(false);
+      setResult({ matches: [], replaced: source, error: english ? "Source text is limited to 16 MiB." : "源文本不能超过 16 MiB。", flags: "" });
+      return () => controller.abort();
+    }
+    if (!pattern.trim()) {
+      setAnalyzing(false);
+      setResult(analyzeRegex("", "", source, replacement));
+      return () => controller.abort();
+    }
+    setAnalyzing(true);
+    const timer = window.setTimeout(() => {
+      void runWorkerTask<{ pattern: string; flags: string; source: string; replacement: string }, RegexAnalysis>({
+        createWorker: () => new Worker(new URL("../features/regex/regex.worker.ts", import.meta.url), { type: "module" }),
+        request: { pattern, flags, source, replacement },
+        signal: controller.signal,
+        timeoutMs: 5_000
+      }).then((next) => {
+        if (!controller.signal.aborted) setResult(next);
+      }).catch((caught) => {
+        if (!controller.signal.aborted) setResult({ matches: [], replaced: source, error: caught instanceof Error ? caught.message : String(caught), flags: "" });
+      }).finally(() => {
+        if (!controller.signal.aborted) setAnalyzing(false);
+      });
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [active, english, flags, pattern, replacement, source, sourceTooLarge]);
   const hasInput = Boolean(pattern.trim() || source.trim());
   const visibleMatches = React.useMemo(() => {
     const value = filter.trim().toLowerCase();
@@ -182,7 +173,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
         </div>
         <label className="stack-label">{english ? "Source text" : "源文本"}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
         {fileError && <div className="empty-state error-state">{fileError}</div>}
-        {result.error && <div className="empty-state error-state">{result.error}</div>}
+        {(analyzing || result.error) && <div className={`empty-state ${result.error ? "error-state" : ""}`} role={result.error ? "alert" : "status"}>{analyzing ? (english ? "Matching…" : "正在匹配…") : result.error}</div>}
       </div>
 
       {hasInput && <div className="tool-panel wide-panel regex-simple-results-panel">
@@ -190,7 +181,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
           title={t.matches}
           subtitle={result.matches.length >= 1000 ? (english ? "First 1,000 matches" : "显示前 1,000 条") : `${result.matches.length} ${english ? "matches" : "个匹配"}`}
           actions={<>
-            <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => void navigator.clipboard.writeText(visibleMatches.map((match) => match.value).join("\n"))}>{english ? "Copy matches" : "复制匹配"}</AButton>
+            <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => void copyText(visibleMatches.map((match) => match.value).join("\n"))}>{english ? "Copy matches" : "复制匹配"}</AButton>
             <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => downloadTextFile(`regex-matches-${Date.now()}.csv`, matchesToCsv(visibleMatches), "text/csv;charset=utf-8")}>{t.exportMatchesCsv}</AButton>
           </>}
         />
@@ -201,7 +192,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
             <tbody>{visibleMatches.map((match) => {
               const key = `${match.order}:${match.index}`;
               return <tr className={selectedMatch && key === `${selectedMatch.order}:${selectedMatch.index}` ? "selected-row" : ""} key={key} onClick={() => setSelectedKey(key)}>
-                <td>{match.order}</td><td className="regex-match-value">{match.value || "--"}</td><td>{match.line}</td><td>{match.index}-{match.end}</td><td>{match.groups.length + Object.keys(match.namedGroups).length || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void navigator.clipboard.writeText(match.value); }}>{t.copy}</AButton></td>
+                <td>{match.order}</td><td className="regex-match-value">{match.value || "--"}</td><td>{match.line}</td><td>{match.index}-{match.end}</td><td>{match.groups.length + Object.keys(match.namedGroups).length || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(match.value); }}>{t.copy}</AButton></td>
               </tr>;
             })}</tbody>
           </table> : <div className="empty-state">{result.error || (english ? "No matches" : "没有匹配结果")}</div>}
@@ -209,7 +200,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
       </div>}
 
       {selectedMatch && <div className="tool-panel wide-panel regex-simple-detail-panel">
-        <ToolPanelHeader title={english ? "Selected match" : "当前匹配"} actions={<AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selectedMatch.value)}>{t.copy}</AButton>} />
+        <ToolPanelHeader title={english ? "Selected match" : "当前匹配"} actions={<AButton variant="outlined" onClick={() => void copyText(selectedMatch.value)}>{t.copy}</AButton>} />
         <InfoTable rows={[
           [english ? "Value" : "内容", selectedMatch.value || "--"],
           [english ? "Line" : "行号", String(selectedMatch.line)],
@@ -222,7 +213,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk }: RegexToolPro
       </div>}
 
       {hasInput && <div className="tool-panel wide-panel regex-simple-replace-panel">
-        <ToolPanelHeader title={t.regexReplaceOutput} actions={<AButton variant="outlined" disabled={!source} onClick={() => void navigator.clipboard.writeText(result.replaced)}>{t.copyOutput}</AButton>} />
+        <ToolPanelHeader title={t.regexReplaceOutput} actions={<AButton variant="outlined" disabled={!source} onClick={() => void copyText(result.replaced)}>{t.copyOutput}</AButton>} />
         <label className="stack-label">{t.regexReplacement}<input className="text-input full-input" value={replacement} onChange={(event) => setReplacement(event.currentTarget.value)} /></label>
         <textarea aria-label={english ? "Replacement result" : "替换结果"} className="single-textarea regex-simple-output" value={result.replaced} readOnly />
       </div>}

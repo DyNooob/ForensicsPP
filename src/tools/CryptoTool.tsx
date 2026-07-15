@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, AInputNumber, ASelect, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -61,19 +62,26 @@ const operations: Operation[] = [
   { value: "rail-d", label: "Rail Fence Decode", parameter: "rails" }
 ];
 
+const MAX_CRYPTO_INPUT_CHARS = 2 * 1024 * 1024;
+const MAX_BRUTEFORCE_INPUT_CHARS = 512 * 1024;
+
 export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: CryptoToolServices }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = React.useState("");
-  const [output, setOutput] = React.useState("");
+  const [input, setInput] = useStoredState("crypto.input.v2", "");
+  const [output, setOutput] = useStoredState("crypto.output.v2", "");
   const [operation, setOperation] = useStoredState("crypto.operation", "caesar");
   const [shift, setShift] = useStoredState("crypto.shift", 3);
-  const [key, setKey] = React.useState("KEY");
+  const [key, setKey] = useStoredState("crypto.key.v2", "KEY");
   const [rails, setRails] = useStoredState("crypto.rails", 3);
   const [affineA, setAffineA] = useStoredState("crypto.affineA", 5);
   const [affineB, setAffineB] = useStoredState("crypto.affineB", 8);
   const selectedOperation = operations.find((item) => item.value === operation) ?? operations[0];
   const hasInput = input.length > 0;
   const hasResult = output.length > 0;
+  const inputLimit = operation === "caesar-all" ? MAX_BRUTEFORCE_INPUT_CHARS : MAX_CRYPTO_INPUT_CHARS;
+  const inputTooLarge = input.length > inputLimit;
+
+  const invalidateResult = () => setOutput("");
 
   const transform = React.useCallback((value: string) => {
     if (operation === "caesar") return services.caesar(value, shift);
@@ -92,7 +100,10 @@ export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: 
     return services.railFenceDecode(value, rails);
   }, [affineA, affineB, key, operation, rails, services, shift]);
 
-  const run = () => setOutput(transform(input));
+  const run = () => {
+    if (inputTooLarge) return;
+    setOutput(transform(input));
+  };
   const clear = () => {
     setInput("");
     setOutput("");
@@ -117,32 +128,33 @@ export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: 
         <div className="crypto-simple-controls">
           <label>
             {t.operation}
-            <ASelect aria-label={t.operation} value={operation} onChange={(value) => { setOperation(String(value)); setOutput(""); }} options={operations.map((item) => ({ value: item.value, label: item.label }))} />
+            <ASelect aria-label={t.operation} value={operation} onChange={(value) => { setOperation(String(value)); invalidateResult(); }} options={operations.map((item) => ({ value: item.value, label: item.label }))} />
           </label>
 
           {selectedOperation.parameter === "shift" && (
-            <label>{t.shift}<AInputNumber min={-25} max={25} value={shift} onChange={(value) => setShift(value ?? 0)} /></label>
+            <label>{t.shift}<AInputNumber min={-25} max={25} value={shift} onChange={(value) => { setShift(value ?? 0); invalidateResult(); }} /></label>
           )}
           {selectedOperation.parameter === "key" && (
-            <label>{t.key}<input className="text-input" value={key} onChange={(event) => setKey(event.target.value)} /></label>
+            <label>{t.key}<input className="text-input" value={key} onChange={(event) => { setKey(event.target.value); invalidateResult(); }} /></label>
           )}
           {selectedOperation.parameter === "rails" && (
-            <label>{t.rails}<AInputNumber min={2} max={12} value={rails} onChange={(value) => setRails(value ?? 2)} /></label>
+            <label>{t.rails}<AInputNumber min={2} max={12} value={rails} onChange={(value) => { setRails(value ?? 2); invalidateResult(); }} /></label>
           )}
           {selectedOperation.parameter === "affine" && (
             <div className="crypto-simple-affine">
-              <label>{t.affineA}<AInputNumber value={affineA} onChange={(value) => setAffineA(value ?? 1)} /></label>
-              <label>{t.affineB}<AInputNumber value={affineB} onChange={(value) => setAffineB(value ?? 0)} /></label>
+              <label>{t.affineA}<AInputNumber value={affineA} onChange={(value) => { setAffineA(value ?? 1); invalidateResult(); }} /></label>
+              <label>{t.affineB}<AInputNumber value={affineB} onChange={(value) => { setAffineB(value ?? 0); invalidateResult(); }} /></label>
             </div>
           )}
         </div>
 
         <label className="crypto-simple-text-field">
           <span>{t.inputText}</span>
-          <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={t.textPlaceholder} />
+          <textarea value={input} onChange={(event) => { setInput(event.target.value); invalidateResult(); }} placeholder={t.textPlaceholder} />
         </label>
+        {inputTooLarge && <div className="empty-state error-state" role="alert">{english ? `Input is limited to ${Math.round(inputLimit / 1024)} KiB for this operation.` : `此操作最多处理 ${Math.round(inputLimit / 1024)} KiB 输入。`}</div>}
         <div className="crypto-simple-primary-action">
-          <AButton variant="filled" disabled={!hasInput} onClick={run}>{t.run}</AButton>
+          <AButton variant="filled" disabled={!hasInput || inputTooLarge} onClick={run}>{t.run}</AButton>
         </div>
       </section>
 
@@ -152,7 +164,7 @@ export function CryptoTool({ t, services }: { t: (typeof copy)["zh"]; services: 
             title={english ? "Result" : "转换结果"}
             subtitle={selectedOperation.label}
             actions={<>
-              <AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(output)}>{t.copyOutput}</AButton>
+              <AButton variant="outlined" onClick={() => void copyText(output)}>{t.copyOutput}</AButton>
               {operation !== "caesar-all" && <AButton variant="text" onClick={useResultAsInput}>{english ? "Use as input" : "作为新输入"}</AButton>}
             </>}
           />

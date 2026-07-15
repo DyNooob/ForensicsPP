@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import type { Translation } from "../i18n";
@@ -110,12 +111,29 @@ function rowsToCsv(items: BaseConvertRow[]) {
   ].join("\n");
 }
 
+const MAX_BASE_CONVERT_INPUT_CHARS = 1_000_000;
+const MAX_BASE_CONVERT_ROWS = 10_000;
+
 export function BaseConvertTool({ t }: { t: Translation }) {
-  const [value, setValue] = React.useState("");
+  const [value, setValue] = useStoredState("baseconvert.value.v3", "");
   const [base, setBase] = useStoredState("baseconvert.base", 16);
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(value.trim());
-  const items = React.useMemo(() => value.split(/\r?\n|,\s*/).map((item) => item.trim()).filter(Boolean).map((item) => analyzeValue(item, base)), [base, value]);
+  const inputTooLarge = value.length > MAX_BASE_CONVERT_INPUT_CHARS;
+  const rowCount = React.useMemo(() => {
+    if (inputTooLarge) return MAX_BASE_CONVERT_ROWS + 1;
+    return value.split(/\r?\n|,\s*/).filter((item) => item.trim()).length;
+  }, [inputTooLarge, value]);
+  const rowsTooMany = rowCount > MAX_BASE_CONVERT_ROWS;
+  const conversionError = inputTooLarge
+    ? (english ? "Input is limited to 1,000,000 characters." : "输入内容不能超过 1,000,000 个字符。")
+    : rowsTooMany
+      ? (english ? "Batch conversion is limited to 10,000 values." : "批量转换最多支持 10,000 个数值。")
+      : "";
+  const items = React.useMemo(() => {
+    if (conversionError) return [];
+    return value.split(/\r?\n|,\s*/).map((item) => item.trim()).filter(Boolean).map((item) => analyzeValue(item, base));
+  }, [base, conversionError, value]);
   const single = items.length === 1 ? items[0] : null;
   const resultRows = React.useMemo<Array<[string, string]>>(() => single ? [
     [english ? "Detected input" : "识别输入", single.detectedBase],
@@ -135,6 +153,7 @@ export function BaseConvertTool({ t }: { t: Translation }) {
       <div className="tool-panel wide-panel baseconvert-simple-input-panel">
         <ToolPanelHeader title={english ? "Base conversion" : "进制转换"} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
         <label className="stack-label">{t.inputText}<textarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={english ? "Enter one value, or one value per line" : "输入一个数值，或每行输入一个数值"} /></label>
+        {conversionError && <div className="empty-state error-state" role="alert">{conversionError}</div>}
         <div className="baseconvert-simple-base-row">
           <span>{english ? "Default input base" : "默认输入进制"}</span>
           <ASegmentedGroup className="baseconvert-base-switch" value={String(base)} selects="single">
@@ -148,9 +167,9 @@ export function BaseConvertTool({ t }: { t: Translation }) {
           title={english ? "Conversion result" : "转换结果"}
           subtitle={single.error ? (english ? "Invalid value" : "数值无效") : single.detectedBase}
           actions={<>
-            <AButton variant="outlined" disabled={single.decimal === "--"} onClick={() => void navigator.clipboard.writeText(single.decimal)}>{t.decimal}</AButton>
-            <AButton variant="outlined" disabled={single.hex === "--"} onClick={() => void navigator.clipboard.writeText(single.hex)}>{t.hexadecimal}</AButton>
-            <AButton variant="text" disabled={single.ascii === "--"} onClick={() => void navigator.clipboard.writeText(single.ascii)}>{english ? "Copy ASCII" : "复制 ASCII"}</AButton>
+            <AButton variant="outlined" disabled={single.decimal === "--"} onClick={() => void copyText(single.decimal)}>{t.decimal}</AButton>
+            <AButton variant="outlined" disabled={single.hex === "--"} onClick={() => void copyText(single.hex)}>{t.hexadecimal}</AButton>
+            <AButton variant="text" disabled={single.ascii === "--"} onClick={() => void copyText(single.ascii)}>{english ? "Copy ASCII" : "复制 ASCII"}</AButton>
           </>}
         />
         {single.error ? <div className="empty-state error-state">{single.error}</div> : <InfoTable rows={resultRows} />}

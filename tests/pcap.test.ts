@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { describe, expect, it } from "vitest";
@@ -25,6 +25,7 @@ import {
   pcapExtractedFilesToCsv,
   pcapHttpToCsv,
   pcapReportText,
+  persistablePcapInfo,
   serializablePcapInfo
 } from "../src/features/pcap/analyzer";
 
@@ -177,6 +178,49 @@ describe("PCAP parser", () => {
     const serializable = serializablePcapInfo(result) as { packets: Array<{ payloadBytes: { size: number; sha256?: string } }> };
     expect(serializable.packets[0].payloadBytes).toEqual(expect.objectContaining({ size: expect.any(Number) }));
     expect(serializable.packets[0].payloadBytes).not.toHaveProperty("sha256");
+  });
+
+  it("does not duplicate packet payload bytes in a persisted workspace", () => {
+    const result = parsePcap(dnsPcapFixture(), "dns.pcap", 1, "");
+    const persisted = persistablePcapInfo(result);
+    expect(persisted.packets[0].payloadBytes).toHaveLength(0);
+    expect(persisted.packets[0].payloadPreview).toBe(result.packets[0].payloadPreview);
+  });
+
+  it("bounds raw stream and extracted-file bytes in a persisted workspace", () => {
+    const source = parsePcap(classicPcap([
+      tcpFrame([10, 0, 0, 5], [10, 0, 0, 6], 41000, 9000, 100, "payload")
+    ]), "large.pcap", 1, "");
+    const largeBytes = new Uint8Array(9 * 1024 * 1024);
+    const result = {
+      ...source,
+      extractedFiles: [{
+        packetNo: 1,
+        timestamp: "2026-07-15T00:00:00.000Z",
+        source: "10.0.0.5:41000",
+        destination: "10.0.0.6:9000",
+        host: "example.test",
+        path: "/large.bin",
+        contentType: "application/octet-stream",
+        filename: "large.bin",
+        size: largeBytes.byteLength,
+        sha256: "",
+        signature: "Binary",
+        preview: "",
+        risk: [],
+        bytes: largeBytes
+      }],
+      tcpStreams: source.tcpStreams.map((stream) => ({
+        ...stream,
+        segments: stream.segments.map((segment) => ({ ...segment, bytes: largeBytes }))
+      }))
+    };
+    const persisted = persistablePcapInfo(result);
+
+    expect(persisted.streamBytesLimited).toBe(true);
+    expect(persisted.extractedBytesLimited).toBe(true);
+    expect(persisted.tcpStreams[0].segments[0].bytes).toHaveLength(0);
+    expect(persisted.extractedFiles[0].bytes).toHaveLength(0);
   });
 
   it("handles TCP sequence wraparound", () => {

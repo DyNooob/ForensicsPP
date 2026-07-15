@@ -9,14 +9,15 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 1.0.0 alpha 1" src="https://img.shields.io/badge/Version-1.0.0--alpha.1-4457A6?style=flat-square" />
+    <img alt="Version 1.0.0 alpha 4" src="https://img.shields.io/badge/Version-1.0.0--alpha.4-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
-    <a href="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml"><img alt="Verify source" src="https://github.com/DyNooob/ForensicsPP/actions/workflows/ci.yml/badge.svg" /></a>
+    <a href="https://git.loken.cn/dynooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-loken-52606D?style=flat-square" /></a>
   </p>
 
   <p>
     <a href="https://www.forensicspp.com/">在线使用</a>
+    · <a href="https://git.loken.cn/dynooob/ForensicsPP">源码仓库</a>
     · <a href="#本地运行">本地运行</a>
     · <a href="#生产构建">生产构建</a>
     · <a href="./CONTRIBUTING.md">参与开发</a>
@@ -34,11 +35,11 @@ Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、�
 | 类别 | 工具 |
 | --- | --- |
 | 文件 | 文件哈希、文件头、字符串、熵、PE / ELF / Mach-O、YARA |
-| 图片与压缩包 | 图片工作台、PNG、二维码、ZIP / APK / JAR / OOXML |
+| 图片与压缩包 | 图片工作台、PNG、二维码、ZIP / APK / JAR / OOXML；压缩包条目按需预览、保存和计算 SHA-256 |
 | 数据库与结构化数据 | SQLite（含 WAL / SHM）、SQL 转储、JSON、Plist、浏览器数据 |
 | 邮件与网络 | EML / MSG、HTTP、URL、IOC、PCAP / PCAPNG |
 | 系统记录 | Registry Hive、EVTX、LNK、Prefetch、REG、AndroidManifest |
-| 文档与时间 | PDF / OOXML / OLE、时间戳转换、时间线 |
+| 文档与时间 | PDF / OOXML / OLE、时间戳转换、多源时间线 |
 | 转换 | CyberChef、编码解码、进制、UUID、JWT、常见密码哈希 |
 
 应用首页列出全部 35 个工具入口，首页本身不计入工具数量。
@@ -46,12 +47,23 @@ Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、�
 ## 数据保存
 
 - 切换工具时，已经打开的页面会保留在当前标签页中，输入和结果不会因为切页消失。
-- SQLite、流量包、邮件、图片、浏览器数据、EVTX、Office/PDF 工作区会保存在浏览器的 IndexedDB 中，刷新页面后可以继续查看；工具内的“清空”会同时删除对应工作区。
-- 其他文件型工具在刷新或关闭标签页后不会保留检材和分析结果。
+- SQLite、流量包、邮件、图片、浏览器数据、EVTX、Office/PDF、SQL Dump、Android Manifest、压缩包目录、Windows Artifact、Registry、Plist、二进制分析、文件识别、PNG 和二维码工作区会保存在浏览器的 IndexedDB 中，刷新页面后可以继续查看；工具内的“清空”会同时删除对应工作区。
+- 对大文件工具，工作区保存解析结果和受控大小的预览数据，不会无限保存原始检材；例如压缩包重新打开条目预览仍需要重新选择原文件。
 - 主题、语言、最近使用等小型设置保存在 `localStorage`。
+- URL、编码、古典密码、JSON、正则、时间戳、UUID 和进制转换的文本输入会保存在浏览器工作区，重新打开工具后可以继续处理；点击工具内的“清空”或全局清理会删除这些内容。
+- 哈希文本和比对值、IOC、原始 HTTP 报文、时间线源文本、字符串提取文本、熵分析文本和 YARA 文本样本也会恢复。密码、JWT 密钥/私钥以及原始 `File` 对象不会持久化。
 - 设置 → 本地数据可以查看浏览器存储占用量并清除全部工作区和设置。
 
 浏览器工作区用于继续当前检查，不代替检材保管和正式归档。
+
+在工具页点击“加入报告”时，当前仍可读取的文件会登记到报告清单：文件名、大小、类型、修改时间和 SHA-256。只有这个明确动作会计算源文件 SHA-256；普通分析和切换工具不会额外计算。
+邮件附件的 SHA-256 也只在附件行中明确点击计算时生成，可复制结果；解析邮件本身不会自动为所有附件计算哈希。
+PCAP 中提取出的 HTTP 文件同样支持按需计算 SHA-256，避免对未选择的输出做额外计算。
+较大的报告和工作区状态会自动使用 IndexedDB 保存，避免超过 localStorage 限制后静默丢失。
+报告窗口支持导出 Markdown、可直接双击打开的自包含 HTML、JSON、CSV 和 Bundle JSON；Bundle 导入前会校验结构，并在确认后替换当前案件记录。
+在报告的证据清单中可以主动选择本地源文件进行 SHA-256 核验，结果不会在未点击核验前自动计算。
+复制按钮优先使用浏览器剪贴板；在静态 `file://` 包或剪贴板权限不可用时，会尝试使用浏览器兼容的降级方式。
+输入状态的写入经过短暂合并，长文本编辑时不会每次按键都写入浏览器存储。
 
 ## 本地运行
 
@@ -61,7 +73,7 @@ Forensics++ 是一个静态 React 网站。哈希、SQLite、邮件、图片、�
 - npm `10` 或更高版本
 
 ```bash
-git clone https://github.com/DyNooob/ForensicsPP.git
+git clone https://git.loken.cn/dynooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
 npm run dev
@@ -105,11 +117,11 @@ npm run release:package
 输出：
 
 ```text
-release/ForensicsPP-v1.0.0-alpha.1-static.zip
+release/ForensicsPP-v1.0.0-alpha.4-static.zip
 release/SHA256SUMS.txt
 ```
 
-ZIP 内只有已经构建的静态网站。解压后可放到 GitHub Pages、Nginx、Apache、对象存储或其他静态托管服务。
+ZIP 内只有已经构建的静态网站。解压后可放到 Nginx、Apache、对象存储或其他静态托管服务。
 
 ## 常用命令
 
@@ -135,12 +147,12 @@ src/utils/        下载、存储等通用代码
 tests/            自动测试
 scripts/          构建、打包和布局审计
 public/           图标、法律页面、CyberChef 等静态文件
-docs/releases/    GitHub Release 文案
+docs/releases/    双语版本发布说明
 ```
 
 ## 部署
 
-仓库已包含 GitHub Pages Workflow。Pages 的 Source 选择 **GitHub Actions**，推送到 `main` 后会自动测试、构建并部署。
+源码仓库使用 loken 作为当前发布入口。源码推送前应先在本地执行 `npm run verify`，再按 [`docs/RELEASE.md`](./docs/RELEASE.md) 的 loken 流程发布。
 
 其他平台使用：
 

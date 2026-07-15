@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import CryptoJS from "crypto-js";
 import { AButton, AInputNumber, APasswordField, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
@@ -45,7 +46,7 @@ async function djangoPbkdf2(password: string, salt: string, iterations = 390000)
   return `pbkdf2_sha256$${iterations}$${salt}$${bytesToBase64(new Uint8Array(bits))}`;
 }
 
-export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services: PasswordToolServices }) {
+export function PasswordTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: PasswordToolServices; active?: boolean }) {
   const { mysqlNativePassword, randomSalt, verifyPasswordCandidates, passwordRowsToCsv } = services;
   const english = t.waiting === "Waiting";
   const [mode, setMode] = React.useState<"generate" | "verify" | "sql">("generate");
@@ -67,6 +68,12 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   const [column, setColumn] = React.useState("password");
   const [whereColumn, setWhereColumn] = React.useState("username");
   const operationRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (active) return;
+    operationRef.current += 1;
+    setLoading("");
+  }, [active]);
 
   const fastHashes = React.useMemo<Array<[string, string]>>(() => password && quickGenerated ? [
     ["MD5", CryptoJS.MD5(password).toString()],
@@ -119,7 +126,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   };
 
   const generateQuickHashes = () => {
-    if (!password) return;
+    if (!password || !active) return;
     operationRef.current += 1;
     setLoading("");
     setError("");
@@ -128,7 +135,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   };
 
   const generateBcrypt = async () => {
-    if (!password) return;
+    if (!password || !active) return;
     const operationId = ++operationRef.current;
     setLoading("bcrypt");
     setError("");
@@ -149,7 +156,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   };
 
   const generatePbkdf2 = async () => {
-    if (!password || !salt) return;
+    if (!password || !salt || !active) return;
     const operationId = ++operationRef.current;
     setLoading("pbkdf2");
     setError("");
@@ -166,7 +173,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
   };
 
   const verify = async () => {
-    if (!targetHash.trim() || !candidates.length) return;
+    if (!targetHash.trim() || !candidates.length || !active) return;
     const operationId = ++operationRef.current;
     setLoading("verify");
     setError("");
@@ -227,8 +234,8 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
             </div>
             {visibleGeneratedHashes.length > 0 && (
               <div className="password-simple-output">
-                <ToolPanelHeader title={english ? "Generated hash" : "生成结果"} actions={<AButton variant="text" onClick={() => void navigator.clipboard.writeText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (english ? "Copy all" : "复制全部") : (english ? "Copy" : "复制")}</AButton>} />
-                <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{visibleGeneratedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void navigator.clipboard.writeText(value)}>{value}</button></td></tr>)}</tbody></table></div>
+                <ToolPanelHeader title={english ? "Generated hash" : "生成结果"} actions={<AButton variant="text" onClick={() => void copyText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (english ? "Copy all" : "复制全部") : (english ? "Copy" : "复制")}</AButton>} />
+                <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{visibleGeneratedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void copyText(value)}>{value}</button></td></tr>)}</tbody></table></div>
               </div>
             )}
           </div>
@@ -258,7 +265,7 @@ export function PasswordTool({ t, services }: { t: (typeof copy)["zh"]; services
               <label className="stack-label">{english ? "Password column" : "密码字段"}<input className="text-input" value={column} onChange={(event) => setColumn(event.currentTarget.value)} /></label>
               <label className="stack-label">{english ? "Where column" : "条件字段"}<input className="text-input" value={whereColumn} onChange={(event) => setWhereColumn(event.currentTarget.value)} /></label>
             </div>
-            {!password ? <div className="empty-state">{english ? "Generate a password hash first" : "请先在生成页输入口令"}</div> : <div className="password-simple-sql-list">{sqlTemplates.map(([label, value]) => <div className="password-simple-sql-row" key={label}><strong>{label}</strong><code>{value}</code><AButton variant="text" disabled={value === "--"} onClick={() => void navigator.clipboard.writeText(value)}>{t.copy}</AButton></div>)}</div>}
+            {!password ? <div className="empty-state">{english ? "Generate a password hash first" : "请先在生成页输入口令"}</div> : <div className="password-simple-sql-list">{sqlTemplates.map(([label, value]) => <div className="password-simple-sql-row" key={label}><strong>{label}</strong><code>{value}</code><AButton variant="text" disabled={value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></div>)}</div>}
           </div>
         )}
 

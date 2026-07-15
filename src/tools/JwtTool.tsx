@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, APasswordField, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -54,7 +55,7 @@ export type JwtToolServices = {
   signJwtHS256: (header: string, payload: string, secret: string) => string;
 };
 
-export function JwtTool({ t, services }: { t: (typeof copy)["zh"]; services: JwtToolServices }) {
+export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: JwtToolServices; active?: boolean }) {
   const { inspectJwtToken, extractJwtTokens, jwtCryptoAlgorithm, verifyJwtAsymmetricSignature, signJwtHS256 } = services;
   const english = t.waiting === "Waiting";
   const [mode, setMode] = React.useState<"inspect" | "generate">("inspect");
@@ -68,6 +69,13 @@ export function JwtTool({ t, services }: { t: (typeof copy)["zh"]; services: Jwt
   const [payload, setPayload] = React.useState("{}");
   const [generatedToken, setGeneratedToken] = React.useState("");
   const [generateError, setGenerateError] = React.useState("");
+  const verificationRequestRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (active) return;
+    verificationRequestRef.current += 1;
+    setVerification({ status: "idle", detail: "" });
+  }, [active]);
 
   const tokens = React.useMemo(() => extractJwtTokens(tokenInput).slice(0, 200), [extractJwtTokens, tokenInput]);
   const tokenRows = React.useMemo<JwtListRow[]>(() => tokens.map((token) => {
@@ -110,12 +118,14 @@ export function JwtTool({ t, services }: { t: (typeof copy)["zh"]; services: Jwt
   }, [multiToken, selectedToken, tokens, view]);
 
   const verifyAsymmetric = async () => {
-    if (!activeToken || !verifyKey.trim()) return;
+    if (!active || !activeToken || !verifyKey.trim()) return;
+    const requestId = ++verificationRequestRef.current;
     setVerification({ status: "checking", detail: english ? "Checking..." : "正在校验..." });
     try {
-      setVerification(await verifyJwtAsymmetricSignature(activeToken, verifyKey.trim()));
+      const result = await verifyJwtAsymmetricSignature(activeToken, verifyKey.trim());
+      if (requestId === verificationRequestRef.current) setVerification(result);
     } catch (caught) {
-      setVerification({ status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
+      if (requestId === verificationRequestRef.current) setVerification({ status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
     }
   };
 
@@ -188,7 +198,7 @@ export function JwtTool({ t, services }: { t: (typeof copy)["zh"]; services: Jwt
                   <InfoTable rows={summaryRows} />
                   <label className="stack-label">Header<textarea className="compact-textarea jwt-simple-json" value={activeInspection.headerText || "--"} readOnly /></label>
                   <label className="stack-label">Payload<textarea className="single-textarea jwt-simple-json" value={activeInspection.payloadText || "--"} readOnly /></label>
-                  <div className="button-row"><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(activeToken)}>{english ? "Copy token" : "复制 Token"}</AButton><AButton variant="text" disabled={!activeInspection.headerText} onClick={() => void navigator.clipboard.writeText(activeInspection.headerText)}>{english ? "Copy Header" : "复制 Header"}</AButton><AButton variant="text" disabled={!activeInspection.payloadText} onClick={() => void navigator.clipboard.writeText(activeInspection.payloadText)}>{english ? "Copy Payload" : "复制 Payload"}</AButton></div>
+                  <div className="button-row"><AButton variant="outlined" onClick={() => void copyText(activeToken)}>{english ? "Copy token" : "复制 Token"}</AButton><AButton variant="text" disabled={!activeInspection.headerText} onClick={() => void copyText(activeInspection.headerText)}>{english ? "Copy Header" : "复制 Header"}</AButton><AButton variant="text" disabled={!activeInspection.payloadText} onClick={() => void copyText(activeInspection.payloadText)}>{english ? "Copy Payload" : "复制 Payload"}</AButton></div>
                 </>}
 
                 {view === "claims" && <InfoTable rows={activeInspection.claimRows.length ? activeInspection.claimRows : [[english ? "Claims" : "声明", "--"]]} />}
@@ -204,7 +214,7 @@ export function JwtTool({ t, services }: { t: (typeof copy)["zh"]; services: Jwt
             <label className="stack-label">{english ? "Shared secret" : "共享密钥"}<APasswordField className="text-input full-input" value={secret} onChange={(event) => { setSecret(event.currentTarget.value); setGeneratedToken(""); }} /></label>
             <div className="button-row"><AButton variant="filled" disabled={!secret} onClick={generate}>{english ? "Generate" : "生成 Token"}</AButton></div>
             {generateError && <div className="empty-state error-state">{generateError}</div>}
-            {generatedToken && <div className="jwt-simple-output"><ToolPanelHeader title={english ? "Generated token" : "生成结果"} actions={<><AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(generatedToken)}>{t.copy}</AButton><AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("inspect"); setView("decoded"); }}>{english ? "Decode" : "打开解析"}</AButton></>} /><textarea className="single-textarea jwt-simple-generated" value={generatedToken} readOnly /></div>}
+            {generatedToken && <div className="jwt-simple-output"><ToolPanelHeader title={english ? "Generated token" : "生成结果"} actions={<><AButton variant="outlined" onClick={() => void copyText(generatedToken)}>{t.copy}</AButton><AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("inspect"); setView("decoded"); }}>{english ? "Decode" : "打开解析"}</AButton></>} /><textarea className="single-textarea jwt-simple-generated" value={generatedToken} readOnly /></div>}
           </div>
         )}
       </div>

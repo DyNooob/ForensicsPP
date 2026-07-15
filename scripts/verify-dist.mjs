@@ -7,7 +7,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { access, readFile, readdir, stat } from "node:fs/promises";
@@ -90,6 +90,16 @@ try {
   if (/\b(?:src|href)="\/assets\//.test(indexHtml)) errors.push("index.html contains root-absolute build asset paths");
 } catch {
   // The required-file check above reports a missing index.html.
+}
+
+try {
+  const serviceWorker = await readFile(join(distRoot, "sw.js"), "utf8");
+  const expectedCacheVersion = `forensicspp-v${packageJson.version}`;
+  if (!serviceWorker.includes(`const CACHE_VERSION = "${expectedCacheVersion}";`)) {
+    errors.push("sw.js cache version does not match package.json");
+  }
+} catch {
+  // The required-file check above reports a missing sw.js.
 }
 
 let totalBytes = 0;

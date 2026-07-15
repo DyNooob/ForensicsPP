@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import type { Database, SqlJsStatic, SqlValue } from "sql.js";
@@ -50,6 +50,7 @@ export type BrowserArtifactFileResult = {
   profile: string;
   artifact: string;
   records: number;
+  truncated: boolean;
   status: "parsed" | "ignored" | "error";
   detail: string;
 };
@@ -62,9 +63,39 @@ export type BrowserArtifactAnalysis = {
   profiles: string[];
   firstTime: string;
   lastTime: string;
+  snapshotLimited?: boolean;
 };
 
 type Row = Record<string, SqlValue>;
+type RowBudget = { remaining: number; truncated: boolean };
+const MAX_RECORDS_PER_FILE = 50_000;
+const MAX_PERSISTED_BROWSER_RECORD_BYTES = 8 * 1024 * 1024;
+
+export function persistableBrowserArtifactAnalysis(analysis: BrowserArtifactAnalysis): BrowserArtifactAnalysis {
+  let retained = 0;
+  const records: BrowserArtifactRecord[] = [];
+  for (const record of analysis.records) {
+    const estimate = record.source.length + record.primary.length + record.secondary.length + record.detail.length
+      + record.url.length + record.path.length + record.browser.length + record.profile.length + record.time.length + 128;
+    if (retained + estimate > MAX_PERSISTED_BROWSER_RECORD_BYTES) break;
+    retained += estimate;
+    records.push(record);
+  }
+  if (records.length === analysis.records.length) return analysis;
+  const categories: BrowserArtifactRecord["category"][] = ["visits", "downloads", "cookies", "logins", "autofill", "extensions"];
+  const counts = Object.fromEntries(categories.map((category) => [category, records.filter((record) => record.category === category).length])) as BrowserArtifactAnalysis["counts"];
+  const timed = records.filter((record) => record.time);
+  return {
+    ...analysis,
+    records,
+    counts,
+    browsers: Array.from(new Set(records.map((record) => record.browser))),
+    profiles: Array.from(new Set(records.map((record) => record.profile))),
+    firstTime: timed[0]?.time ?? "",
+    lastTime: timed[timed.length - 1]?.time ?? "",
+    snapshotLimited: true
+  };
+}
 
 const CHROME_EPOCH_OFFSET_MS = 11644473600000;
 
@@ -123,11 +154,21 @@ export function browserAndProfile(pathValue: string) {
   return { browser, profile };
 }
 
-function rows(db: Database, query: string): Row[] {
+function rows(db: Database, query: string, budget?: RowBudget): Row[] {
+  if (budget && budget.remaining <= 0) {
+    budget.truncated = true;
+    return [];
+  }
   try {
-    const result = db.exec(query)[0];
+    const limitedQuery = budget ? `${query.trim().replace(/;$/, "")} LIMIT ${budget.remaining + 1}` : query;
+    const result = db.exec(limitedQuery)[0];
     if (!result) return [];
-    return result.values.map((values) => Object.fromEntries(result.columns.map((column, index) => [column, values[index] ?? null])));
+    const values = budget && result.values.length > budget.remaining ? result.values.slice(0, budget.remaining) : result.values;
+    if (budget) {
+      if (result.values.length > values.length) budget.truncated = true;
+      budget.remaining -= values.length;
+    }
+    return values.map((row) => Object.fromEntries(result.columns.map((column, index) => [column, row[index] ?? null])));
   } catch {
     return [];
   }
@@ -155,13 +196,13 @@ function makeRecord(
   };
 }
 
-function parseChromiumHistory(db: Database, input: BrowserArtifactInput, browser: string, profile: string) {
+function parseChromiumHistory(db: Database, input: BrowserArtifactInput, browser: string, profile: string, budget: RowBudget) {
   const records: BrowserArtifactRecord[] = [];
   const visits = rows(db, `
     SELECT visits.id AS record_id, urls.url, urls.title, urls.visit_count, urls.typed_count,
            visits.visit_time, visits.transition, visits.visit_duration
     FROM visits JOIN urls ON urls.id = visits.url ORDER BY visits.visit_time
-  `);
+  `, budget);
   visits.forEach((row, index) => records.push(makeRecord(input, "visits", browser, profile, index, {
     time: chromiumTimeToIso(row.visit_time),
     primary: text(row.title) || text(row.url),
@@ -173,11 +214,11 @@ function parseChromiumHistory(db: Database, input: BrowserArtifactInput, browser
   })));
 
   const chains = new Map<string, string[]>();
-  rows(db, "SELECT id, chain_index, url FROM downloads_url_chains ORDER BY id, chain_index").forEach((row) => {
+  rows(db, `SELECT id, chain_index, url FROM downloads_url_chains ORDER BY id, chain_index LIMIT ${MAX_RECORDS_PER_FILE}`).forEach((row) => {
     const id = text(row.id);
     chains.set(id, [...(chains.get(id) ?? []), text(row.url)]);
   });
-  rows(db, "SELECT * FROM downloads ORDER BY start_time").forEach((row, index) => {
+  rows(db, "SELECT * FROM downloads ORDER BY start_time", budget).forEach((row, index) => {
     const id = text(row.id);
     const urls = chains.get(id) ?? [];
     const url = text(row.tab_url) || text(row.site_url) || text(row.referrer) || urls[urls.length - 1] || "";
@@ -195,7 +236,7 @@ function parseChromiumHistory(db: Database, input: BrowserArtifactInput, browser
   return records;
 }
 
-function parseFirefoxPlaces(db: Database, input: BrowserArtifactInput, browser: string, profile: string) {
+function parseFirefoxPlaces(db: Database, input: BrowserArtifactInput, browser: string, profile: string, budget: RowBudget) {
   const records: BrowserArtifactRecord[] = [];
   rows(db, `
     SELECT moz_historyvisits.id AS record_id, moz_places.url, moz_places.title,
@@ -203,7 +244,7 @@ function parseFirefoxPlaces(db: Database, input: BrowserArtifactInput, browser: 
            moz_historyvisits.visit_type, moz_historyvisits.from_visit
     FROM moz_historyvisits JOIN moz_places ON moz_places.id = moz_historyvisits.place_id
     ORDER BY moz_historyvisits.visit_date
-  `).forEach((row, index) => records.push(makeRecord(input, "visits", browser, profile, index, {
+  `, budget).forEach((row, index) => records.push(makeRecord(input, "visits", browser, profile, index, {
     time: firefoxTimeToIso(row.visit_date),
     primary: text(row.title) || text(row.url),
     secondary: text(row.url),
@@ -215,9 +256,9 @@ function parseFirefoxPlaces(db: Database, input: BrowserArtifactInput, browser: 
   return records;
 }
 
-function parseCookies(db: Database, input: BrowserArtifactInput, browser: string, profile: string, firefox: boolean) {
+function parseCookies(db: Database, input: BrowserArtifactInput, browser: string, profile: string, firefox: boolean, budget: RowBudget) {
   const table = firefox ? "moz_cookies" : "cookies";
-  return rows(db, `SELECT * FROM ${table}`).map((row, index) => {
+  return rows(db, `SELECT * FROM ${table}`, budget).map((row, index) => {
     const host = text(row.host_key ?? row.host);
     const name = text(row.name);
     const encrypted = row.encrypted_value instanceof Uint8Array && row.encrypted_value.byteLength > 0;
@@ -237,8 +278,8 @@ function parseCookies(db: Database, input: BrowserArtifactInput, browser: string
   });
 }
 
-function parseChromiumLogins(db: Database, input: BrowserArtifactInput, browser: string, profile: string) {
-  return rows(db, "SELECT * FROM logins ORDER BY date_created").map((row, index) => {
+function parseChromiumLogins(db: Database, input: BrowserArtifactInput, browser: string, profile: string, budget: RowBudget) {
+  return rows(db, "SELECT * FROM logins ORDER BY date_created", budget).map((row, index) => {
     const origin = text(row.origin_url) || text(row.signon_realm) || text(row.action_url);
     const passwordState = row.password_value instanceof Uint8Array && row.password_value.byteLength ? "encrypted" : text(row.password_value) ? "stored" : "empty";
     return makeRecord(input, "logins", browser, profile, index, {
@@ -253,8 +294,8 @@ function parseChromiumLogins(db: Database, input: BrowserArtifactInput, browser:
   });
 }
 
-function parseChromiumAutofill(db: Database, input: BrowserArtifactInput, browser: string, profile: string) {
-  return rows(db, "SELECT * FROM autofill ORDER BY date_created").map((row, index) => makeRecord(input, "autofill", browser, profile, index, {
+function parseChromiumAutofill(db: Database, input: BrowserArtifactInput, browser: string, profile: string, budget: RowBudget) {
+  return rows(db, "SELECT * FROM autofill ORDER BY date_created", budget).map((row, index) => makeRecord(input, "autofill", browser, profile, index, {
     time: unixTimeToIso(row.date_created),
     primary: text(row.name),
     secondary: text(row.value),
@@ -265,8 +306,16 @@ function parseChromiumAutofill(db: Database, input: BrowserArtifactInput, browse
   }));
 }
 
-function parseJson(input: BrowserArtifactInput, browser: string, profile: string) {
+function parseJson(input: BrowserArtifactInput, browser: string, profile: string, budget: RowBudget) {
   const records: BrowserArtifactRecord[] = [];
+  const addRecord = (record: BrowserArtifactRecord) => {
+    if (budget.remaining <= 0) {
+      budget.truncated = true;
+      return;
+    }
+    records.push(record);
+    budget.remaining -= 1;
+  };
   const decoded = new TextDecoder("utf-8", { fatal: false }).decode(input.bytes);
   const value = JSON.parse(decoded) as Record<string, unknown>;
   const name = input.name.toLowerCase();
@@ -275,7 +324,7 @@ function parseJson(input: BrowserArtifactInput, browser: string, profile: string
       if (!node || typeof node !== "object") return;
       const item = node as Record<string, unknown>;
       const nextFolder = item.type === "folder" ? [folder, String(item.name ?? "")].filter(Boolean).join("/") : folder;
-      if (item.type === "url") records.push(makeRecord(input, "visits", browser, profile, records.length, {
+      if (item.type === "url") addRecord(makeRecord(input, "visits", browser, profile, records.length, {
         time: chromiumTimeToIso(String(item.date_added ?? "")),
         primary: String(item.name ?? item.url ?? "Bookmark"),
         secondary: String(item.url ?? ""),
@@ -292,7 +341,7 @@ function parseJson(input: BrowserArtifactInput, browser: string, profile: string
     Object.entries(settings).forEach(([id, raw], index) => {
       const extension = raw as Record<string, unknown>;
       const manifest = (extension.manifest as Record<string, unknown> | undefined) ?? {};
-      records.push(makeRecord(input, "extensions", browser, profile, index, {
+      addRecord(makeRecord(input, "extensions", browser, profile, index, {
         time: chromiumTimeToIso(String(extension.first_install_time ?? extension.install_time ?? "")),
         primary: String(manifest.name ?? id),
         secondary: id,
@@ -306,7 +355,7 @@ function parseJson(input: BrowserArtifactInput, browser: string, profile: string
     const logins = Array.isArray(value.logins) ? value.logins : [];
     logins.forEach((raw, index) => {
       const login = raw as Record<string, unknown>;
-      records.push(makeRecord(input, "logins", browser, profile, index, {
+      addRecord(makeRecord(input, "logins", browser, profile, index, {
         time: unixTimeToIso(login.timeCreated),
         primary: String(login.encryptedUsername ? "encrypted username" : "(empty username)"),
         secondary: String(login.hostname ?? ""),
@@ -338,6 +387,7 @@ export function analyzeBrowserArtifacts(inputs: BrowserArtifactInput[], SQL: Sql
     const identity = browserAndProfile(input.path);
     let artifact = "Unsupported file";
     let records: BrowserArtifactRecord[] = [];
+    const budget: RowBudget = { remaining: MAX_RECORDS_PER_FILE, truncated: false };
     try {
       const sqlite = input.bytes.length >= 16 && new TextDecoder().decode(input.bytes.slice(0, 16)) === "SQLite format 3\u0000";
       if (sqlite) {
@@ -345,23 +395,23 @@ export function analyzeBrowserArtifacts(inputs: BrowserArtifactInput[], SQL: Sql
         try {
           const tables = tableNames(db);
           artifact = sqliteArtifactName(tables);
-          if (tables.has("visits") && tables.has("urls")) records.push(...parseChromiumHistory(db, input, identity.browser, identity.profile));
-          if (tables.has("moz_historyvisits") && tables.has("moz_places")) records.push(...parseFirefoxPlaces(db, input, "Firefox", identity.profile));
-          if (tables.has("cookies")) records.push(...parseCookies(db, input, identity.browser, identity.profile, false));
-          if (tables.has("moz_cookies")) records.push(...parseCookies(db, input, "Firefox", identity.profile, true));
-          if (tables.has("logins")) records.push(...parseChromiumLogins(db, input, identity.browser, identity.profile));
-          if (tables.has("autofill")) records.push(...parseChromiumAutofill(db, input, identity.browser, identity.profile));
+          if (tables.has("visits") && tables.has("urls")) records.push(...parseChromiumHistory(db, input, identity.browser, identity.profile, budget));
+          if (tables.has("moz_historyvisits") && tables.has("moz_places")) records.push(...parseFirefoxPlaces(db, input, "Firefox", identity.profile, budget));
+          if (tables.has("cookies")) records.push(...parseCookies(db, input, identity.browser, identity.profile, false, budget));
+          if (tables.has("moz_cookies")) records.push(...parseCookies(db, input, "Firefox", identity.profile, true, budget));
+          if (tables.has("logins")) records.push(...parseChromiumLogins(db, input, identity.browser, identity.profile, budget));
+          if (tables.has("autofill")) records.push(...parseChromiumAutofill(db, input, identity.browser, identity.profile, budget));
         } finally {
           db.close();
         }
       } else if (["bookmarks", "preferences", "logins.json"].includes(input.name.toLowerCase())) {
         artifact = input.name;
-        records = parseJson(input, input.name.toLowerCase() === "logins.json" ? "Firefox" : identity.browser, identity.profile);
+        records = parseJson(input, input.name.toLowerCase() === "logins.json" ? "Firefox" : identity.browser, identity.profile, budget);
       }
       allRecords.push(...records);
-      files.push({ path: input.path, size: input.size, browser: identity.browser, profile: identity.profile, artifact, records: records.length, status: records.length ? "parsed" : "ignored", detail: records.length ? `${records.length} record(s)` : "No supported records found" });
+      files.push({ path: input.path, size: input.size, browser: identity.browser, profile: identity.profile, artifact, records: records.length, truncated: budget.truncated, status: records.length ? "parsed" : "ignored", detail: records.length ? `${records.length}${budget.truncated ? "+" : ""} record(s)${budget.truncated ? "; record limit reached" : ""}` : "No supported records found" });
     } catch (caught) {
-      files.push({ path: input.path, size: input.size, browser: identity.browser, profile: identity.profile, artifact, records: 0, status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
+      files.push({ path: input.path, size: input.size, browser: identity.browser, profile: identity.profile, artifact, records: 0, truncated: false, status: "error", detail: caught instanceof Error ? caught.message : String(caught) });
     }
   }
 

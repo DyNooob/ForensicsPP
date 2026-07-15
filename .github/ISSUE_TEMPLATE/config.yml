@@ -5,7 +5,7 @@
 # Author: DyNooob
 # Website: https://www.loken.cn
 # Platform: DigiForensics.cn
-# Project: https://github.com/DyNooob/ForensicsPP
+# Project: https://git.loken.cn/dynooob/ForensicsPP
 #
 # Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
 # lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -15,10 +15,10 @@
 # privacy infringement, or unlawful activity.
 #
 # Released under the MIT License.
-# Full source code: https://github.com/DyNooob/ForensicsPP
+# Full source code: https://git.loken.cn/dynooob/ForensicsPP
 
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/DyNooob/ForensicsPP/security/advisories/new
-    about: Privately report vulnerabilities. Do not open a public issue.
+    url: mailto:toolab@digiforensics.cn?subject=ForensicsPP%20security%20report
+    about: Privately report vulnerabilities by email. Do not open a public issue.

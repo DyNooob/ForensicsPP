@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 const databaseName = "forensicspp-workspaces";
@@ -49,26 +49,55 @@ function runSessionRequest<T>(mode: IDBTransactionMode, operation: (store: IDBOb
   return openSessionDatabase().then((database) => new Promise<T>((resolve, reject) => {
     const transaction = database.transaction(sessionStore, mode);
     const request = operation(transaction.objectStore(sessionStore));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Browser storage request failed"));
-    transaction.oncomplete = () => database.close();
+    let requestFinished = false;
+    let transactionFinished = false;
+    let result!: T;
+    let settled = false;
+    const close = () => database.close();
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      close();
+      reject(error instanceof Error ? error : new Error("Browser storage transaction failed"));
+    };
+    const finish = () => {
+      if (settled || !requestFinished || !transactionFinished) return;
+      settled = true;
+      close();
+      resolve(result);
+    };
+    request.onsuccess = () => {
+      result = request.result;
+      requestFinished = true;
+      finish();
+    };
+    request.onerror = () => fail(request.error ?? new Error("Browser storage request failed"));
+    transaction.oncomplete = () => {
+      transactionFinished = true;
+      finish();
+    };
     transaction.onerror = () => {
-      database.close();
-      reject(transaction.error ?? new Error("Browser storage transaction failed"));
+      fail(transaction.error ?? new Error("Browser storage transaction failed"));
     };
     transaction.onabort = () => {
-      database.close();
-      reject(transaction.error ?? new Error("Browser storage transaction was cancelled"));
+      fail(transaction.error ?? new Error("Browser storage transaction was cancelled"));
     };
   }));
 }
 
 export async function readToolSession<T>(id: string) {
+  return (await readToolSessionResult<T>(id)).value;
+}
+
+export async function readToolSessionResult<T>(id: string): Promise<{ value: T | null; error: Error | null }> {
   try {
     const stored = await runSessionRequest<StoredToolSession<T> | undefined>("readonly", (store) => store.get(id));
-    return stored?.value ?? null;
-  } catch {
-    return null;
+    return { value: stored?.value ?? null, error: null };
+  } catch (caught) {
+    return {
+      value: null,
+      error: caught instanceof Error ? caught : new Error("Browser storage request failed")
+    };
   }
 }
 
@@ -81,14 +110,8 @@ export async function removeToolSession(id: string) {
 }
 
 export function clearToolSessions() {
-  return new Promise<void>((resolve) => {
-    if (typeof indexedDB === "undefined") {
-      resolve();
-      return;
-    }
-    const request = indexedDB.deleteDatabase(databaseName);
-    request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
-  });
+  if (typeof indexedDB === "undefined") return Promise.resolve();
+  // Clear records inside the existing store instead of deleting the database.
+  // Database deletion can be blocked by another open tab and falsely report success.
+  return runSessionRequest<undefined>("readwrite", (store) => store.clear()).then(() => undefined);
 }

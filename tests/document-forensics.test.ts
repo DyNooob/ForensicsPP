@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,13 +16,13 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import * as CFB from "cfb";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { analyzeOle, analyzeOoxml, isOle, isPdf, isZip } from "../src/features/document/analyzer";
+import { analyzeOle, analyzeOoxml, isOle, isPdf, isZip, persistableDocumentAnalysis } from "../src/features/document/analyzer";
 
 const encoder = new TextEncoder();
 
@@ -90,6 +90,14 @@ describe("OOXML analysis", () => {
     expect(result.findings.some((finding) => finding.category === "external" && finding.detail === "https://external.test/path")).toBe(true);
     expect(result.findings.some((finding) => finding.category === "macro" && finding.location === "word/vbaProject.bin")).toBe(true);
     expect(result.extracts.map((extract) => extract.name)).toEqual(expect.arrayContaining(["oleObject1.bin", "vbaProject.bin"]));
+  });
+
+  it("bounds embedded bytes kept in a workspace snapshot", () => {
+    const result = analyzeOoxml(zipSync({ "[Content_Types].xml": encoder.encode("<Types></Types>"), "word/document.xml": encoder.encode("<w:document/>") }), "fixture.docx");
+    const withExtracts = { ...result, extracts: [{ id: "large", name: "large.bin", size: 9 * 1024 * 1024, kind: "Embedded object", bytes: new Uint8Array(9 * 1024 * 1024) }] };
+    const persisted = persistableDocumentAnalysis(withExtracts);
+    expect(persisted.extracts[0].bytes.byteLength).toBe(0);
+    expect(withExtracts.extracts[0].bytes.byteLength).toBe(9 * 1024 * 1024);
   });
 
   it("rejects ordinary ZIP files and truncated containers", () => {

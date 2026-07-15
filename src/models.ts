@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 export type HashBundle = {
@@ -217,6 +217,8 @@ export type PcapInfo = {
   httpItems: PcapHttpItem[];
   dnsItems: PcapDnsItem[];
   extractedFiles: PcapExtractedFile[];
+  streamBytesLimited?: boolean;
+  extractedBytesLimited?: boolean;
   iocs: IocRecord[];
   timeline: PcapTimelineBucket[];
   events: PcapTimelineEvent[];
@@ -288,6 +290,16 @@ export type ArchiveEvidenceRow = {
   action: string;
 };
 
+export type CaseEvidenceFile = {
+  name: string;
+  size: number;
+  type: string;
+  lastModified?: string;
+  sha256?: string;
+};
+
+export type CaseTimelineEvent = Pick<TimelineEvent, "iso" | "local" | "raw" | "format" | "line" | "source" | "context" | "epochMs">;
+
 export type CaseNote = {
   id: string;
   tool: string;
@@ -299,6 +311,8 @@ export type CaseNote = {
   route?: string;
   sourceUrl?: string;
   contentSha256?: string;
+  evidenceFiles?: CaseEvidenceFile[];
+  timelineEvents?: CaseTimelineEvent[];
   createdAt: string;
 };
 

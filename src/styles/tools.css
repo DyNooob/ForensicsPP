@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 /* Desktop stacked workbench refinement */
@@ -529,6 +529,29 @@ textarea {
   border-radius: 7px;
   background: var(--app-surface-raised, var(--app-surface)) !important;
   box-shadow: var(--app-shadow-lg);
+}
+
+.ant-dropdown,
+.ant-dropdown-menu,
+.ant-popover .ant-popover-inner,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-color-picker-dropdown {
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  background: var(--app-surface-raised, var(--app-surface)) !important;
+  box-shadow: var(--app-shadow-lg);
+}
+
+.ant-dropdown-menu,
+.ant-popover .ant-popover-inner,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-color-picker-dropdown {
+  color: var(--app-text);
+}
+
+.ant-popover .ant-popover-arrow::before,
+.ant-popover .ant-popover-arrow::after {
+  background: var(--app-surface-raised, var(--app-surface));
 }
 
 .ant-select-dropdown .ant-select-item {
@@ -2748,6 +2771,44 @@ pre.result-box {
   resize: vertical;
 }
 
+.archive-entry-integrity {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--app-line);
+  padding-top: 10px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.archive-entry-integrity > span {
+  flex: 0 0 auto;
+  font-weight: 650;
+}
+
+.archive-entry-hash {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary);
+  font-family: var(--app-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: copy;
+}
+
+.archive-entry-hash:hover,
+.archive-entry-hash:focus-visible {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
 .archive-image-preview {
   display: grid;
   min-height: 280px;
@@ -3807,6 +3868,37 @@ details[open] > summary::after {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .home-directory-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-category-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .top-action-group {
+    gap: 4px;
+  }
+
+  .top-action-icon,
+  .github-icon-button {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .language-switch .app-button {
+    min-width: 38px;
+    padding-inline: 8px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
   .top-actions .favorite-toggle,
   .top-actions .link-toggle,
   .top-actions .command-toggle {
@@ -3976,6 +4068,43 @@ textarea {
   gap: 10px;
   color: var(--app-muted);
   font-size: var(--text-sm);
+}
+
+.tool-storage-note {
+  margin-top: 8px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tool-error-state {
+  display: grid;
+  min-height: 260px;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-danger) 24%, var(--app-line));
+  border-radius: var(--app-radius);
+  background: color-mix(in srgb, var(--app-danger) 5%, var(--app-surface));
+  color: var(--app-text);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.tool-error-state > svg {
+  color: var(--app-danger);
+  font-size: 22px;
+}
+
+.tool-error-state strong {
+  font-size: 16px;
+}
+
+.tool-error-state p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--app-muted);
+  line-height: 1.6;
 }
 
 /* File intake uses the same spacing on every tool page. */
@@ -4239,11 +4368,51 @@ textarea {
   background: #fff;
 }
 
+.email-attachment-hash {
+  max-width: 280px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary);
+  font-family: var(--app-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: copy;
+}
+
+.email-attachment-hash:hover,
+.email-attachment-hash:focus-visible {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
 .email-raw-source {
   max-height: 520px;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.pcap-extracted-hash {
+  max-width: 280px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary);
+  font-family: var(--app-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: copy;
+}
+
+.pcap-extracted-hash:hover,
+.pcap-extracted-hash:focus-visible {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
 }
 .sqlite-edit-mode {
   display: inline-flex;

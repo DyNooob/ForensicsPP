@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import {
@@ -28,13 +28,17 @@ import {
 } from "./analyzer";
 
 export type ImageAnalysisResult = ReturnType<typeof analyzeImagePixels>;
+export type ImageBasicsWorkerResult = {
+  analysis: ReturnType<typeof analyzeImageBasics>;
+  exif: Record<string, unknown>;
+};
 export type ImageRepairWorkerResult = {
   candidates: ReturnType<typeof buildImageRepairCandidates>;
   rebuiltPng: ReturnType<typeof tryRebuildPngContainer>;
 };
 
 export type ImageWorkerRequest =
-  | { action: "basics"; bytes: ArrayBuffer; fileType: string; metadataFields: number }
+  | { action: "basics"; bytes: ArrayBuffer; fileType: string }
   | { action: "hidden-undecoded"; bytes: ArrayBuffer; fileType: string; metadataFields: number; recoveryRows: Array<[string, string]> }
   | { action: "hidden-pixels"; bytes: ArrayBuffer; fileType: string; metadataFields: number; pixels: ArrayBuffer; width: number; height: number }
   | { action: "repair"; bytes: ArrayBuffer; format: string };
@@ -49,13 +53,25 @@ function resultTransferables(value: unknown, buffers = new Set<ArrayBuffer>()): 
   return Array.from(buffers);
 }
 
-self.onmessage = (event: MessageEvent<ImageWorkerRequest>) => {
+async function parseImageMetadata(bytes: Uint8Array) {
+  try {
+    const exifrModule = await import("exifr");
+    return ((await exifrModule
+      .parse(bytes, { tiff: true, xmp: true, iptc: true, icc: true, jfif: true, ihdr: true, gps: true })
+      .catch(() => null)) ?? {}) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+self.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
   try {
     const request = event.data;
     const bytes = new Uint8Array(request.bytes);
-    let result: ImageAnalysisResult | ImageRepairWorkerResult;
+    let result: ImageAnalysisResult | ImageBasicsWorkerResult | ImageRepairWorkerResult;
     if (request.action === "basics") {
-      result = analyzeImageBasics(bytes, request.fileType, request.metadataFields);
+      const exif = await parseImageMetadata(bytes);
+      result = { analysis: analyzeImageBasics(bytes, request.fileType, exif), exif };
     } else if (request.action === "hidden-undecoded") {
       result = analyzeUndecodedImageBytes(bytes, request.fileType, request.metadataFields, request.recoveryRows);
     } else if (request.action === "hidden-pixels") {

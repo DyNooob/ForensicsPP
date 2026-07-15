@@ -6,7 +6,7 @@
   Author: DyNooob
   Website: https://www.loken.cn
   Platform: DigiForensics.cn
-  Project: https://github.com/DyNooob/ForensicsPP
+  Project: https://git.loken.cn/dynooob/ForensicsPP
 
   Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
   lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
   privacy infringement, or unlawful activity.
 
   Released under the MIT License.
-  Full source code: https://github.com/DyNooob/ForensicsPP
+  Full source code: https://git.loken.cn/dynooob/ForensicsPP
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Forensics++">
   <rect width="64" height="64" rx="14" fill="#0b1624"/>

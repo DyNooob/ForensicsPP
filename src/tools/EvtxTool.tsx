@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,12 +16,12 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
-import { evtxEventsToCsv, type EvtxEvent, type EvtxFileAnalysis } from "../features/evtx/analyzer";
+import { evtxEventsToCsv, persistableEvtxResults, type EvtxEvent, type EvtxFileAnalysis } from "../features/evtx/analyzer";
 import { parseSigmaRules, runSigmaRules, type SigmaMatch, type SigmaRule } from "../features/evtx/sigma";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
@@ -41,7 +41,7 @@ function isAnalysis(file: ParsedFile): file is EvtxFileAnalysis {
   return "events" in file;
 }
 
-export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
+export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [parsedFiles, setParsedFiles] = React.useState<ParsedFile[]>([]);
@@ -67,7 +67,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
   const sigmaFileRef = React.useRef(0);
   const workspace = useToolWorkspace<ParsedFile[]>({
     id: "evtx",
-    version: 1,
+    version: 2,
     isValid: (value): value is ParsedFile[] => Array.isArray(value) && value.every((file) => Boolean(file && typeof file === "object" && typeof (file as ParsedFile).source === "string")),
     onRestore: (value) => {
       setParsedFiles(value);
@@ -172,7 +172,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
       setLoading(false);
       setProgress("");
       setView(results.some(isAnalysis) ? "overview" : "files");
-      if (results.length) workspace.save(results);
+      if (results.length) workspace.save(persistableEvtxResults(results));
     }
     if (parseAbortRef.current === controller) parseAbortRef.current = null;
   };
@@ -187,6 +187,11 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
     setSigmaLoading(false);
     setProgress("");
   };
+
+  React.useEffect(() => {
+    if (active) return;
+    cancel();
+  }, [active]);
 
   const clear = () => {
     workspace.clear();
@@ -310,7 +315,7 @@ export function EvtxTool({ t }: { t: (typeof copy)["zh"] }) {
           </div>
           <div className="table-scroll evtx-event-table-scroll"><table className="data-table evtx-event-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>Event ID</th><th>{english ? "Provider" : "提供程序"}</th><th>{english ? "Level" : "级别"}</th><th>{english ? "Computer" : "计算机"}</th><th>{english ? "Summary" : "摘要"}</th></tr></thead><tbody>{visibleEvents.map((event) => <tr key={event.id} className={selectedEventId === event.id ? "selected-row" : ""} onClick={() => setSelectedEventId(event.id)}><td>{event.timestamp || "--"}</td><td>{event.eventId ?? "--"}</td><td title={event.provider}>{event.provider || "--"}</td><td>{event.levelName}</td><td>{event.computer || "--"}</td><td title={event.message}>{event.message || "--"}</td></tr>)}</tbody></table></div>
           {filteredEvents.length > PAGE_SIZE && <div className="evtx-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredEvents.length)} / {filteredEvents.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
-          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>{english ? "Save XML" : "保存 XML"}</AButton>} /><InfoTable rows={[[english ? "Time" : "时间", selectedEvent.timestamp || "--"], [english ? "Channel" : "通道", selectedEvent.channel || "--"], [english ? "Computer" : "计算机", selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{english ? "Field" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<details className="evtx-xml-details"><summary>{english ? "Raw XML" : "原始 XML"}</summary><textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /></details></div>}
+          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" disabled={!selectedEvent.xml} onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>{selectedEvent.xml ? (english ? "Save XML" : "保存 XML") : (english ? "Re-analyze for XML" : "需重新分析 XML")}</AButton>} /><InfoTable rows={[[english ? "Time" : "时间", selectedEvent.timestamp || "--"], [english ? "Channel" : "通道", selectedEvent.channel || "--"], [english ? "Computer" : "计算机", selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{english ? "Field" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<details className="evtx-xml-details"><summary>{english ? "Raw XML" : "原始 XML"}</summary>{selectedEvent.xml ? <textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /> : <div className="empty-state">{english ? "Raw XML was not kept in the workspace snapshot. Re-analyze the file to retrieve it." : "工作区快照未保留原始 XML，请重新分析文件后查看。"}</div>}</details></div>}
         </>}
 
         {view === "sigma" && <div className="evtx-sigma-workspace">

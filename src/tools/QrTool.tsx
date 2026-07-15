@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,13 +16,15 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 type QrPoint = [string, string];
 type CompactQrAnalysis = {
@@ -55,6 +57,12 @@ const MAX_QR_FILE_BYTES = 96 * 1024 * 1024;
 const MAX_QR_SOURCE_PIXELS = 40_000_000;
 const MAX_QR_SCAN_PIXELS = 4_000_000;
 const MAX_QR_SCAN_EDGE = 2048;
+const MAX_PERSISTED_QR_PREVIEW_BYTES = 8 * 1024 * 1024;
+type QrWorkspace = { analysis: Omit<CompactQrAnalysis, "previewUrl">; previewBytes: Uint8Array | null };
+
+function isQrWorkspace(value: unknown): value is QrWorkspace {
+  return Boolean(value && typeof value === "object" && "analysis" in value && "previewBytes" in value);
+}
 
 function scaledQrLocation(location: Record<string, unknown>, scaleX: number, scaleY: number) {
   return Object.fromEntries(Object.entries(location).map(([key, value]) => {
@@ -65,29 +73,59 @@ function scaledQrLocation(location: Record<string, unknown>, scaleX: number, sca
   }));
 }
 
-export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrToolServices }) {
+export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: QrToolServices; active?: boolean }) {
   const { classifyQrPayload, detectImageFormat, parseQrPayloadDetails, qrGeometryRows, qrPointRow } = services;
   const english = t.waiting === "Waiting";
   const [analysis, setAnalysis] = React.useState<CompactQrAnalysis | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestIdRef = React.useRef(0);
   const previewUrlRef = React.useRef("");
+  const workspace = useToolWorkspace<QrWorkspace>({
+    id: "qr",
+    version: 2,
+    isValid: isQrWorkspace,
+    onRestore: ({ analysis: restored, previewBytes }) => {
+      let previewUrl = "";
+      if (previewBytes?.byteLength) {
+        const copy = new Uint8Array(previewBytes.length);
+        copy.set(previewBytes);
+        previewUrl = URL.createObjectURL(new Blob([copy.buffer], { type: restored.mime }));
+      }
+      setAnalysis({ ...restored, previewUrl });
+      previewUrlRef.current = previewUrl;
+      setStorageNotice(restored.size > MAX_PERSISTED_QR_PREVIEW_BYTES && !previewBytes?.byteLength
+        ? (english ? "This image is available for the current session only; reopen it after a refresh." : "当前图片仅在本次打开期间可用，刷新后请重新选择文件。")
+        : "");
+      setError("");
+    }
+  });
 
   React.useEffect(() => () => {
     requestIdRef.current += 1;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
+  React.useEffect(() => {
+    if (active) return;
+    requestIdRef.current += 1;
+    setLoading(false);
+  }, [active]);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     const requestId = ++requestIdRef.current;
     let pendingPreviewUrl = "";
     setDropActive(false);
+    workspace.clear();
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = "";
+    setAnalysis(null);
     setLoading(true);
     setError("");
+    setStorageNotice("");
     try {
       if (file.size > MAX_QR_FILE_BYTES) throw new Error(english ? "Image is too large (96 MiB maximum)." : "图片过大，最大支持 96 MiB。");
       const sampleBytes = new Uint8Array(await file.slice(0, 1024 * 1024).arrayBuffer());
@@ -154,6 +192,26 @@ export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrTo
         cornerRows,
         geometryRows: qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
       });
+      const persisted = {
+        name: file.name,
+        size: file.size,
+        mime: file.type || "unknown",
+        format: detectImageFormat(sampleBytes, file.type),
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        scanWidth,
+        scanHeight,
+        payload,
+        payloadType,
+        decodedBytes,
+        payloadRows: parseQrPayloadDetails(payload, payloadType),
+        cornerRows,
+        geometryRows: qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
+      } satisfies Omit<CompactQrAnalysis, "previewUrl">;
+      setStorageNotice(file.size > MAX_PERSISTED_QR_PREVIEW_BYTES
+        ? (english ? "This image is available for the current session only; it is not restored automatically." : "当前图片仅在本次打开期间保留，不会自动恢复。")
+        : "");
+      workspace.save({ analysis: persisted, previewBytes: file.size <= MAX_PERSISTED_QR_PREVIEW_BYTES ? new Uint8Array(await file.arrayBuffer()) : null });
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = previewUrl;
       pendingPreviewUrl = "";
@@ -170,10 +228,12 @@ export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrTo
 
   const clear = () => {
     requestIdRef.current += 1;
+    workspace.clear();
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = "";
     setAnalysis(null);
     setError("");
+    setStorageNotice("");
     setLoading(false);
     setDropActive(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -221,9 +281,12 @@ export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrTo
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="text" disabled={!analysis && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
+        {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
         {loading && <ALinearProgress />}
         {error && <pre className="result-box">{error}</pre>}
-        {analysis && <img className="image-preview" src={analysis.previewUrl} alt={analysis.name} />}
+        {analysis && (analysis.previewUrl
+          ? <img className="image-preview" src={analysis.previewUrl} alt={analysis.name} />
+          : <div className="empty-state">{storageNotice ? (english ? "Preview not restored" : "预览未恢复") : "--"}</div>)}
       </div>
 
       {analysis && (
@@ -231,7 +294,7 @@ export function QrTool({ t, services }: { t: (typeof copy)["zh"]; services: QrTo
           <div className="tool-panel wide-panel qr-result-panel">
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Decoded content" : "识别结果"} />
-              <AButton variant="text" disabled={!analysis.payload} onClick={() => void navigator.clipboard.writeText(analysis.payload)}>{t.copy}</AButton>
+              <AButton variant="text" disabled={!analysis.payload} onClick={() => void copyText(analysis.payload)}>{t.copy}</AButton>
             </div>
             <div className="qr-primary-grid">
               <div className="result-copy-card"><span>{t.qrPayloadType}</span><strong>{analysis.payload ? analysis.payloadType : "--"}</strong></div>

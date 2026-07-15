@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { decompressSync, strFromU8 } from "fflate";
@@ -782,7 +782,11 @@ function scoreImageNoise(source: ImagePixelData) {
   return { rows, findings };
 }
 
-function createChannelPreviews(image: HTMLImageElement) {
+function yieldToBrowser() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+async function createChannelPreviews(image: HTMLImageElement, shouldCancel: () => boolean = () => false) {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("Canvas is not available");
@@ -792,6 +796,8 @@ function createChannelPreviews(image: HTMLImageElement) {
   canvas.height = dimensions.height;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const source = context.getImageData(0, 0, canvas.width, canvas.height);
+  await yieldToBrowser();
+  if (shouldCancel()) return null;
 
   const makeChannel = (channel: "red" | "green" | "blue" | "alpha" | "lsb" | "lsbRed" | "lsbGreen" | "lsbBlue" | "lowBitHeatmap" | "noiseMap") => {
     const output = context.createImageData(source.width, source.height);
@@ -853,28 +859,37 @@ function createChannelPreviews(image: HTMLImageElement) {
     return canvas.toDataURL("image/png");
   };
 
-  return {
-    red: makeChannel("red"),
-    green: makeChannel("green"),
-    blue: makeChannel("blue"),
-    alpha: makeChannel("alpha"),
-    lsb: makeChannel("lsb"),
-    lsbRed: makeChannel("lsbRed"),
-    lsbGreen: makeChannel("lsbGreen"),
-    lsbBlue: makeChannel("lsbBlue"),
-    lowBitHeatmap: makeChannel("lowBitHeatmap"),
-    noiseMap: makeChannel("noiseMap"),
-    bitPlanes: [
-      { label: "R bit 0", src: makeBitPlane(0, 0) },
-      { label: "G bit 0", src: makeBitPlane(1, 0) },
-      { label: "B bit 0", src: makeBitPlane(2, 0) },
-      { label: "A bit 0", src: makeBitPlane(3, 0) },
-      { label: "R bit 1", src: makeBitPlane(0, 1) },
-      { label: "G bit 1", src: makeBitPlane(1, 1) },
-      { label: "B bit 1", src: makeBitPlane(2, 1) },
-      { label: "A bit 1", src: makeBitPlane(3, 1) }
-    ]
+  const channels: ImageInfo["channelDataUrls"] = {
+    red: "",
+    green: "",
+    blue: "",
+    alpha: "",
+    lsb: "",
+    lsbRed: "",
+    lsbGreen: "",
+    lsbBlue: "",
+    lowBitHeatmap: "",
+    noiseMap: "",
+    bitPlanes: []
   };
+  const channelNames: Array<"red" | "green" | "blue" | "alpha" | "lsb" | "lsbRed" | "lsbGreen" | "lsbBlue" | "lowBitHeatmap" | "noiseMap"> = [
+    "red", "green", "blue", "alpha", "lsb", "lsbRed", "lsbGreen", "lsbBlue", "lowBitHeatmap", "noiseMap"
+  ];
+  for (const channel of channelNames) {
+    await yieldToBrowser();
+    if (shouldCancel()) return null;
+    channels[channel] = makeChannel(channel);
+  }
+  const bitPlanes: Array<[string, 0 | 1 | 2 | 3, number]> = [
+    ["R bit 0", 0, 0], ["G bit 0", 1, 0], ["B bit 0", 2, 0], ["A bit 0", 3, 0],
+    ["R bit 1", 0, 1], ["G bit 1", 1, 1], ["B bit 1", 2, 1], ["A bit 1", 3, 1]
+  ];
+  for (const [label, channelIndex, bit] of bitPlanes) {
+    await yieldToBrowser();
+    if (shouldCancel()) return null;
+    channels.bitPlanes.push({ label, src: makeBitPlane(channelIndex, bit) });
+  }
+  return channels;
 }
 
 function buildAutoRevealPreviews(channels: ImageInfo["channelDataUrls"], hasAlphaSignal: boolean) {

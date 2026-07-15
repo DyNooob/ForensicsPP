@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,12 +16,14 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
+import { useStoredState } from "../utils/storage";
 
 function refang(value: string) {
   return value.trim()
@@ -41,7 +43,7 @@ function safeDecode(value: string) {
 
 export function UrlTool({ t }: { t: (typeof copy)["zh"] }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = React.useState("");
+  const [input, setInput] = useStoredState("url.input.v4", "");
   const parsed = React.useMemo(() => {
     const raw = refang(input);
     if (!raw) return { url: null as URL | null, normalized: "", error: "" };
@@ -127,7 +129,7 @@ export function UrlTool({ t }: { t: (typeof copy)["zh"] }) {
               {outputs.map(([label, value]) => (
                 <div className="url-output-row" key={label}>
                   <div><strong>{label}</strong><code>{value}</code></div>
-                  <AButton variant="text" onClick={() => void navigator.clipboard.writeText(value)}>{t.copy}</AButton>
+                  <AButton variant="text" onClick={() => void copyText(value)}>{t.copy}</AButton>
                 </div>
               ))}
             </div>

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,23 +16,28 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
+import type { WindowsWorkerRequest } from "../features/windows/windows.worker";
 import { copy } from "../i18n";
 import type { WindowsArtifactAnalysis } from "../models";
 import { formatBytes } from "../utils/files";
-
-type Services = {
-  analyzeWindowsArtifact: (bytes: Uint8Array, name: string) => WindowsArtifactAnalysis;
-};
+import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
 type ResultView = "overview" | "fields" | "timestamps" | "paths" | "text";
+type WindowsWorkspace = { analysis: WindowsArtifactAnalysis };
 
-export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; services: Services }) {
+function isWindowsWorkspace(value: unknown): value is WindowsWorkspace {
+  return Boolean(value && typeof value === "object" && "analysis" in value && value.analysis && typeof value.analysis === "object");
+}
+
+export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [analysis, setAnalysis] = React.useState<WindowsArtifactAnalysis | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -42,13 +47,37 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
   const [pathFilter, setPathFilter] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
-  React.useEffect(() => () => { requestRef.current += 1; }, []);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<WindowsWorkspace>({
+    id: "windows-artifact",
+    version: 1,
+    isValid: isWindowsWorkspace,
+    onRestore: ({ analysis: restored }) => {
+      setAnalysis(restored);
+      setView("overview");
+      setPathFilter("");
+      setError("");
+    }
+  });
+  React.useEffect(() => () => {
+    requestRef.current += 1;
+    abortRef.current?.abort();
+  }, []);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, [active]);
 
   const loadFile = async (file?: File) => {
     if (!file) return;
     const requestId = ++requestRef.current;
+    abortRef.current?.abort();
     setDropActive(false);
     setError("");
+    workspace.clear();
     setAnalysis(null);
     setView("overview");
     setPathFilter("");
@@ -57,22 +86,38 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
       return;
     }
     setLoading(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (requestId !== requestRef.current) return;
-      setAnalysis(services.analyzeWindowsArtifact(bytes, file.name));
+      const workerBytes = bytes.slice();
+      const nextAnalysis = await runWorkerTask<WindowsWorkerRequest, WindowsArtifactAnalysis>({
+        createWorker: () => new Worker(new URL("../features/windows/windows.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes: workerBytes.buffer, name: file.name },
+        transfer: [workerBytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 120_000
+      });
+      if (requestId !== requestRef.current || controller.signal.aborted) return;
+      setAnalysis(nextAnalysis);
+      workspace.save({ analysis: nextAnalysis });
     } catch (caught) {
-      if (requestId === requestRef.current) {
+      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {
         setAnalysis(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
     requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    workspace.clear();
     setAnalysis(null);
     setError("");
     setLoading(false);
@@ -114,7 +159,7 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void loadFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{analysis?.name || t.dropFileTitle}</strong>
           <span>{analysis ? `${analysis.artifactType} · ${formatBytes(analysis.size)}` : (english ? "LNK, Prefetch, Zone.Identifier, or REG" : "支持 LNK、Prefetch、Zone.Identifier 和 REG")}</span>
@@ -178,7 +223,7 @@ export function WindowsArtifactTool({ t, services }: { t: (typeof copy)["zh"]; s
               <div className="windows-text-view">
                 <div className="panel-heading-row">
                 <span />
-                <AButton variant="text" onClick={() => void navigator.clipboard.writeText(analysis.textPreview)}>{t.copy}</AButton>
+                <AButton variant="text" onClick={() => void copyText(analysis.textPreview)}>{t.copy}</AButton>
               </div>
               <textarea className="single-textarea windows-preview-textarea" value={analysis.textPreview} readOnly />
             </div>

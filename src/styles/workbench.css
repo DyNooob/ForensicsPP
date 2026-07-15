@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 /* Canonical tool controls. Keep this section as the shared visual contract for every tool. */
@@ -3868,7 +3868,8 @@ details.tool-panel:not([open]) > :not(summary) {
 .reporter-detail-panel,
 .reporter-preview-panel,
 .reporter-integrity-box,
-.reporter-timeline-box {
+.reporter-timeline-box,
+.reporter-evidence-box {
   min-width: 0;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius);
@@ -4027,9 +4028,49 @@ details.tool-panel:not([open]) > :not(summary) {
   gap: 10px;
 }
 
+.reporter-evidence-table {
+  max-height: 220px;
+}
+
+.reporter-evidence-table code {
+  display: block;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reporter-verification-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .reporter-markdown {
   min-height: 260px;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+@media (max-width: 1120px) {
+  .reporter-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reporter-preview-panel { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .reporter-panel { width: min(calc(100vw - 20px), 1320px); padding: 10px; }
+  .reporter-meta-grid,
+  .reporter-layout { grid-template-columns: 1fr; }
+  .reporter-preview-panel { grid-column: auto; }
+  .reporter-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 460px) {
+  .reporter-summary-grid { grid-template-columns: 1fr; }
 }
 
 .legal-consent-modal .ant-modal-content {

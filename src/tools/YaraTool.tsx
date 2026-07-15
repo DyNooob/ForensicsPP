@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
@@ -37,10 +37,10 @@ export type YaraToolServices = {
   yaraBatchRowsToCsv: (rows: YaraBatchRow[]) => string;
 };
 
-export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: YaraToolServices }) {
+export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: YaraToolServices; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [rules, setRules] = useStoredState("yara.rules.v2", "");
-  const [sample, setSample] = React.useState("");
+  const [sample, setSample] = useStoredState("yara.sample.v3", "");
   const [sampleName, setSampleName] = React.useState("text sample");
   const [sampleBytes, setSampleBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(sample));
   const [result, setResult] = React.useState<YaraScanResult | null>(null);
@@ -124,9 +124,11 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
       let firstResult: YaraScanResult | null = null;
       for (const [index, file] of selectedFiles.entries()) {
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        if (controller.signal.aborted) break;
+        if (!active || controller.signal.aborted) break;
         const bytes = new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer());
+        if (!active || controller.signal.aborted) break;
         const scan = await scanSample(bytes, file.name, controller.signal);
+        if (!active || controller.signal.aborted) break;
         const matchedRules = scan.results.filter((item) => item.matched).map((item) => item.rule.name);
         rows.push({
           name: file.name,
@@ -146,6 +148,7 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
           setSample(previewText(bytes, Math.min(bytes.length, 20000)));
         }
       }
+      if (!active || controller.signal.aborted) return;
       setBatchRows(rows);
       setResult(firstResult);
       setSelectedRule(firstResult?.results.find((item) => item.matched)?.rule.name ?? "");
@@ -166,6 +169,11 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
     abortRef.current = null;
     setScanning(false);
   };
+
+  React.useEffect(() => {
+    if (active) return;
+    cancel();
+  }, [active]);
 
   const loadDemo = () => {
     setRules(services.yaraRuleTemplates[0]?.rule ?? "");
@@ -224,7 +232,7 @@ export function YaraTool({ t, services }: { t: (typeof copy)["zh"]; services: Ya
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void handleFiles(event.dataTransfer.files); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFiles(event.dataTransfer.files); }}
         >
           <strong>{sampleName === "text sample" ? (english ? "Text sample" : "文本样本") : sampleName}</strong>
           <span>{sampleBytes.length ? formatBytes(sampleBytes.length) : (english ? "Drop up to 25 files" : "拖入最多 25 个文件")}</span>

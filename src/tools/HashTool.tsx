@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,18 +16,20 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ACheckbox, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { BatchHashRow } from "../models";
+import type { ExpectedHashTarget } from "../features/hash/matching";
 import { downloadTextFile, formatBytes } from "../utils/files";
-import { formatHashCase, hashSelectedBytes, hashSelectedFile, SM3_FILE_SIZE_LIMIT } from "../utils/hash";
+import { formatHashCase, normalizeHashAlgorithms, SM3_FILE_SIZE_LIMIT } from "../utils/hash";
+import { hashBytesInWorker, hashFileInWorker } from "../features/hash/task";
 import { useStoredState } from "../utils/storage";
-
-type ExpectedHashTarget = { hash: string; label: string };
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 export type HashToolServices = {
   annotateBatchHashMatches: (rows: BatchHashRow[], expectedHash: string) => BatchHashRow[];
@@ -43,6 +45,23 @@ const ALGORITHMS = [
   { id: "sha3", label: "SHA3-512" },
   { id: "sm3", label: "SM3" }
 ];
+
+type HashWorkspace = {
+  mode: "file" | "text";
+  batchRows: BatchHashRow[];
+  textHashes: Record<string, string> | null;
+  resultAlgorithms: string[];
+};
+
+function isHashWorkspace(value: unknown): value is HashWorkspace {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<HashWorkspace>;
+  return (candidate.mode === "file" || candidate.mode === "text")
+    && Array.isArray(candidate.batchRows)
+    && (candidate.textHashes === null || (Boolean(candidate.textHashes) && typeof candidate.textHashes === "object"))
+    && Array.isArray(candidate.resultAlgorithms)
+    && candidate.resultAlgorithms.every((item) => typeof item === "string");
+}
 
 function csvEscape(value: string | number) {
   const text = String(value);
@@ -64,14 +83,14 @@ function rowsToCsv(rows: BatchHashRow[], algorithms: string[], hashCase: "lower"
   return [headers, ...values].map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 
-export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: HashToolServices }) {
+export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: HashToolServices; active?: boolean }) {
   const { annotateBatchHashMatches, parseExpectedHashSet } = services;
   const english = t.waiting === "Waiting";
-  const [text, setText] = React.useState("");
-  const [mode, setMode] = React.useState<"file" | "text">("file");
+  const [text, setText] = useStoredState("hash.text.v2", "");
+  const [mode, setMode] = useStoredState<"file" | "text">("hash.mode.v2", "file");
   const [hashCase, setHashCase] = useStoredState<"lower" | "upper">("hash.case", "lower");
   const [selectedAlgorithms, setSelectedAlgorithms] = useStoredState<string[]>("hash.algorithms", ["sha256"]);
-  const [expectedHash, setExpectedHash] = React.useState("");
+  const [expectedHash, setExpectedHash] = useStoredState("hash.expectedHash.v2", "");
   const [batchRows, setBatchRows] = React.useState<BatchHashRow[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [textHashes, setTextHashes] = React.useState<Record<string, string> | null>(null);
@@ -88,7 +107,19 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   const abortRef = React.useRef<AbortController | null>(null);
   const textRunRef = React.useRef(0);
   const directoryInputProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
-  const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ["sha256"];
+  const algorithms = React.useMemo(() => normalizeHashAlgorithms(selectedAlgorithms), [selectedAlgorithms]);
+  const workspace = useToolWorkspace<HashWorkspace>({
+    id: "hash.v1",
+    version: 1,
+    isValid: isHashWorkspace,
+    onRestore: (value) => {
+      setMode(value.mode);
+      setBatchRows(value.batchRows);
+      setTextHashes(value.textHashes);
+      setResultAlgorithms(value.resultAlgorithms);
+      setSelectedFiles([]);
+    }
+  });
   const expectedTargets = React.useMemo(() => parseExpectedHashSet(expectedHash), [expectedHash, parseExpectedHashSet]);
   const evaluatedRows = React.useMemo(() => annotateBatchHashMatches(batchRows, expectedHash), [annotateBatchHashMatches, batchRows, expectedHash]);
   const filteredRows = React.useMemo(() => {
@@ -119,7 +150,17 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    textRunRef.current += 1;
+    setIsHashing(false);
+    setProgress({ done: 0, total: 0, name: "" });
+  }, [active]);
+
   const queueFiles = (files: FileList | File[] | null | undefined) => {
+    if (!active) return;
     const fileArray = Array.from(files ?? []);
     if (!fileArray.length) return;
     abortRef.current?.abort();
@@ -128,6 +169,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
     setSelectedFiles(fileArray);
     setMode("file");
     setBatchRows([]);
+    workspace.clear();
     setFilter("");
     setPage(0);
     setError("");
@@ -135,10 +177,11 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   };
 
   const hashFiles = async (files: File[] = lastFilesRef.current, selected = algorithms) => {
+    if (!active) return;
     const fileArray = Array.from(files);
     if (!fileArray.length) return;
     abortRef.current?.abort();
-    textRunRef.current += 1;
+    const runId = ++textRunRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setIsHashing(true);
@@ -156,10 +199,10 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
         if (controller.signal.aborted) throw new DOMException("Hash calculation cancelled", "AbortError");
         setProgress({ done: completedBytes, total: totalBytes, name });
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        const digests = await hashSelectedFile(file, selected, {
-          signal: controller.signal,
-          onProgress: ({ loaded }) => setProgress({ done: completedBytes + loaded, total: totalBytes, name })
-        });
+        const digests = await hashFileInWorker(file, selected, { signal: controller.signal, onProgress: ({ loaded }) => {
+          if (runId === textRunRef.current) setProgress({ done: completedBytes + loaded, total: totalBytes, name });
+        } });
+        if (!active || controller.signal.aborted || runId !== textRunRef.current) return;
         rows.push({
           index: index + 1,
           name,
@@ -169,10 +212,13 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
         });
         completedBytes += file.size;
       }
+      if (!active || controller.signal.aborted || runId !== textRunRef.current) return;
       setBatchRows(rows);
       setResultAlgorithms(selected);
+      workspace.save({ mode: "file", batchRows: rows, textHashes: null, resultAlgorithms: selected });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (!active || runId !== textRunRef.current) return;
       if (caught instanceof RangeError && caught.message.startsWith("SM3_FILE_TOO_LARGE:")) {
         setError(english
           ? `SM3 is limited to files up to ${formatBytes(SM3_FILE_SIZE_LIMIT)}. Deselect SM3 to hash larger files.`
@@ -191,19 +237,29 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   };
 
   const hashText = async () => {
-    if (!text) return;
+    if (!text || !active) return;
     abortRef.current?.abort();
     const runId = ++textRunRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setError("");
     setIsHashing(true);
     try {
-      const values = await hashSelectedBytes(new TextEncoder().encode(text), algorithms);
-      if (runId !== textRunRef.current) return;
+      const bytes = new TextEncoder().encode(text);
+      const values = await hashBytesInWorker(bytes, algorithms, { signal: controller.signal });
+      if (!active || controller.signal.aborted || runId !== textRunRef.current) return;
       setTextHashes(Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]))));
       setResultAlgorithms(algorithms);
+      workspace.save({
+        mode: "text",
+        batchRows: [],
+        textHashes: Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]))),
+        resultAlgorithms: algorithms
+      });
     } catch (caught) {
-      if (runId === textRunRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && runId === textRunRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (runId === textRunRef.current) setIsHashing(false);
     }
   };
@@ -217,11 +273,28 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
   };
 
   const toggleAlgorithm = (algorithm: string) => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    textRunRef.current += 1;
+    setIsHashing(false);
+    setProgress({ done: 0, total: 0, name: "" });
     const next = algorithms.includes(algorithm)
       ? algorithms.filter((item) => item !== algorithm)
       : [...algorithms, algorithm];
     if (!next.length) return;
     setSelectedAlgorithms(next);
+  };
+
+  const handleTextChange = (value: string) => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    textRunRef.current += 1;
+    setIsHashing(false);
+    setProgress({ done: 0, total: 0, name: "" });
+    workspace.clear();
+    setText(value);
+    setTextHashes(null);
+    setResultAlgorithms([]);
   };
 
   const clear = () => {
@@ -239,6 +312,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
     setPage(0);
     setError("");
     setProgress({ done: 0, total: 0, name: "" });
+    workspace.clear();
   };
 
   const rangeStart = filteredRows.length ? page * PAGE_SIZE + 1 : 0;
@@ -284,8 +358,16 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
                 queueFiles(event.dataTransfer.files);
               }}
             >
-              <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} files selected` : `已选择 ${selectedFiles.length} 个文件`) : (english ? "Select or drop files" : "选择或拖入文件")}</strong>
-              <span>{selectedFiles.length ? formatBytes(selectedFileBytes) : (english ? "Multiple files are supported" : "支持一次选择多个文件")}</span>
+              <strong>{selectedFiles.length
+                ? (english ? `${selectedFiles.length} files selected` : `已选择 ${selectedFiles.length} 个文件`)
+                : batchRows.length
+                  ? (english ? `${batchRows.length} calculated results restored` : `已恢复 ${batchRows.length} 条计算结果`)
+                  : (english ? "Select or drop files" : "选择或拖入文件")}</strong>
+              <span>{selectedFiles.length
+                ? formatBytes(selectedFileBytes)
+                : batchRows.length
+                  ? (english ? "Re-select files to calculate again" : "重新选择文件可再次计算")
+                  : (english ? "Multiple files are supported" : "支持一次选择多个文件")}</span>
             </div>
             <div className="button-row">
               <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{english ? "Select files" : "选择文件"}</AButton>
@@ -295,7 +377,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
         ) : (
           <label className="stack-label">
             {english ? "Text" : "文本"}
-            <textarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => { setText(event.currentTarget.value); setTextHashes(null); }} placeholder={english ? "Enter text to hash" : "输入要计算哈希的文本"} />
+            <textarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => handleTextChange(event.currentTarget.value)} placeholder={english ? "Enter text to hash" : "输入要计算哈希的文本"} />
           </label>
         )}
 
@@ -319,7 +401,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
 
         <label className="stack-label">
           {t.expectedHash}
-          <textarea className="compact-textarea hash-simple-expected" value={expectedHash} onChange={(event) => setExpectedHash(event.currentTarget.value)} placeholder={english ? "Optional: paste one or more known digests" : "可选：粘贴一个或多个已知哈希值"} />
+          <textarea className="compact-textarea hash-simple-expected" value={expectedHash} onChange={(event) => setExpectedHash(event.currentTarget.value)} placeholder={t.expectedHashHint} />
         </label>
 
         <div className="button-row">
@@ -336,7 +418,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
           <ToolPanelHeader
             title={english ? "Text hash" : "文本哈希"}
             subtitle={expectedTargets.length ? (textMatched ? "MATCH" : "NO MATCH") : `${text.length.toLocaleString()} ${english ? "characters" : "个字符"}`}
-            actions={<AButton variant="text" onClick={() => void navigator.clipboard.writeText(displayedTextHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{t.copy}</AButton>}
+            actions={<AButton variant="text" onClick={() => void copyText(displayedTextHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{t.copy}</AButton>}
           />
           <InfoTable rows={displayedTextHashes} />
         </div>
@@ -362,7 +444,7 @@ export function HashTool({ t, services }: { t: (typeof copy)["zh"]; services: Ha
               <tbody>{visibleRows.map((row) => <tr key={`${row.index}-${row.name}-${row.size}`}><td>{row.name}</td><td>{formatBytes(row.size)}</td><td>{row.lastModified || "--"}</td>{expectedTargets.length > 0 && <td>{row.matched ? "MATCH" : "NO MATCH"}</td>}{resultAlgorithms.map((algorithm) => {
                 const digest = row[algorithm as keyof BatchHashRow];
                 const displayed = typeof digest === "string" ? formatHashCase(digest, hashCase) : "--";
-                return <td key={algorithm}>{displayed === "--" ? displayed : <button className="hash-simple-digest" type="button" title={english ? "Copy digest" : "复制哈希"} onClick={() => void navigator.clipboard.writeText(displayed)}>{displayed}</button>}</td>;
+                return <td key={algorithm}>{displayed === "--" ? displayed : <button className="hash-simple-digest" type="button" title={english ? "Copy digest" : "复制哈希"} onClick={() => void copyText(displayed)}>{displayed}</button>}</td>;
               })}</tr>)}</tbody>
             </table>
           </div>

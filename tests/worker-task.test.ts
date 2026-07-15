@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -25,6 +25,7 @@ import { runWorkerTask, type WorkerTaskMessage } from "../src/utils/workerTask";
 class MockWorker<TResult, TProgress = never> {
   onmessage: ((event: MessageEvent<WorkerTaskMessage<TResult, TProgress>>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: (() => void) | null = null;
   postMessage = vi.fn();
   terminate = vi.fn();
 
@@ -78,6 +79,40 @@ describe("worker task runner", () => {
 
     await expect(task).rejects.toThrow("broken input");
     expect(progress).not.toHaveBeenCalled();
+    expect(worker.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects when the worker result cannot be deserialized", async () => {
+    const worker = new MockWorker<number>();
+    const task = runWorkerTask({ createWorker: () => worker as unknown as Worker, request: null });
+
+    worker.onmessageerror?.();
+
+    await expect(task).rejects.toThrow("returned unreadable data");
+    expect(worker.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects malformed worker messages instead of hanging", async () => {
+    const worker = new MockWorker<number>();
+    const task = runWorkerTask({ createWorker: () => worker as unknown as Worker, request: null });
+
+    worker.onmessage?.({ data: null } as unknown as MessageEvent<WorkerTaskMessage<number>>);
+
+    await expect(task).rejects.toThrow("invalid message");
+    expect(worker.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects when a progress callback fails", async () => {
+    const worker = new MockWorker<number, number>();
+    const task = runWorkerTask({
+      createWorker: () => worker as unknown as Worker,
+      request: null,
+      onProgress: () => { throw new Error("progress handler failed"); }
+    });
+
+    worker.send({ type: "progress", progress: 50 });
+
+    await expect(task).rejects.toThrow("progress handler failed");
     expect(worker.terminate).toHaveBeenCalledOnce();
   });
 

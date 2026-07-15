@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,31 +16,65 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
+import type { PngWorkerRequest } from "../features/png/png.worker";
 import type { PngAnalysis } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
-
-type Services = {
-  analyzePngEvidence: (bytes: Uint8Array, name: string) => PngAnalysis;
-};
+import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_PNG_BYTES = 128 * 1024 * 1024;
+const MAX_PERSISTED_PNG_PREVIEW_BYTES = 8 * 1024 * 1024;
+type PngWorkspace = { analysis: PngAnalysis; previewBytes: Uint8Array | null };
 
-export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Services }) {
+function isPngWorkspace(value: unknown): value is PngWorkspace {
+  return Boolean(value && typeof value === "object" && "analysis" in value && "previewBytes" in value);
+}
+
+export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [analysis, setAnalysis] = React.useState<PngAnalysis | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
-  React.useEffect(() => () => { requestRef.current += 1; }, []);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<PngWorkspace>({
+    id: "png",
+    version: 2,
+    isValid: isPngWorkspace,
+    onRestore: ({ analysis: restored, previewBytes }) => {
+      setAnalysis(restored);
+      setStorageNotice(restored.size > MAX_PERSISTED_PNG_PREVIEW_BYTES && !previewBytes?.byteLength
+        ? (english ? "This image is available for the current session only; reopen it after a refresh." : "当前图片仅在本次打开期间可用，刷新后请重新选择文件。")
+        : "");
+      if (previewBytes?.byteLength) {
+        const copy = new Uint8Array(previewBytes.length);
+        copy.set(previewBytes);
+        setPreviewUrl(URL.createObjectURL(new Blob([copy.buffer], { type: "image/png" })));
+      }
+      setError("");
+    }
+  });
+  React.useEffect(() => () => {
+    requestRef.current += 1;
+    abortRef.current?.abort();
+  }, []);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, [active]);
 
   React.useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -49,8 +83,11 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
   const loadFile = async (file?: File) => {
     if (!file) return;
     const requestId = ++requestRef.current;
+    abortRef.current?.abort();
     setDropActive(false);
+    workspace.clear();
     setError("");
+    setStorageNotice("");
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
     setAnalysis(null);
@@ -60,28 +97,50 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
       return;
     }
     setLoading(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (requestId !== requestRef.current) return;
-      const next = services.analyzePngEvidence(bytes, file.name);
+      const workerBytes = bytes.slice();
+      const next = await runWorkerTask<PngWorkerRequest, PngAnalysis>({
+        createWorker: () => new Worker(new URL("../features/png/png.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes: workerBytes.buffer, name: file.name },
+        transfer: [workerBytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 120_000
+      });
+      if (requestId !== requestRef.current || controller.signal.aborted) return;
       setPreviewUrl(URL.createObjectURL(file));
       setAnalysis(next);
+      setStorageNotice(file.size > MAX_PERSISTED_PNG_PREVIEW_BYTES
+        ? (english ? "This image is available for the current session only; it is not restored automatically." : "当前图片仅在本次打开期间保留，不会自动恢复。")
+        : "");
+      workspace.save({
+        analysis: { ...next, trailer: new Uint8Array() },
+        previewBytes: file.size <= MAX_PERSISTED_PNG_PREVIEW_BYTES ? bytes : null
+      });
     } catch (caught) {
-      if (requestId === requestRef.current) {
+      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {
         setAnalysis(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
     requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    workspace.clear();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
     setAnalysis(null);
     setError("");
+    setStorageNotice("");
     setLoading(false);
     setDropActive(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -113,7 +172,7 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void loadFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{analysis?.name || t.dropFileTitle}</strong>
           <span>{analysis ? `${formatBytes(analysis.size)} · ${analysis.chunks.length} chunks` : t.dropFileHint}</span>
@@ -123,6 +182,7 @@ export function PngTool({ t, services }: { t: (typeof copy)["zh"]; services: Ser
           <AButton variant="text" disabled={!analysis && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <ALinearProgress />}
+        {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
 

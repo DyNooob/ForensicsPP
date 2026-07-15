@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,27 +16,46 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
-import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
-import { formatTimelineDuration, parseTimestampCandidates, timelineToCsv } from "../features/timestamp/analyzer";
+import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { rememberTimelineEvents, timelineBounds } from "../features/reporter/timeline";
+import { formatTimelineDuration, timelineToCsv } from "../features/timestamp/analyzer";
+import type { TimestampWorkerRequest, TimestampWorkerResult } from "../features/timestamp/timestamp.worker";
 import { copy } from "../i18n";
 import type { TimelineEvent } from "../models";
 import { downloadTextFile } from "../utils/files";
+import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
 const PAGE_SIZE = 100;
 const MAX_TIMELINE_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_TIMELINE_TOTAL_BYTES = 64 * 1024 * 1024;
 
-function timelineJson(source: string, events: TimelineEvent[]) {
-  return JSON.stringify({ source, exportedAt: new Date().toISOString(), events }, null, 2);
+type TimelineSource = {
+  name: string;
+  text: string;
+  size: number;
+  lastModified: number;
+};
+
+function timelineJson(source: string, events: TimelineEvent[], sources: TimelineSource[]) {
+  return JSON.stringify({
+    source,
+    sources: sources.map((item) => ({ name: item.name, size: item.size, lastModified: item.lastModified })),
+    exportedAt: new Date().toISOString(),
+    events
+  }, null, 2);
 }
 
-export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
+export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
-  const [input, setInput] = React.useState("");
-  const [source, setSource] = React.useState(english ? "Pasted text" : "粘贴文本");
+  const [input, setInput] = useStoredState("timeline.input.v3", "");
+  const [source, setSource] = useStoredState("timeline.source.v3", english ? "Pasted text" : "粘贴文本");
+  const [sources, setSources] = React.useState<TimelineSource[]>([]);
   const [query, setQuery] = React.useState("");
   const [format, setFormat] = React.useState("");
   const [sortMode, setSortMode] = React.useState<"time" | "line">("time");
@@ -45,11 +64,22 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
   const [dragActive, setDragActive] = React.useState(false);
   const [error, setError] = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const workbenchRef = React.useRef<HTMLDivElement | null>(null);
   const requestRef = React.useRef(0);
   const deferredInput = React.useDeferredValue(input);
-  const hasInput = Boolean(input.trim());
-  const sourceLabel = /^(?:pasted text|粘贴文本)$/i.test(source) ? (english ? "Pasted text" : "粘贴文本") : source;
-  const events = React.useMemo(() => parseTimestampCandidates(deferredInput, sourceLabel), [deferredInput, sourceLabel]);
+  const hasInput = Boolean(input.trim() || sources.length);
+  const sourceLabel = sources.length === 1
+    ? sources[0].name
+    : sources.length > 1
+      ? (english ? `${sources.length} files` : `${sources.length} 个文件`)
+      : (/^(?:pasted text|粘贴文本)$/i.test(source) ? (english ? "Pasted text" : "粘贴文本") : source);
+  const parsedSources = React.useMemo(() => sources.length
+    ? sources
+    : input.trim()
+      ? [{ name: sourceLabel, text: deferredInput, size: new TextEncoder().encode(deferredInput).byteLength, lastModified: 0 }]
+      : [], [deferredInput, input, sourceLabel, sources]);
+  const [events, setEvents] = React.useState<TimelineEvent[]>([]);
+  const [parsing, setParsing] = React.useState(false);
   const formats = React.useMemo(() => Array.from(new Set(events.map((event) => event.format))).sort(), [events]);
   const filteredEvents = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -57,17 +87,59 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
       .filter((event) => !format || event.format === format)
       .filter((event) => !needle || [event.iso, event.local, event.raw, event.format, event.source, event.context].join(" ").toLowerCase().includes(needle))
       .sort((left, right) => sortMode === "line"
-        ? left.line - right.line || (left.epochMs ?? 0) - (right.epochMs ?? 0)
-        : (left.epochMs ?? 0) - (right.epochMs ?? 0) || left.line - right.line);
+        ? left.line - right.line || left.source.localeCompare(right.source) || (left.epochMs ?? 0) - (right.epochMs ?? 0)
+        : (left.epochMs ?? 0) - (right.epochMs ?? 0) || left.source.localeCompare(right.source) || left.line - right.line);
   }, [events, format, query, sortMode]);
   const pageCount = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
   const visibleEvents = React.useMemo(() => filteredEvents.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filteredEvents, page]);
   const selectedEvent = React.useMemo(() => events.find((event) => event.id === selectedId) ?? null, [events, selectedId]);
-  const firstEvent = events[0];
-  const lastEvent = events[events.length - 1];
+  const { first: firstEvent, last: lastEvent } = React.useMemo(() => timelineBounds(events), [events]);
   const span = firstEvent?.epochMs != null && lastEvent?.epochMs != null
     ? formatTimelineDuration(Math.max(0, Math.floor((lastEvent.epochMs - firstEvent.epochMs) / 1000)))
     : "--";
+
+  React.useEffect(() => {
+    rememberTimelineEvents(workbenchRef.current, events);
+  }, [events]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    if (!active) {
+      setParsing(false);
+      return () => controller.abort();
+    }
+    if (!parsedSources.length) {
+      setEvents([]);
+      setParsing(false);
+      return () => controller.abort();
+    }
+    setParsing(true);
+    setError("");
+    void (async () => {
+      try {
+        const collected: TimelineEvent[] = [];
+        for (const item of parsedSources) {
+          const result = await runWorkerTask<TimestampWorkerRequest, TimestampWorkerResult>({
+            createWorker: () => new Worker(new URL("../features/timestamp/timestamp.worker.ts", import.meta.url), { type: "module" }),
+            request: { source: item.text, name: item.name },
+            signal: controller.signal,
+            timeoutMs: 120_000
+          });
+          collected.push(...result.events);
+          if (collected.length >= 5000) break;
+        }
+        if (controller.signal.aborted) return;
+        setEvents(collected.slice(0, 5000));
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setEvents([]);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        if (!controller.signal.aborted) setParsing(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [active, parsedSources]);
 
   React.useEffect(() => {
     setPage(0);
@@ -92,37 +164,55 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
   const clear = () => {
     requestRef.current += 1;
     setInput("");
+    setSources([]);
     setSource(english ? "Pasted text" : "粘贴文本");
     setError("");
     resetReview();
   };
 
-  const loadFile = async (file: File | undefined) => {
-    if (!file) return;
+  const loadFiles = async (files: FileList | File[] | null | undefined) => {
+    const fileArray = Array.from(files ?? []);
+    if (!fileArray.length) return;
     const requestId = ++requestRef.current;
     setDragActive(false);
-    setSource(file.name);
     setInput("");
     setError("");
     resetReview();
-    if (file.size > MAX_TIMELINE_FILE_BYTES) {
-      setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+    const oversized = fileArray.find((file) => file.size > MAX_TIMELINE_FILE_BYTES);
+    const totalBytes = fileArray.reduce((total, file) => total + file.size, 0);
+    if (oversized) {
+      setError(english ? `${oversized.name} exceeds the 16 MiB per-file limit.` : `${oversized.name} 超过单文件 16 MiB 限制。`);
+      return;
+    }
+    const currentBytes = sources.reduce((total, item) => total + item.size, 0);
+    if (currentBytes + totalBytes > MAX_TIMELINE_TOTAL_BYTES) {
+      setError(english ? "Selected timeline files exceed the 64 MiB total limit." : "所选时间线文件超过 64 MiB 总限制。");
       return;
     }
     try {
-      const value = await file.text();
-      if (requestId === requestRef.current) setInput(value);
+      const loaded = await Promise.all(fileArray.map(async (file): Promise<TimelineSource> => ({
+        name: file.name,
+        text: await file.text(),
+        size: file.size,
+        lastModified: file.lastModified
+      })));
+      if (requestId !== requestRef.current) return;
+      setSources((current) => {
+        const byKey = new Map(current.map((item) => [`${item.name}\u0000${item.size}\u0000${item.lastModified}`, item]));
+        loaded.forEach((item) => byKey.set(`${item.name}\u0000${item.size}\u0000${item.lastModified}`, item));
+        return Array.from(byKey.values());
+      });
     } catch (caught) {
       if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
 
-  const exportEvents = filteredEvents.length ? filteredEvents : events;
+  const exportEvents = filteredEvents;
   const rangeStart = filteredEvents.length ? page * PAGE_SIZE + 1 : 0;
   const rangeEnd = Math.min((page + 1) * PAGE_SIZE, filteredEvents.length);
 
   return (
-    <div className={`tool-grid timeline-simple-workbench ${hasInput ? "has-timeline" : "empty-timeline"}`}>
+    <div ref={workbenchRef} className={`tool-grid timeline-simple-workbench ${hasInput ? "has-timeline" : "empty-timeline"}`}>
       <div className="tool-panel wide-panel timeline-simple-input-panel">
         <ToolPanelHeader
           title={english ? "Timeline input" : "时间线输入"}
@@ -132,7 +222,7 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
-        <input ref={fileInputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
+        <input ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,text/*,application/json" onChange={(event) => { const files = event.currentTarget.files; event.currentTarget.value = ""; void loadFiles(files); }} />
         <div
           className={`desktop-drop-zone timeline-simple-drop-zone ${dragActive ? "active" : ""}`}
           role="button"
@@ -151,11 +241,11 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
           onDragLeave={() => setDragActive(false)}
           onDrop={(event) => {
             event.preventDefault();
-            void loadFile(event.dataTransfer.files?.[0]);
+            void loadFiles(event.dataTransfer.files);
           }}
         >
-          <strong>{english ? "Open a log, text, CSV, or JSON file" : "打开日志、文本、CSV 或 JSON 文件"}</strong>
-          <span>{english ? "or paste the source text below" : "也可以在下方直接粘贴源文本"}</span>
+          <strong>{english ? "Open one or more log, text, CSV, or JSON files" : "打开一个或多个日志、文本、CSV 或 JSON 文件"}</strong>
+          <span>{english ? "or paste source text below" : "也可以在下方直接粘贴源文本"}</span>
         </div>
         <label className="stack-label">
           {english ? "Source text" : "源文本"}
@@ -164,6 +254,7 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             value={input}
             onChange={(event) => {
               requestRef.current += 1;
+              setSources([]);
               setInput(event.currentTarget.value);
               setError("");
               if (!event.currentTarget.value) setSelectedId("");
@@ -181,9 +272,10 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
             subtitle={`${filteredEvents.length}/${events.length} ${english ? "events" : "条事件"}`}
             actions={<>
               <AButton variant="outlined" disabled={!exportEvents.length} onClick={() => downloadTextFile(`timeline-${Date.now()}.csv`, timelineToCsv(exportEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
-              <AButton variant="text" disabled={!exportEvents.length} onClick={() => downloadTextFile(`timeline-${Date.now()}.json`, timelineJson(sourceLabel, exportEvents), "application/json;charset=utf-8")}>{t.exportJson}</AButton>
+              <AButton variant="text" disabled={!exportEvents.length} onClick={() => downloadTextFile(`timeline-${Date.now()}.json`, timelineJson(sourceLabel, exportEvents, parsedSources), "application/json;charset=utf-8")}>{t.exportJson}</AButton>
             </>}
           />
+          {parsing && <ALinearProgress />}
           <div className="timeline-simple-summary">
             <InfoTable rows={[
               [english ? "Events" : "事件数", String(events.length)],
@@ -204,13 +296,14 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
           {visibleEvents.length ? (
             <div className="table-scroll timeline-simple-scroll">
               <table className="data-table timeline-simple-table">
-                <thead><tr><th>ISO</th><th>{english ? "Format" : "格式"}</th><th>{english ? "Line" : "行号"}</th><th>{t.timelineContext}</th></tr></thead>
+                <thead><tr><th>ISO</th><th>{english ? "Format" : "格式"}</th><th>{english ? "Line" : "行号"}</th><th>{english ? "Source" : "来源"}</th><th>{t.timelineContext}</th></tr></thead>
                 <tbody>
                   {visibleEvents.map((event) => (
                     <tr className={event.id === selectedId ? "selected-row" : ""} key={event.id}>
                       <td><button className="timeline-row-select" type="button" onClick={() => setSelectedId(event.id)}>{event.iso}</button></td>
                       <td>{event.format}</td>
                       <td>{event.line}</td>
+                      <td title={event.source}>{event.source}</td>
                       <td>{event.context}</td>
                     </tr>
                   ))}
@@ -235,14 +328,15 @@ export function TimelineTool({ t }: { t: (typeof copy)["zh"] }) {
         <div className="tool-panel wide-panel timeline-simple-detail-panel">
           <ToolPanelHeader
             title={english ? "Event details" : "事件详情"}
-            subtitle={`${sourceLabel} · ${english ? "line" : "第"} ${selectedEvent.line}${english ? "" : " 行"}`}
-            actions={<AButton variant="text" onClick={() => void navigator.clipboard.writeText(selectedEvent.context)}>{english ? "Copy context" : "复制上下文"}</AButton>}
+            subtitle={`${selectedEvent.source} · ${english ? "line" : "第"} ${selectedEvent.line}${english ? "" : " 行"}`}
+            actions={<AButton variant="text" onClick={() => void copyText(selectedEvent.context)}>{english ? "Copy context" : "复制上下文"}</AButton>}
           />
           <InfoTable rows={[
             ["ISO", selectedEvent.iso],
             [english ? "Local time" : "本地时间", selectedEvent.local],
             [english ? "Raw value" : "原始值", selectedEvent.raw],
-            [english ? "Format" : "格式", selectedEvent.format]
+            [english ? "Format" : "格式", selectedEvent.format],
+            [english ? "Source" : "来源", selectedEvent.source]
           ]} />
           <pre className="result-box timeline-simple-context">{selectedEvent.context}</pre>
         </div>

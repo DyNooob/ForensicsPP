@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,15 +16,19 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
-import { unzip } from "fflate";
 import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
+import type { ArchiveWorkerRequest } from "../features/archive/archive.worker";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { hexPreview, previewText } from "../utils/binary";
+import { hashBytesInWorker } from "../features/hash/task";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { runWorkerTask } from "../utils/workerTask";
 
 type EntryMeta = {
   name: string;
@@ -45,6 +49,18 @@ type ArchiveState = {
   entries: ArchiveEntry[];
   skipped: number;
 };
+
+type ArchiveWorkspace = {
+  archive: Omit<ArchiveState, "entries"> & { entries: EntryMeta[] };
+  selectedName: string;
+  query: string;
+  entryType: "all" | "files" | "directories" | "encrypted";
+  sortBy: "path" | "size";
+};
+
+function isArchiveWorkspace(value: unknown): value is ArchiveWorkspace {
+  return Boolean(value && typeof value === "object" && "archive" in value && "selectedName" in value && "entryType" in value && "sortBy" in value);
+}
 
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
@@ -109,7 +125,7 @@ function mimeForName(name: string) {
   return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
 }
 
-export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
+export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [archive, setArchive] = React.useState<ArchiveState | null>(null);
   const [selectedName, setSelectedName] = React.useState("");
@@ -118,12 +134,48 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const [sortBy, setSortBy] = React.useState<"path" | "size">("path");
   const [loading, setLoading] = React.useState(false);
   const [loadingEntry, setLoadingEntry] = React.useState("");
+  const [entryHashes, setEntryHashes] = React.useState<Record<string, string>>({});
+  const [entryHashingKey, setEntryHashingKey] = React.useState("");
+  const [entryHashError, setEntryHashError] = React.useState("");
   const [error, setError] = React.useState("");
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const archiveBytesRef = React.useRef<Uint8Array | null>(null);
   const requestRef = React.useRef(0);
-  React.useEffect(() => () => { requestRef.current += 1; archiveBytesRef.current = null; }, []);
+  const entryAbortRef = React.useRef<AbortController | null>(null);
+  const entryHashAbortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<ArchiveWorkspace>({
+    id: "archive",
+    version: 1,
+    isValid: isArchiveWorkspace,
+    onRestore: (restored) => {
+      setArchive(restored.archive);
+      setSelectedName(restored.selectedName);
+      setQuery(restored.query);
+      setEntryType(restored.entryType);
+      setSortBy(restored.sortBy);
+      archiveBytesRef.current = null;
+      setError("");
+    }
+  });
+  React.useEffect(() => () => {
+    requestRef.current += 1;
+    entryAbortRef.current?.abort();
+    entryHashAbortRef.current?.abort();
+    archiveBytesRef.current = null;
+  }, []);
+
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    entryAbortRef.current?.abort();
+    entryAbortRef.current = null;
+    entryHashAbortRef.current?.abort();
+    entryHashAbortRef.current = null;
+    setLoading(false);
+    setLoadingEntry("");
+    setEntryHashingKey("");
+  }, [active]);
 
   const entries = archive?.entries ?? [];
   const visibleEntries = React.useMemo(() => {
@@ -151,8 +203,12 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
   const loadFile = async (file?: File) => {
     if (!file) return;
     const requestId = ++requestRef.current;
+    entryAbortRef.current?.abort();
+    entryHashAbortRef.current?.abort();
+    entryHashAbortRef.current = null;
     setDropActive(false);
     setError("");
+    workspace.clear();
     archiveBytesRef.current = null;
     setArchive(null);
     setSelectedName("");
@@ -160,6 +216,9 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     setEntryType("all");
     setSortBy("path");
     setLoadingEntry("");
+    setEntryHashes({});
+    setEntryHashingKey("");
+    setEntryHashError("");
     setLoading(false);
     if (file.size > MAX_ARCHIVE_BYTES) {
       setError(english ? "The archive exceeds the 256 MiB limit." : "压缩包超过 256 MiB 限制。");
@@ -174,11 +233,13 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
       archiveBytesRef.current = bytes;
       const nextEntries = parsed.entries.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
-      setArchive({ name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries), entries: nextEntries, skipped: parsed.skipped });
+      const nextArchive = { name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries), entries: nextEntries, skipped: parsed.skipped } satisfies ArchiveState;
+      setArchive(nextArchive);
       setSelectedName(firstFile?.name ?? "");
       setQuery("");
       setEntryType("all");
       setSortBy("path");
+      workspace.save({ archive: nextArchive, selectedName: firstFile?.name ?? "", query: "", entryType: "all", sortBy: "path" });
     } catch (caught) {
       if (requestId === requestRef.current) {
         setArchive(null);
@@ -192,6 +253,11 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
 
   const clear = () => {
     requestRef.current += 1;
+    entryAbortRef.current?.abort();
+    entryAbortRef.current = null;
+    entryHashAbortRef.current?.abort();
+    entryHashAbortRef.current = null;
+    workspace.clear();
     archiveBytesRef.current = null;
     setArchive(null);
     setSelectedName("");
@@ -201,6 +267,9 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     setError("");
     setLoading(false);
     setLoadingEntry("");
+    setEntryHashes({});
+    setEntryHashingKey("");
+    setEntryHashError("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -215,18 +284,28 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     }
     setLoadingEntry(entry.name);
     setError("");
+    const controller = new AbortController();
+    entryAbortRef.current = controller;
     try {
-      const extracted = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
-        unzip(bytes, { filter: (candidate) => candidate.name === entry.name }, (caught, data) => caught ? reject(caught) : resolve(data));
+      const workerBytes = bytes.slice();
+      const extracted = await runWorkerTask<ArchiveWorkerRequest, ArrayBuffer>({
+        createWorker: () => new Worker(new URL("../features/archive/archive.worker.ts", import.meta.url), { type: "module" }),
+        request: { bytes: workerBytes.buffer, entryName: entry.name },
+        transfer: [workerBytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 120_000
       });
-      const data = extracted[entry.name];
-      if (!data) throw new Error(english ? "Entry could not be extracted." : "无法提取该条目。");
+      if (controller.signal.aborted) return null;
+      const data = new Uint8Array(extracted);
       setArchive((current) => current ? { ...current, entries: current.entries.map((item) => item.name === entry.name ? { ...item, data } : item) } : current);
       return data;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
       return null;
-    } finally { setLoadingEntry(""); }
+    } finally {
+      if (entryAbortRef.current === controller) entryAbortRef.current = null;
+      setLoadingEntry("");
+    }
   };
 
   const downloadEntry = async () => {
@@ -236,6 +315,33 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
     const bytes = new Uint8Array(data.length);
     bytes.set(data);
     downloadBlob(selected.name.split("/").pop() || "entry.bin", new Blob([bytes], { type: "application/octet-stream" }));
+  };
+
+  const hashSelectedEntry = async () => {
+    if (!selected || selected.name.endsWith("/") || selected.encrypted || entryHashingKey) return;
+    const key = selected.name;
+    if (entryHashes[key]) return;
+    const requestId = requestRef.current;
+    setEntryHashingKey(key);
+    setEntryHashError("");
+    const controller = new AbortController();
+    entryHashAbortRef.current?.abort();
+    entryHashAbortRef.current = controller;
+    try {
+      const data = selected.data ?? await loadEntry(selected);
+      if (!data) return;
+      const dataCopy = new Uint8Array(data.length);
+      dataCopy.set(data);
+      const result = await hashBytesInWorker(dataCopy, ["sha256"], { signal: controller.signal });
+      if (controller.signal.aborted || requestId !== requestRef.current) return;
+      if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
+      setEntryHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
+    } catch (caught) {
+      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (entryHashAbortRef.current === controller) entryHashAbortRef.current = null;
+      if (requestId === requestRef.current) setEntryHashingKey("");
+    }
   };
 
   const totalUncompressed = entries.reduce((sum, entry) => sum + entry.uncompressed, 0);
@@ -254,7 +360,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void loadFile(event.dataTransfer.files?.[0]); }}>
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}>
           <strong>{archive?.name || t.dropFileTitle}</strong>
           <span>{archive ? `${archive.kind} · ${fileCount} ${english ? "files" : "个文件"}` : t.dropFileHint}</span>
         </div>
@@ -301,7 +407,7 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
             </div>
             <div className="archive-file-list">
               {visibleEntries.map((entry) => (
-                <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => setSelectedName(entry.name)}>
+                  <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); setEntryHashError(""); }}>
                   <span>{entry.name}</span>
                   <small>{entry.name.endsWith("/") ? (english ? "Directory" : "目录") : formatBytes(entry.uncompressed)}</small>
                 </button>
@@ -323,6 +429,13 @@ export function ArchiveTool({ t }: { t: (typeof copy)["zh"] }) {
                 [english ? "Method" : "方式", methodLabel(selected.method)],
                 [english ? "Encrypted" : "加密", selected.encrypted ? (english ? "Yes" : "是") : (english ? "No" : "否")]
               ]} />
+              <div className="archive-entry-integrity">
+                <span>SHA-256</span>
+                {entryHashes[selected.name]
+                  ? <button type="button" className="archive-entry-hash" title={t.copy} onClick={() => void copyText(entryHashes[selected.name])}>{entryHashes[selected.name]}</button>
+                  : <AButton variant="text" disabled={selected.encrypted || selected.name.endsWith("/") || Boolean(entryHashingKey) || Boolean(loadingEntry)} onClick={() => void hashSelectedEntry()}>{entryHashingKey === selected.name ? (english ? "Calculating..." : "计算中...") : (english ? "Calculate" : "计算")}</AButton>}
+              </div>
+              {entryHashError && <div className="empty-state error-state">{entryHashError}</div>}
               {imageUrl ? <div className="archive-image-preview"><img src={imageUrl} alt={selected.name} /></div> : selected.data ? (
                 <textarea aria-label={english ? "Archive entry preview" : "压缩包条目预览"} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
               ) : <div className="empty-state">{selected.encrypted ? (english ? "Encrypted entry cannot be previewed." : "加密条目无法预览。") : (english ? "This entry was not extracted for preview." : "该条目未提取预览。")}</div>}

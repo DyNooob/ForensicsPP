@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 export type WorkerTaskMessage<TResult, TProgress = never> =
@@ -71,18 +71,32 @@ export function runWorkerTask<TRequest, TResult, TProgress = never>({
     signal?.addEventListener("abort", onAbort, { once: true });
     worker.onmessage = (event: MessageEvent<WorkerTaskMessage<TResult, TProgress>>) => {
       if (settled) return;
-      const message = event.data;
-      if (message.type === "progress") {
-        onProgress?.(message.progress);
-        return;
+      try {
+        const message = event.data;
+        if (!message || typeof message !== "object" || typeof message.type !== "string") {
+          finish(() => reject(new Error("Worker task returned an invalid message")));
+          return;
+        }
+        const messageType = (message as { type: string }).type;
+        if (messageType === "progress") {
+          onProgress?.((message as Extract<WorkerTaskMessage<TResult, TProgress>, { type: "progress" }>).progress);
+          return;
+        }
+        if (messageType === "result") {
+          finish(() => resolve((message as Extract<WorkerTaskMessage<TResult, TProgress>, { type: "result" }>).result));
+          return;
+        }
+        if (messageType === "error") {
+          finish(() => reject(new Error((message as Extract<WorkerTaskMessage<TResult, TProgress>, { type: "error" }>).error || "Worker task failed")));
+          return;
+        }
+        finish(() => reject(new Error(`Worker task returned an unknown message type: ${messageType}`)));
+      } catch (error) {
+        finish(() => reject(error instanceof Error ? error : new Error(String(error))));
       }
-      if (message.type === "result") {
-        finish(() => resolve(message.result));
-        return;
-      }
-      finish(() => reject(new Error(message.error || "Worker task failed")));
     };
     worker.onerror = (event) => finish(() => reject(new Error(event.message || "Worker task failed")));
+    worker.onmessageerror = () => finish(() => reject(new Error("Worker task returned unreadable data")));
 
     if (timeoutMs && timeoutMs > 0) {
       timeout = setTimeout(() => finish(() => reject(new Error(`Worker task timed out after ${timeoutMs} ms`))), timeoutMs);

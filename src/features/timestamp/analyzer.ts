@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import type { TimelineEvent } from "../../models";
@@ -519,11 +519,11 @@ export function parseTimestampCandidates(raw: string, source = "pasted text"): T
           epochMs < Date.parse("1980-01-01T00:00:00Z") ? "very old timestamp" : "",
           ...timelineContextRisks(context)
         ].filter(Boolean);
-        const key = `${iso}|${lineIndex + 1}|${match[0]}|${line}`;
+        const key = `${source}|${iso}|${lineIndex + 1}|${match[0]}|${line}`;
         if (seen.has(key)) continue;
         seen.add(key);
         events.push({
-          id: `${lineIndex + 1}-${match.index ?? 0}-${match[0]}`,
+          id: `${source}-${lineIndex + 1}-${match.index ?? 0}-${match[0]}`,
           iso,
           local: parsed.date.toLocaleString(),
           raw: match[0],

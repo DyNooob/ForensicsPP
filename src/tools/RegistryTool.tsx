@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
@@ -26,10 +26,17 @@ import type { RegistryHive } from "../features/registry/analyzer";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 const LIMIT = 256 * 1024 * 1024;
+const MAX_PERSISTED_REGISTRY_BYTES = 8 * 1024 * 1024;
+type RegistryWorkspace = { hive: RegistryHive; selectedId: number; query: string; valueFilter: string; fileName: string; fileSize: number };
 
-export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
+function isRegistryWorkspace(value: unknown): value is RegistryWorkspace {
+  return Boolean(value && typeof value === "object" && "hive" in value && "selectedId" in value && "fileName" in value && "fileSize" in value);
+}
+
+export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -40,7 +47,29 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const [valueFilter, setValueFilter] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
+  const [fileMeta, setFileMeta] = React.useState<{ name: string; size: number } | null>(null);
+  const workspace = useToolWorkspace<RegistryWorkspace>({
+    id: "registry",
+    version: 1,
+    isValid: isRegistryWorkspace,
+    onRestore: (restored) => {
+      setFile(null);
+      setFileMeta({ name: restored.fileName, size: restored.fileSize });
+      setHive(restored.hive);
+      setSelectedId(restored.selectedId);
+      setQuery(restored.query);
+      setValueFilter(restored.valueFilter);
+      setError("");
+    }
+  });
   React.useEffect(() => () => abortRef.current?.abort(), []);
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, [active]);
   const selected = hive?.keys[selectedId] ?? null;
   const children = React.useMemo(() => selected && hive ? selected.children.map((id) => hive.keys[id]).filter(Boolean) : [], [hive, selected]);
   const searchResults = React.useMemo(() => { const needle = query.trim().toLowerCase(); if (!needle || !hive) return []; return hive.keys.filter((key) => key.path.toLowerCase().includes(needle) || key.values.some((value) => `${value.name} ${value.value}`.toLowerCase().includes(needle))).slice(0, 300); }, [hive, query]);
@@ -52,11 +81,16 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
     if (!next) return;
     abortRef.current?.abort();
     abortRef.current = null;
+    workspace.clear();
     setFile(next);
+    setFileMeta({ name: next.name, size: next.size });
     setHive(null);
     setSelectedId(0);
     setQuery("");
     setValueFilter("");
+    setStorageNotice(next.size > MAX_PERSISTED_REGISTRY_BYTES
+      ? (english ? "This file is available for the current session only; files over 8 MiB are not restored automatically." : "当前文件仅在本次打开期间可用；超过 8 MiB 的文件不会自动恢复。")
+      : "");
     setLoading(false);
     if (next.size > LIMIT) {
       setError(english ? "Hive exceeds the 256 MiB limit." : "Hive 超过 256 MiB 解析上限。");
@@ -81,6 +115,7 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
       setSelectedId(result.rootId);
       setQuery("");
       setValueFilter("");
+      if (next.size <= MAX_PERSISTED_REGISTRY_BYTES) workspace.save({ hive: result, selectedId: result.rootId, query: "", valueFilter: "", fileName: next.name, fileSize: next.size });
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -93,13 +128,16 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
   const clear = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    workspace.clear();
     setFile(null);
+    setFileMeta(null);
     setHive(null);
     setSelectedId(0);
     setQuery("");
     setValueFilter("");
     setLoading(false);
     setError("");
+    setStorageNotice("");
     if (inputRef.current) inputRef.current.value = "";
   };
   const selectKey = (id: number) => { setSelectedId(id); setQuery(""); setValueFilter(""); };
@@ -110,12 +148,13 @@ export function RegistryTool({ t }: { t: (typeof copy)["zh"] }) {
 
   return <div className="tool-grid browser-tool-workbench registry-browser-workbench">
     <section className="tool-panel wide-panel browser-source-panel">
-      <div className="panel-heading-row"><PanelTitle title={english ? "Registry Hive browser" : "注册表 Hive 浏览器"} />{hive && <span className="status-pill">{hive.keys.length} {english ? "keys" : "个键"} · {formatBytes(file?.size ?? 0)}</span>}</div>
+      <div className="panel-heading-row"><PanelTitle title={english ? "Registry Hive browser" : "注册表 Hive 浏览器"} />{hive && <span className="status-pill">{hive.keys.length} {english ? "keys" : "个键"} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
       <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
       {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{english ? "Open a Registry Hive" : "打开 Registry Hive"}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
       <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="text" disabled={!file && !hive} onClick={clear}>{t.clear}</AButton></div>
       {loading && <ALinearProgress />}
       {error && <div className="empty-state error-state">{error}</div>}
+      {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
       {hive && hive.warnings.length > 0 && <div className="empty-state registry-warning-list">{hive.warnings.map((warning) => english ? warning.replace("主序列号与次序列号不一致，Hive 可能需要事务日志恢复。", "Primary and secondary sequence numbers differ; transaction logs may be required.").replace("Hive 文件头校验和不匹配。", "Hive header checksum does not match.") : warning).join("\n")}</div>}
     </section>
 

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,31 +16,64 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
-import { AButton, ASelect, InfoTable, PanelTitle, ToolFactGrid, ToolPanelHeader, ToolStageFeatures } from "../components/ui";
-import { filterSqlRows, minifySqlText, parseSqlDump, sqlRowsToCsv, sqlTableToJson } from "../features/sql/analyzer";
+import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle, ToolFactGrid, ToolPanelHeader, ToolStageFeatures } from "../components/ui";
+import { filterSqlRows, sqlRowsToCsv, sqlTableToJson } from "../features/sql/analyzer";
+import type { SqlWorkerRequest, SqlWorkerResult } from "../features/sql/sql.worker";
 import type { Translation } from "../i18n";
 import type { SqlParseResult } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_SQL_FILE_BYTES = 32 * 1024 * 1024;
 
-export function SqlTool({ t }: { t: Translation }) {
+type SqlWorkspace = {
+  result: SqlParseResult;
+};
+
+export function SqlTool({ t, active = true }: { t: Translation; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [result, setResult] = React.useState<SqlParseResult | null>(null);
   const [selectedTable, setSelectedTable] = React.useState("");
   const [tableFilter, setTableFilter] = React.useState("");
   const [error, setError] = React.useState("");
-  const [formatInput, setFormatInput] = React.useState("");
-  const [formatOutput, setFormatOutput] = React.useState("");
+  const [formatInput, setFormatInput] = useStoredState("sql.formatInput.v2", "");
+  const [formatOutput, setFormatOutput] = useStoredState("sql.formatOutput.v2", "");
   const [dialect, setDialect] = useStoredState("sql.dialect", "mysql");
   const [dropActive, setDropActive] = React.useState(false);
+  const [processing, setProcessing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
+  const taskAbortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<SqlWorkspace>({
+    id: "sql",
+    version: 1,
+    isValid: (value): value is SqlWorkspace => Boolean(
+      value && typeof value === "object" &&
+      (value as SqlWorkspace).result &&
+      Array.isArray((value as SqlWorkspace).result.tables)
+    ),
+    onRestore: (value) => {
+      setResult(value.result);
+      setSelectedTable(value.result.tables[0]?.name ?? "");
+      setTableFilter("");
+      setError("");
+    }
+  });
+  React.useEffect(() => () => taskAbortRef.current?.abort(), []);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    taskAbortRef.current?.abort();
+    taskAbortRef.current = null;
+    setProcessing(false);
+  }, [active]);
 
   const labels = React.useMemo(() => ({
     statements: english ? "Statements" : "语句数",
@@ -65,19 +98,41 @@ export function SqlTool({ t }: { t: Translation }) {
   const totalRows = result?.tables.reduce((sum, item) => sum + item.insertRows, 0) ?? 0;
   const totalColumns = result?.tables.reduce((sum, item) => sum + item.columns.length, 0) ?? 0;
 
-  const applyResult = (text: string, name: string, size: number) => {
-    const parsed = parseSqlDump(text, name, size);
+  const applyResult = (text: string, parsed: Extract<SqlWorkerResult, { tables: SqlParseResult["tables"] }>) => {
     setResult(parsed);
     setSelectedTable(parsed.tables[0]?.name ?? "");
     setTableFilter("");
     setFormatInput(text.slice(0, 20000));
     setFormatOutput("");
     setError("");
+    workspace.save({ result: parsed });
+  };
+
+  const runSqlTask = async (request: SqlWorkerRequest) => {
+    taskAbortRef.current?.abort();
+    const controller = new AbortController();
+    taskAbortRef.current = controller;
+    setProcessing(true);
+    try {
+      return await runWorkerTask<SqlWorkerRequest, SqlWorkerResult>({
+        createWorker: () => new Worker(new URL("../features/sql/sql.worker.ts", import.meta.url), { type: "module" }),
+        request,
+        signal: controller.signal,
+        timeoutMs: 120_000
+      });
+    } finally {
+      if (taskAbortRef.current === controller) {
+        taskAbortRef.current = null;
+        setProcessing(false);
+      }
+    }
   };
 
   const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
+    taskAbortRef.current?.abort();
+    workspace.clear();
     setDropActive(false);
     setResult(null);
     setFormatInput("");
@@ -90,44 +145,64 @@ export function SqlTool({ t }: { t: Translation }) {
     try {
       const text = await file.text();
       if (requestId !== requestRef.current) return;
-      applyResult(text, file.name, file.size);
+      const parsed = await runSqlTask({ mode: "parse", text, name: file.name, size: file.size });
+      if (!active || requestId !== requestRef.current || !("tables" in parsed)) return;
+      applyResult(text, parsed);
     } catch (caught) {
-      if (requestId !== requestRef.current) return;
-      setResult(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId !== requestRef.current || (caught instanceof DOMException && caught.name === "AbortError")) return;
+      if (active) {
+        setResult(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     }
   };
 
-  const analyzeInput = () => {
+  const analyzeInput = async () => {
+    if (!active) return;
+    const requestId = ++requestRef.current;
     const text = formatInput.trim();
     if (!text) return;
+    workspace.clear();
     try {
-      applyResult(text, "pasted-sql.sql", new TextEncoder().encode(text).byteLength);
+      const size = new TextEncoder().encode(text).byteLength;
+      if (size > MAX_SQL_FILE_BYTES) throw new Error(english ? "SQL input exceeds the 32 MiB limit." : "SQL 输入超过 32 MiB 限制。");
+      const parsed = await runSqlTask({ mode: "parse", text, name: "pasted-sql.sql", size });
+      if (requestId === requestRef.current && active && "tables" in parsed) applyResult(text, parsed);
     } catch (caught) {
-      setResult(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (requestId === requestRef.current && active) {
+        setResult(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     }
   };
 
   const runFormatter = async (mode: "format" | "minify") => {
+    if (!active) return;
+    const requestId = ++requestRef.current;
     try {
-      if (mode === "minify") {
-        setFormatOutput(minifySqlText(formatInput));
-        return;
-      }
-      const formatter = await import("sql-formatter");
-      setFormatOutput(formatter.format(formatInput, { language: dialect as never }));
+      const size = new TextEncoder().encode(formatInput).byteLength;
+      if (size > MAX_SQL_FILE_BYTES) throw new Error(english ? "SQL input exceeds the 32 MiB limit." : "SQL 输入超过 32 MiB 限制。");
+      const result = await runSqlTask(mode === "minify" ? { mode, text: formatInput } : { mode, text: formatInput, dialect });
+      if (requestId === requestRef.current && active && "text" in result) setFormatOutput(result.text);
     } catch (caught) {
-      setFormatOutput(`${t.parseError}: ${caught instanceof Error ? caught.message : String(caught)}`);
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      if (requestId === requestRef.current && active) setFormatOutput(`${t.parseError}: ${caught instanceof Error ? caught.message : String(caught)}`);
     }
   };
 
   const clear = () => {
     requestRef.current += 1;
+    taskAbortRef.current?.abort();
+    taskAbortRef.current = null;
+    workspace.clear();
     setResult(null);
     setSelectedTable("");
     setTableFilter("");
+    setFormatInput("");
+    setFormatOutput("");
     setError("");
+    setProcessing(false);
     setDropActive(false);
   };
 
@@ -169,17 +244,22 @@ export function SqlTool({ t }: { t: Translation }) {
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{result?.name ?? t.dropFileTitle}</strong>
           <span>{result ? `${result.tables.length} ${t.tables} · ${totalRows} ${t.rows} · ${totalColumns} ${t.columns}` : t.dropFileHint}</span>
           <em>{result ? `${result.statementCount} ${labels.statements} · ${formatBytes(result.size)}` : ".sql / .txt"}</em>
         </div>
+        {processing && <ALinearProgress />}
         <div className="action-row">
-          <AButton onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="outlined" disabled={!formatInput.trim()} onClick={analyzeInput}>{labels.analyzeInput}</AButton>
-          <AButton variant="text" disabled={!result && !error} onClick={clear}>{t.clear}</AButton>
+          <AButton disabled={processing} onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
+          <AButton variant="outlined" disabled={!formatInput.trim() || processing} onClick={() => void analyzeInput()}>{labels.analyzeInput}</AButton>
+          <AButton variant="text" disabled={processing || (!result && !error)} onClick={clear}>{t.clear}</AButton>
         </div>
+        {!result && <div className="text-panel sql-input-stage">
+          <div className="text-panel-title"><strong>{english ? "Paste SQL" : "粘贴 SQL"}</strong><AButton variant="text" disabled={!formatInput} onClick={() => void copyText(formatInput)}>{t.copyInput}</AButton></div>
+          <textarea className="single-textarea sql-input-textarea" aria-label={english ? "SQL input" : "SQL 输入"} value={formatInput} onChange={(event) => { setFormatInput(event.currentTarget.value); setError(""); }} placeholder={english ? "Paste a SQL dump here" : "在这里粘贴 SQL dump"} />
+        </div>}
         {!result && <ToolStageFeatures items={stageFeatures} />}
         {error && <pre className="result-box">{error}</pre>}
       </div>
@@ -191,8 +271,8 @@ export function SqlTool({ t }: { t: Translation }) {
               title={labels.overview}
               actions={
                 <>
-                <AButton variant="text" onClick={() => void navigator.clipboard.writeText(JSON.stringify(result, null, 2))}>JSON</AButton>
-                <AButton variant="text" disabled={!table} onClick={() => table && void navigator.clipboard.writeText(table.name)}>{t.copy}</AButton>
+                <AButton variant="text" onClick={() => void copyText(JSON.stringify(result, null, 2))}>JSON</AButton>
+                <AButton variant="text" disabled={!table} onClick={() => table && void copyText(table.name)}>{t.copy}</AButton>
                 </>
               }
             />
@@ -223,8 +303,8 @@ export function SqlTool({ t }: { t: Translation }) {
               subtitle={`${filteredRows.length}/${table?.rows.length ?? 0} ${t.rows}`}
               actions={
                 <>
-                <AButton variant="outlined" disabled={!table || !filteredRows.length} onClick={() => void navigator.clipboard.writeText(sqlRowsToCsv(previewColumns, filteredRows))}>{t.copyCsv}</AButton>
-                <AButton variant="outlined" disabled={!table || !filteredRows.length} onClick={() => void navigator.clipboard.writeText(sqlTableToJson(table, filteredRows))}>{t.copyJson}</AButton>
+                <AButton variant="outlined" disabled={!table || !filteredRows.length} onClick={() => void copyText(sqlRowsToCsv(previewColumns, filteredRows))}>{t.copyCsv}</AButton>
+                <AButton variant="outlined" disabled={!table || !filteredRows.length} onClick={() => void copyText(sqlTableToJson(table, filteredRows))}>{t.copyJson}</AButton>
                 <AButton variant="text" disabled={!table || !filteredRows.length} onClick={() => table && downloadTextFile(`sql-${table.name}-${Date.now()}.csv`, sqlRowsToCsv(previewColumns, filteredRows), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
                 </>
               }
@@ -272,13 +352,13 @@ export function SqlTool({ t }: { t: Translation }) {
           <details className="tool-panel wide-panel sql-format-details" open>
             <summary><strong>{t.sqlFormatter}</strong></summary>
             <div className="control-bar">
-              <label>{t.sqlDialect}<ASelect aria-label={t.sqlDialect} value={dialect} onChange={(value) => setDialect(String(value))} options={["mysql", "postgresql", "sqlite", "transactsql", "mariadb", "plsql", "spark"].map((item) => ({ value: item, label: item }))} /></label>
-              <AButton onClick={() => void runFormatter("format")}>{t.formatSql}</AButton>
-              <AButton variant="outlined" onClick={() => void runFormatter("minify")}>{t.minifySql}</AButton>
-              <AButton variant="text" disabled={!formatOutput} onClick={() => void navigator.clipboard.writeText(formatOutput)}>{t.copyOutput}</AButton>
+              <label>{t.sqlDialect}<ASelect aria-label={t.sqlDialect} value={dialect} onChange={(value) => { setDialect(String(value)); setFormatOutput(""); }} options={["mysql", "postgresql", "sqlite", "transactsql", "mariadb", "plsql", "spark"].map((item) => ({ value: item, label: item }))} /></label>
+              <AButton disabled={processing} onClick={() => void runFormatter("format")}>{t.formatSql}</AButton>
+              <AButton variant="outlined" disabled={processing} onClick={() => void runFormatter("minify")}>{t.minifySql}</AButton>
+              <AButton variant="text" disabled={!formatOutput} onClick={() => void copyText(formatOutput)}>{t.copyOutput}</AButton>
             </div>
             <div className="text-columns sql-format-columns">
-              <textarea className="single-textarea" aria-label={english ? "SQL input" : "SQL 输入"} value={formatInput} onChange={(event) => setFormatInput(event.target.value)} />
+              <textarea className="single-textarea" aria-label={english ? "SQL input" : "SQL 输入"} value={formatInput} onChange={(event) => { setFormatInput(event.target.value); setFormatOutput(""); }} />
               <textarea className="single-textarea" aria-label={english ? "Formatted SQL output" : "格式化 SQL 输出"} value={formatOutput} readOnly />
             </div>
           </details>

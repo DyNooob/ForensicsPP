@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
@@ -26,6 +26,7 @@ import {
   browserArtifactRecordsToCsv,
   chromiumTimeToIso,
   firefoxTimeToIso,
+  persistableBrowserArtifactAnalysis,
   type BrowserArtifactInput
 } from "../src/features/browserArtifacts/analyzer";
 
@@ -133,6 +134,22 @@ describe("Browser Artifact Studio", () => {
     expect(login.detail).toContain("password=encrypted");
     expect(JSON.stringify(login)).not.toContain("deadbeef");
   });
+
+  it("caps oversized artifact files and reports the limit", () => {
+    const db = new SQL.Database();
+    db.run("CREATE TABLE logins (id INTEGER PRIMARY KEY, origin_url TEXT, username_value TEXT, password_value BLOB, date_created INTEGER, date_last_used INTEGER, date_password_modified INTEGER, times_used INTEGER, blocked_by_user INTEGER);");
+    const statement = db.prepare("INSERT INTO logins VALUES (?, ?, ?, NULL, 0, 0, 0, 0, 0)");
+    for (let index = 1; index <= 50_001; index += 1) statement.run([index, "https://example.test/", `user-${index}`]);
+    statement.free();
+    const result = analyzeBrowserArtifacts([input("Login Data", "Chrome/User Data/Default/Login Data", exported(db))], SQL);
+
+    expect(result.records).toHaveLength(50_000);
+    expect(result.files[0].truncated).toBe(true);
+    expect(result.files[0].detail).toContain("record limit");
+    const persisted = persistableBrowserArtifactAnalysis(result);
+    expect(persisted.snapshotLimited).toBe(true);
+    expect(persisted.records.length).toBeLessThan(result.records.length);
+  }, 15_000);
 
   it("parses bookmark and extension JSON and escapes CSV fields", () => {
     const encoder = new TextEncoder();

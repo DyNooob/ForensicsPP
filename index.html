@@ -7,7 +7,7 @@
   Author: DyNooob
   Website: https://www.loken.cn
   Platform: DigiForensics.cn
-  Project: https://github.com/DyNooob/ForensicsPP
+  Project: https://git.loken.cn/dynooob/ForensicsPP
 
   Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
   lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
   privacy infringement, or unlawful activity.
 
   Released under the MIT License.
-  Full source code: https://github.com/DyNooob/ForensicsPP
+  Full source code: https://git.loken.cn/dynooob/ForensicsPP
 -->
 <html lang="zh-CN">
   <head>
@@ -35,10 +35,10 @@
     />
     <meta name="author" content="DyNooob" />
     <meta name="license" content="MIT" />
-    <meta name="repository" content="https://github.com/DyNooob/ForensicsPP" />
+    <meta name="repository" content="https://git.loken.cn/dynooob/ForensicsPP" />
     <meta name="application-name" content="Forensics++" />
-    <meta name="version" content="1.0.0-alpha.1" />
-    <meta name="date" content="2026-07-14" />
+    <meta name="version" content="1.0.0-alpha.4" />
+    <meta name="date" content="2026-07-15" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Forensics++" />
     <meta property="og:title" content="Forensics++ Workbench" />
@@ -52,7 +52,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
-    <meta property="og:updated_time" content="2026-07-14T00:00:00+08:00" />
+    <meta property="og:updated_time" content="2026-07-15T00:00:00+08:00" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Forensics++ Workbench" />
     <meta
@@ -64,6 +64,23 @@
     <link rel="canonical" href="https://www.forensicspp.com/" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="manifest" href="./site.webmanifest" />
+    <style>
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+        background: #f5f7fa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        html,
+        body,
+        #root {
+          background: #0f1822;
+        }
+      }
+    </style>
     <title>Forensics++ Workbench | Open-source DFIR tools</title>
     <script type="application/ld+json">
       {
@@ -73,10 +90,10 @@
         "alternateName": "ForensicsPP",
         "applicationCategory": "SecurityApplication",
         "operatingSystem": "Any modern browser",
-        "softwareVersion": "1.0.0-alpha.1",
-        "dateModified": "2026-07-14",
-        "license": "https://github.com/DyNooob/ForensicsPP/blob/main/LICENSE",
-        "codeRepository": "https://github.com/DyNooob/ForensicsPP",
+        "softwareVersion": "1.0.0-alpha.4",
+        "dateModified": "2026-07-15",
+        "license": "https://git.loken.cn/dynooob/ForensicsPP/src/branch/main/LICENSE",
+        "codeRepository": "https://git.loken.cn/dynooob/ForensicsPP",
         "url": "https://www.forensicspp.com/",
         "author": {
           "@type": "Person",
@@ -108,10 +125,10 @@
         console.log("%cAuthor    %cDyNooob", label, value);
         console.log("%cWebsite   %chttps://www.loken.cn", label, value);
         console.log("%cPlatform  %cDigiForensics.cn", label, value);
-        console.log("%cGitHub    %chttps://github.com/DyNooob/ForensicsPP", label, value);
+        console.log("%cRepository%c https://git.loken.cn/dynooob/ForensicsPP", label, value);
         console.log("%cProject   %cOpen-source DFIR workbench.", label, muted);
         console.log("%cNotice    %cUse only in lawful and authorized scenarios.", label, warn);
-        console.log("%cLicense   %cMIT. Full source code: https://github.com/DyNooob/ForensicsPP", label, muted);
+        console.log("%cLicense   %cMIT. Full source code: https://git.loken.cn/dynooob/ForensicsPP", label, muted);
         console.groupEnd();
       })();
     </script>

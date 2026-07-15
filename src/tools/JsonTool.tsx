@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,104 +16,23 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { analyzeBasicJson, type JsonBasicPath, type JsonBasicResult } from "../features/json/basic";
+import type { JsonBasicWorkerRequest } from "../features/json/basic.worker";
 import type { Translation } from "../i18n";
-import type { JsonAnalysisServices } from "../features/json/analyzer";
 import { downloadTextFile } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
 
-type JsonToolProps = JsonAnalysisServices & { t: Translation };
+type JsonToolProps = { t: Translation };
 type JsonMode = "format" | "minify" | "jsonl" | "escape" | "unescape";
 
-type JsonPathItem = {
-  path: string;
-  type: string;
-  value: string;
-  length: number;
-};
-
-function valueType(value: unknown) {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "array";
-  return typeof value;
-}
-
-function displayValue(value: unknown) {
-  if (Array.isArray(value)) return `Array(${value.length})`;
-  if (value && typeof value === "object") return `Object(${Object.keys(value).length})`;
-  if (typeof value === "string") return value;
-  if (value === undefined) return "undefined";
-  return JSON.stringify(value);
-}
-
-function childPath(parent: string, key: string) {
-  return /^[A-Za-z_$][\w$]*$/.test(key) ? `${parent}.${key}` : `${parent}[${JSON.stringify(key)}]`;
-}
-
-function collectPaths(root: unknown) {
-  const rows: JsonPathItem[] = [];
-  const visit = (value: unknown, path: string) => {
-    if (rows.length >= 5000) return;
-    const rendered = displayValue(value);
-    rows.push({ path, type: valueType(value), value: rendered, length: rendered.length });
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => visit(item, `${path}[${index}]`));
-    } else if (value && typeof value === "object") {
-      Object.entries(value as Record<string, unknown>).forEach(([key, item]) => visit(item, childPath(path, key)));
-    }
-  };
-  visit(root, "$");
-  return rows;
-}
-
-function parseJson(input: string) {
-  if (!input.trim()) return { ok: false as const, value: null, kind: "", error: "", normalized: "", minified: "", jsonl: "" };
-  try {
-    const value: unknown = JSON.parse(input);
-    return {
-      ok: true as const,
-      value,
-      kind: "JSON",
-      error: "",
-      normalized: JSON.stringify(value, null, 2),
-      minified: JSON.stringify(value),
-      jsonl: Array.isArray(value) ? value.map((item) => JSON.stringify(item)).join("\n") : JSON.stringify(value)
-    };
-  } catch (jsonError) {
-    const lines = input.split(/\r?\n/).filter((line) => line.trim());
-    if (lines.length > 1) {
-      try {
-        const value = lines.map((line) => JSON.parse(line) as unknown);
-        return {
-          ok: true as const,
-          value,
-          kind: "JSONL",
-          error: "",
-          normalized: JSON.stringify(value, null, 2),
-          minified: JSON.stringify(value),
-          jsonl: value.map((item) => JSON.stringify(item)).join("\n")
-        };
-      } catch {
-        // Report the original JSON parser error; it usually has the most useful offset.
-      }
-    }
-    return {
-      ok: false as const,
-      value: null,
-      kind: "",
-      error: jsonError instanceof Error ? jsonError.message : String(jsonError),
-      normalized: "",
-      minified: "",
-      jsonl: ""
-    };
-  }
-}
-
-function pathsToCsv(rows: JsonPathItem[]) {
+function pathsToCsv(rows: JsonBasicPath[]) {
   const escape = (value: string | number) => {
     const text = String(value);
     return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
@@ -124,20 +43,68 @@ function pathsToCsv(rows: JsonPathItem[]) {
   ].join("\n");
 }
 
-export function JsonTool({ t, ..._services }: JsonToolProps) {
-  const [input, setInput] = React.useState("");
-  const [analyzedInput, setAnalyzedInput] = React.useState("");
+const MAX_JSON_BYTES = 16 * 1024 * 1024;
+
+export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolean }) {
+  const [input, setInput] = useStoredState("json.input.v2", "");
+  const [analyzedInput, setAnalyzedInput] = useStoredState("json.analyzedInput.v2", "");
   const [storedMode, setStoredMode] = useStoredState("json.outputMode", "format");
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [selectedPath, setSelectedPath] = React.useState("");
   const [error, setError] = React.useState("");
+  const [analyzing, setAnalyzing] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
   const english = t.waiting === "Waiting";
   const mode = (["format", "minify", "jsonl", "escape", "unescape"] as JsonMode[]).includes(storedMode as JsonMode) ? storedMode as JsonMode : "format";
-  const parsed = React.useMemo(() => parseJson(analyzedInput), [analyzedInput]);
-  const paths = React.useMemo(() => parsed.ok ? collectPaths(parsed.value) : [], [parsed]);
+  const [basicResult, setBasicResult] = React.useState<JsonBasicResult>(() => analyzeBasicJson(analyzedInput));
+  const parsed = basicResult.parsed;
+  const paths = basicResult.paths;
+
+  React.useEffect(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (!active) {
+      setAnalyzing(false);
+      return;
+    }
+    if (!analyzedInput.trim()) {
+      setBasicResult(analyzeBasicJson(""));
+      setAnalyzing(false);
+      return;
+    }
+    if (new TextEncoder().encode(analyzedInput).byteLength > MAX_JSON_BYTES) {
+      setBasicResult(analyzeBasicJson(""));
+      setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
+      setAnalyzing(false);
+      return;
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setAnalyzing(true);
+    setError("");
+    void runWorkerTask<JsonBasicWorkerRequest, JsonBasicResult>({
+      createWorker: () => new Worker(new URL("../features/json/basic.worker.ts", import.meta.url), { type: "module" }),
+      request: { input: analyzedInput },
+      signal: controller.signal,
+      timeoutMs: 60_000
+    }).then((result) => {
+      if (!controller.signal.aborted) setBasicResult(result);
+    }).catch((caught) => {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        setBasicResult(analyzeBasicJson(""));
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }).finally(() => {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setAnalyzing(false);
+      }
+    });
+    return () => controller.abort();
+  }, [active, analyzedInput, english]);
   const pathTypes = React.useMemo(() => Array.from(new Set(paths.map((row) => row.type))).sort(), [paths]);
   const visiblePaths = React.useMemo(() => {
     const value = filter.trim().toLowerCase();
@@ -172,7 +139,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
     setFilter("");
     setTypeFilter("");
     setSelectedPath("");
-    if (file.size > 16 * 1024 * 1024) {
+    if (file.size > MAX_JSON_BYTES) {
       setError(english ? "JSON file exceeds the 16 MiB processing limit." : "JSON 文件超过 16 MiB 处理上限。");
       return;
     }
@@ -187,6 +154,8 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
   };
   const clear = () => {
     requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setInput("");
     setAnalyzedInput("");
     setFilter("");
@@ -195,7 +164,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
     setError("");
   };
   const analyze = () => {
-    if (new TextEncoder().encode(input).length > 16 * 1024 * 1024) {
+    if (new TextEncoder().encode(input).byteLength > MAX_JSON_BYTES) {
       setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
       return;
     }
@@ -220,6 +189,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openFile(file); }} />
         {error && <div className="empty-state error-state">{error}</div>}
+        {analyzing && <div className="empty-state" role="status">{english ? "Processing JSON…" : "正在处理 JSON…"}</div>}
         <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={english ? "JSON operation" : "JSON 操作"}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>
           <ASegmentedButton value="minify" onClick={() => setStoredMode("minify")}>{t.minifyJson}</ASegmentedButton>
@@ -228,7 +198,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
           <ASegmentedButton value="unescape" onClick={() => setStoredMode("unescape")}>{t.unescapeString}</ASegmentedButton>
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
-          <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void navigator.clipboard.writeText(input)}>{t.copyInput}</AButton></div>
+          <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton></div>
           <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
@@ -237,7 +207,7 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
             <strong>{t.outputText}</strong>
             <div className="mini-actions">
               {parsed.ok && mode !== "escape" && mode !== "unescape" && <span className="status-pill">{parsed.kind} · {paths.length} {english ? "paths" : "路径"}</span>}
-              <AButton variant="text" disabled={!output} onClick={() => void navigator.clipboard.writeText(output)}>{t.copyOutput}</AButton>
+              <AButton variant="text" disabled={!output} onClick={() => void copyText(output)}>{t.copyOutput}</AButton>
               <AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`json-output-${Date.now()}.${outputExtension}`, output, "text/plain;charset=utf-8")}>{english ? "Save" : "保存"}</AButton>
             </div>
           </div>
@@ -259,13 +229,13 @@ export function JsonTool({ t, ..._services }: JsonToolProps) {
           {visiblePaths.length ? <table className="data-table json-simple-path-table">
             <thead><tr><th>{t.jsonPath}</th><th>{t.jsonType}</th><th>{english ? "Length" : "长度"}</th><th>{t.jsonValue}</th><th>{t.copy}</th></tr></thead>
             <tbody>{visiblePaths.slice(0, 1000).map((row) => <tr className={selected?.path === row.path ? "selected-row" : ""} key={row.path} onClick={() => setSelectedPath(row.path)}>
-              <td><code>{row.path}</code></td><td>{row.type}</td><td>{row.length}</td><td className="json-path-value">{row.value || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void navigator.clipboard.writeText(row.value); }}>{t.copy}</AButton></td>
+              <td><code>{row.path}</code></td><td>{row.type}</td><td>{row.length}</td><td className="json-path-value">{row.value || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(row.value); }}>{t.copy}</AButton></td>
             </tr>)}</tbody>
           </table> : <div className="empty-state">--</div>}
         </div>
         {selected && <div className="json-simple-selected">
           <InfoTable rows={[[t.jsonPath, selected.path], [t.jsonType, selected.type], [english ? "Length" : "长度", String(selected.length)]]} />
-          <div className="result-box"><div className="text-panel-title"><strong>{t.jsonValue}</strong><AButton variant="text" onClick={() => void navigator.clipboard.writeText(selected.value)}>{t.copy}</AButton></div><pre>{selected.value || "--"}</pre></div>
+          <div className="result-box"><div className="text-panel-title"><strong>{t.jsonValue}</strong><AButton variant="text" onClick={() => void copyText(selected.value)}>{t.copy}</AButton></div><pre>{selected.value || "--"}</pre></div>
         </div>}
       </div>}
     </div>

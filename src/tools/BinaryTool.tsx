@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,25 +16,38 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, AInputNumber, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { FileAnalysis, FileEmbeddedSignature } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { runWorkerTask } from "../utils/workerTask";
+import type { BinaryWorkerRequest } from "../features/file/file.worker";
 
 type HexRow = { offset: number; hex: string; ascii: string };
+const MAX_PERSISTED_BINARY_BYTES = 8 * 1024 * 1024;
+type BinaryWorkspace = { analysis: FileAnalysis; bytes: Uint8Array; fileName: string; offsetInput: string; viewLength: number };
+
+function isBinaryWorkspace(value: unknown): value is BinaryWorkspace {
+  return Boolean(value && typeof value === "object" && "analysis" in value && "bytes" in value && "fileName" in value && "viewLength" in value);
+}
+
+function persistableBinaryAnalysis(analysis: FileAnalysis): FileAnalysis {
+  return { ...analysis, embeddedSignatures: analysis.embeddedSignatures.map((payload) => ({ ...payload, bytes: new Uint8Array() })), trailerBytes: new Uint8Array() };
+}
 
 export type BinaryToolServices = {
-  analyzeFileBytes: (bytes: Uint8Array, name: string, size: number, options?: { includeHash?: boolean; includeSideEvidence?: boolean; includeEmbeddedHashes?: boolean }) => FileAnalysis;
   binaryHexDumpRows: (bytes: Uint8Array, start: number, length: number, width?: number) => HexRow[];
   parseByteOffset: (value: string, max: number, fallback?: number) => number;
 };
 
-export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: BinaryToolServices }) {
-  const { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } = services;
+export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: BinaryToolServices; active?: boolean }) {
+  const { binaryHexDumpRows, parseByteOffset } = services;
   const english = t.waiting === "Waiting";
   const [analysis, setAnalysis] = React.useState<FileAnalysis | null>(null);
   const [bytes, setBytes] = React.useState<Uint8Array>(() => new Uint8Array());
@@ -43,18 +56,49 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
   const [viewLength, setViewLength] = React.useState(512);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
-  React.useEffect(() => () => { requestRef.current += 1; }, []);
+  const abortRef = React.useRef<AbortController | null>(null);
+  const workspace = useToolWorkspace<BinaryWorkspace>({
+    id: "binary",
+    version: 2,
+    isValid: isBinaryWorkspace,
+    onRestore: (restored) => {
+      setAnalysis(restored.analysis);
+      setBytes(restored.bytes);
+      setFileName(restored.fileName);
+      setOffsetInput(restored.offsetInput);
+      setViewLength(restored.viewLength);
+      setStorageNotice(restored.analysis.size > MAX_PERSISTED_BINARY_BYTES && !restored.bytes.byteLength
+        ? (english ? "This file is available for the current session only; reopen it after a refresh." : "当前文件仅在本次打开期间可用，刷新后请重新选择文件。")
+        : "");
+      setError("");
+    }
+  });
+  React.useEffect(() => () => {
+    requestRef.current += 1;
+    abortRef.current?.abort();
+  }, []);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, [active]);
   const offset = React.useMemo(() => parseByteOffset(offsetInput, Math.max(0, bytes.length - 1), 0), [bytes.length, offsetInput, parseByteOffset]);
   const hexRows = React.useMemo(() => binaryHexDumpRows(bytes, offset, viewLength), [binaryHexDumpRows, bytes, offset, viewLength]);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     const requestId = ++requestRef.current;
+    abortRef.current?.abort();
     setDropActive(false);
     setError("");
+    setStorageNotice("");
+    workspace.clear();
     setAnalysis(null);
     setBytes(new Uint8Array());
     setFileName("");
@@ -65,38 +109,58 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
       return;
     }
     setLoading(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const nextBytes = new Uint8Array(await file.arrayBuffer());
       if (requestId !== requestRef.current) return;
-      const nextAnalysis = analyzeFileBytes(nextBytes, file.name, file.size, {
-        includeHash: false,
-        includeSideEvidence: false,
-        includeEmbeddedHashes: false
+      const workerBytes = nextBytes.slice();
+      const nextAnalysis = await runWorkerTask<BinaryWorkerRequest, FileAnalysis>({
+        createWorker: () => new Worker(new URL("../features/file/file.worker.ts", import.meta.url), { type: "module" }),
+        request: {
+          bytes: workerBytes.buffer,
+          name: file.name,
+          size: file.size,
+          options: { includeHash: false, includeSideEvidence: false, includeEmbeddedHashes: false }
+        },
+        transfer: [workerBytes.buffer],
+        signal: controller.signal,
+        timeoutMs: 180_000
       });
+      if (requestId !== requestRef.current || controller.signal.aborted) return;
       setBytes(nextBytes);
       setFileName(file.name);
       setOffsetInput("0");
       setAnalysis(nextAnalysis);
+      setStorageNotice(file.size > MAX_PERSISTED_BINARY_BYTES
+        ? (english ? "This file is available for the current session only; it is not restored automatically." : "当前文件仅在本次打开期间保留，不会自动恢复。")
+        : "");
+      workspace.save({ analysis: persistableBinaryAnalysis(nextAnalysis), bytes: file.size <= MAX_PERSISTED_BINARY_BYTES ? nextBytes : new Uint8Array(), fileName: file.name, offsetInput: "0", viewLength: 512 });
     } catch (caught) {
-      if (requestId === requestRef.current) {
+      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {
         setAnalysis(null);
         setBytes(new Uint8Array());
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
     requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    workspace.clear();
     setAnalysis(null);
     setBytes(new Uint8Array());
     setFileName("");
     setOffsetInput("0");
     setViewLength(512);
     setError("");
+    setStorageNotice("");
     setLoading(false);
     setDropActive(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -170,6 +234,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
           <AButton variant="text" disabled={!analysis && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <ALinearProgress />}
+        {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
         {error && <pre className="result-box">{error}</pre>}
       </div>
 
@@ -184,7 +249,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Hex viewer" : "Hex 查看器"} />
               <div className="button-row compact-buttons">
-                <AButton variant="text" disabled={!hexRows.length} onClick={() => void navigator.clipboard.writeText(hexRows.map((row) => `${row.offset.toString(16).padStart(8, "0").toUpperCase()}  ${row.hex.padEnd(47)}  ${row.ascii}`).join("\n"))}>{t.copy}</AButton>
+                <AButton variant="text" disabled={!hexRows.length} onClick={() => void copyText(hexRows.map((row) => `${row.offset.toString(16).padStart(8, "0").toUpperCase()}  ${row.hex.padEnd(47)}  ${row.ascii}`).join("\n"))}>{t.copy}</AButton>
                 <AButton variant="text" disabled={!bytes.length} onClick={downloadSlice}>{english ? "Save slice" : "保存片段"}</AButton>
               </div>
             </div>
@@ -225,7 +290,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
                   <thead><tr><th>{english ? "Type" : "类型"}</th><th>{english ? "Offset" : "偏移"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th>{t.download}</th></tr></thead>
-                  <tbody>{analysis.embeddedSignatures.map((payload, index) => <tr key={`${payload.label}-${payload.offset}`}><td>{payload.label}</td><td>0x{payload.offset.toString(16).toUpperCase()}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview || "--"}</td><td><AButton variant="text" onClick={() => downloadEmbedded(payload, index)}>{t.download}</AButton></td></tr>)}</tbody>
+                  <tbody>{analysis.embeddedSignatures.map((payload, index) => <tr key={`${payload.label}-${payload.offset}`}><td>{payload.label}</td><td>0x{payload.offset.toString(16).toUpperCase()}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview || "--"}</td><td><AButton variant="text" disabled={!payload.bytes.length} onClick={() => downloadEmbedded(payload, index)}>{t.download}</AButton></td></tr>)}</tbody>
                 </table>
               </div>
             </div>
@@ -233,7 +298,7 @@ export function BinaryTool({ t, services }: { t: (typeof copy)["zh"]; services: 
 
           {analysis.trailerBytes.length ? (
             <div className="tool-panel wide-panel binary-trailer-panel">
-              <div className="panel-heading-row"><PanelTitle title={t.trailerData} /><AButton variant="text" onClick={downloadTrailer}>{t.download}</AButton></div>
+              <div className="panel-heading-row"><PanelTitle title={t.trailerData} /><AButton variant="text" disabled={!analysis.trailerBytes.length} onClick={downloadTrailer}>{t.download}</AButton></div>
               <InfoTable rows={analysis.trailerRows} />
               <textarea className="single-textarea compact-textarea" value={analysis.trailerPreview || "--"} readOnly />
             </div>

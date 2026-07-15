@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASelect, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -45,15 +46,19 @@ export type CodecToolServices = {
   transformText: (operation: string, input: string) => string;
 };
 
-export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: CodecToolServices }) {
-  const [input, setInput] = React.useState("");
-  const [output, setOutput] = React.useState("");
+export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: CodecToolServices; active?: boolean }) {
+  const [input, setInput] = useStoredState("codec.input.v2", "");
+  const [output, setOutput] = useStoredState("codec.output.v2", "");
   const [operation, setOperation] = useStoredState("codec.operation", "urle");
   const [selectedFormat, setSelectedFormat] = useStoredState("codec.selectedFormat", "url");
   const [directOperation, setDirectOperation] = useStoredState("codec.directOperation", "autocodec");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+  }, [active]);
   const english = t.waiting === "Waiting";
 
   const formats: CodecFormat[] = [
@@ -104,7 +109,7 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
     }
   };
   const openFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     setInput("");
     setOutput("");
@@ -115,10 +120,10 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
     }
     try {
       const value = await file.text();
-      if (requestId !== requestRef.current) return;
+      if (!active || requestId !== requestRef.current) return;
       setInput(value);
     } catch (caught) {
-      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
   const clear = () => {
@@ -189,12 +194,12 @@ export function CodecTool({ t, services }: { t: (typeof copy)["zh"]; services: C
         </div>
 
         <div className="text-panel codec-simple-text-panel">
-          <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void navigator.clipboard.writeText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton></div></div>
+          <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton></div></div>
           <textarea className="codec-simple-textarea" aria-label={english ? "Input text" : "输入文本"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
         <div className="text-panel codec-simple-text-panel">
-          <div className="text-panel-title"><strong>{t.outputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!output} onClick={() => void navigator.clipboard.writeText(output)}>{t.copyOutput}</AButton><AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`codec-output-${Date.now()}.txt`, output, "text/plain;charset=utf-8")}>{t.download}</AButton><AButton variant="text" disabled={!output} onClick={() => { setInput(output); setOutput(""); setError(""); }}>{t.codecApplyCandidate}</AButton></div></div>
+          <div className="text-panel-title"><strong>{t.outputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!output} onClick={() => void copyText(output)}>{t.copyOutput}</AButton><AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`codec-output-${Date.now()}.txt`, output, "text/plain;charset=utf-8")}>{t.download}</AButton><AButton variant="text" disabled={!output} onClick={() => { setInput(output); setOutput(""); setError(""); }}>{t.codecApplyCandidate}</AButton></div></div>
           <textarea className="codec-simple-textarea" aria-label={english ? "Output text" : "输出文本"} value={output} readOnly />
         </div>
       </div>

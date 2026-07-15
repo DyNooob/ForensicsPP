@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -26,11 +27,17 @@ import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../
 import { hexPreview } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
+import { useStoredState } from "../utils/storage";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 type Finding = { level: string; title: string; detail: string };
 type AndroidWorkerResult = {
   xml: string;
   archiveInfo: { rows: Array<[string, string]>; findings: Finding[]; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Finding[] };
+};
+
+type AndroidWorkspace = {
+  info: AndroidManifestInfo;
 };
 
 export type AndroidManifestToolServices = {
@@ -45,11 +52,11 @@ export type AndroidManifestToolServices = {
 type AndroidView = "overview" | "permissions" | "components" | "entries";
 const MAX_ARCHIVE_SIZE = 256 * 1024 * 1024;
 
-export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; services: AndroidManifestToolServices }) {
+export function AndroidManifestTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: AndroidManifestToolServices; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [info, setInfo] = React.useState<AndroidManifestInfo | null>(null);
-  const [manifestText, setManifestText] = React.useState("");
-  const [sourceName, setSourceName] = React.useState("pasted AndroidManifest.xml");
+  const [manifestText, setManifestText] = useStoredState("android.manifestText.v2", "");
+  const [sourceName, setSourceName] = useStoredState("android.sourceName.v2", "pasted AndroidManifest.xml");
   const [view, setView] = React.useState<AndroidView>("overview");
   const [componentFilter, setComponentFilter] = React.useState("");
   const [entryFilter, setEntryFilter] = React.useState("");
@@ -93,13 +100,30 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     setSelectedEntryName("");
   };
 
+  const workspace = useToolWorkspace<AndroidWorkspace>({
+    id: "android-manifest",
+    version: 1,
+    isValid: (value): value is AndroidWorkspace => Boolean(
+      value && typeof value === "object" &&
+      (value as AndroidWorkspace).info &&
+      Array.isArray((value as AndroidWorkspace).info.components)
+    ),
+    onRestore: (value) => {
+      setInfo(value.info);
+      setError("");
+      resetReview();
+    }
+  });
+
   const parseText = (text = manifestText, name = sourceName) => {
     abortRef.current?.abort();
     abortRef.current = null;
     setParsing(false);
     setError("");
     try {
-      setInfo(services.parseAndroidManifest(text, name, new Blob([text]).size));
+      const next = services.parseAndroidManifest(text, name, new Blob([text]).size);
+      setInfo(next);
+      workspace.save({ info: next });
       resetReview();
     } catch (caught) {
       setInfo(null);
@@ -108,7 +132,8 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   };
 
   const handleFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
+    workspace.clear();
     setDropActive(false);
     setError("");
     abortRef.current?.abort();
@@ -127,6 +152,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
     abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (!active || controller.signal.aborted) return;
       const result = await runWorkerTask<{ bytes: Uint8Array; name: string; size: number }, AndroidWorkerResult>({
         createWorker: () => new Worker(new URL("../workers/android.worker.ts", import.meta.url), { type: "module" }),
         request: { bytes, name: file.name, size: file.size },
@@ -134,10 +160,12 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
         signal: controller.signal,
         timeoutMs: 180_000
       });
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
+      const next = services.parseAndroidManifest(result.xml, file.name, file.size, result.archiveInfo);
       setManifestText(result.xml);
       setSourceName(file.name);
-      setInfo(services.parseAndroidManifest(result.xml, file.name, file.size, result.archiveInfo));
+      setInfo(next);
+      workspace.save({ info: next });
       resetReview();
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -154,6 +182,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   const clear = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    workspace.clear();
     setParsing(false);
     setManifestText("");
     setInfo(null);
@@ -164,6 +193,12 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
   };
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setParsing(false);
+  }, [active]);
 
   const exportInfoJson = () => {
     if (!info) return;
@@ -201,7 +236,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{info ? sourceName : t.uploadManifest}</strong>
           <span>{info ? `${info.sourceFormat} · ${formatBytes(info.size)}` : (english ? "APK, XML, or binary AXML" : "支持 APK、XML 和二进制 AXML")}</span>
@@ -221,7 +256,7 @@ export function AndroidManifestTool({ t, services }: { t: (typeof copy)["zh"]; s
         <div className="android-simple-primary-action">
           <AButton variant="filled" disabled={parsing || !manifestText.trim()} onClick={() => parseText()}>{t.parseManifest}</AButton>
           <AButton variant="outlined" disabled={parsing} onClick={() => inputRef.current?.click()}>{t.uploadManifest}</AButton>
-          <AButton variant="text" disabled={!manifestText} onClick={() => void navigator.clipboard.writeText(manifestText)}>{t.copy} XML</AButton>
+          <AButton variant="text" disabled={!manifestText} onClick={() => void copyText(manifestText)}>{t.copy} XML</AButton>
           <AButton variant="text" disabled={!manifestText} onClick={() => downloadTextFile(`decoded-android-manifest-${Date.now()}.xml`, manifestText, "application/xml;charset=utf-8")}>{english ? "Download XML" : "下载 XML"}</AButton>
         </div>
         {error && <pre className="result-box android-simple-error">{error}</pre>}

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,15 +16,17 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ACheckbox, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import type { Translation } from "../i18n";
 import type { UuidAnalysis } from "../models";
 import { downloadTextFile } from "../utils/files";
 import { isUsableDate } from "../utils/forensics";
+import { useStoredState } from "../utils/storage";
 
 function uuidVersionName(version: string) {
   return ({
@@ -126,10 +128,10 @@ function uuidAnalysesToCsv(items: UuidAnalysis[]) {
 }
 
 export function UuidTool({ t }: { t: Translation }) {
-  const [value, setValue] = React.useState("");
-  const [query, setQuery] = React.useState("");
-  const [sortMode, setSortMode] = React.useState<"input" | "time" | "version">("input");
-  const [timeOnly, setTimeOnly] = React.useState(false);
+  const [value, setValue] = useStoredState("uuid.value.v2", "");
+  const [query, setQuery] = useStoredState("uuid.query.v2", "");
+  const [sortMode, setSortMode] = useStoredState<"input" | "time" | "version">("uuid.sortMode.v2", "input");
+  const [timeOnly, setTimeOnly] = useStoredState("uuid.timeOnly.v2", false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(value.trim());
@@ -186,7 +188,7 @@ export function UuidTool({ t }: { t: Translation }) {
         <div className="action-row">
           <AButton variant="filled" onClick={() => replaceWithGenerated(4)}>{t.generate} v4</AButton>
           <AButton variant="outlined" onClick={() => replaceWithGenerated(7)}>{english ? "Generate v7" : "生成 v7"}</AButton>
-          <AButton variant="outlined" disabled={!selected.valid} onClick={() => void navigator.clipboard.writeText(selected.normalized)}>{t.copyOutput}</AButton>
+          <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.normalized)}>{t.copyOutput}</AButton>
         </div>
       </div>
 
@@ -195,8 +197,8 @@ export function UuidTool({ t }: { t: Translation }) {
           title={english ? "Parsed UUID" : "解析结果"}
           subtitle={analyses.length > 1 ? `${selectedIndex + 1}/${analyses.length}` : undefined}
           actions={<>
-            <AButton variant="outlined" disabled={!selected.valid} onClick={() => void navigator.clipboard.writeText(selected.bytes)}>{t.standardBytes}</AButton>
-            <AButton variant="outlined" disabled={!selected.valid} onClick={() => void navigator.clipboard.writeText(selected.guidBytes)}>{t.guidBytes}</AButton>
+            <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.bytes)}>{t.standardBytes}</AButton>
+            <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.guidBytes)}>{t.guidBytes}</AButton>
           </>}
         />
         {selected.valid ? <InfoTable rows={selectedRows} /> : <div className="empty-state error-state">{english ? "Invalid UUID" : "UUID 格式无效"}</div>}
@@ -208,7 +210,7 @@ export function UuidTool({ t }: { t: Translation }) {
           subtitle={`${analyses.filter((item) => item.valid).length}/${analyses.length} ${english ? "valid" : "有效"}`}
           actions={<>
             <AButton variant="outlined" onClick={() => downloadTextFile(`uuid-${Date.now()}.csv`, uuidAnalysesToCsv(analyses), "text/csv;charset=utf-8")}>{t.exportUuidCsv}</AButton>
-            <AButton variant="text" onClick={() => void navigator.clipboard.writeText(analyses.filter((item) => item.valid).map((item) => item.normalized).join("\n"))}>{t.copy}</AButton>
+            <AButton variant="text" onClick={() => void copyText(analyses.filter((item) => item.valid).map((item) => item.normalized).join("\n"))}>{t.copy}</AButton>
           </>}
         />
         <div className="uuid-simple-filter-row">

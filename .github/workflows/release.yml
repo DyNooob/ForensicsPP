@@ -5,7 +5,7 @@
 # Author: DyNooob
 # Website: https://www.loken.cn
 # Platform: DigiForensics.cn
-# Project: https://github.com/DyNooob/ForensicsPP
+# Project: https://git.loken.cn/dynooob/ForensicsPP
 #
 # Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
 # lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -15,13 +15,11 @@
 # privacy infringement, or unlawful activity.
 #
 # Released under the MIT License.
-# Full source code: https://github.com/DyNooob/ForensicsPP
+# Full source code: https://git.loken.cn/dynooob/ForensicsPP
 
-name: Publish release
+name: Verify release candidate
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -30,7 +28,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
@@ -52,18 +50,14 @@ jobs:
         run: npm ci
 
       - name: Resolve release version
-        id: version
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then TAG="${INPUT_TAG}"; fi
+          TAG="${INPUT_TAG}"
           VERSION="${TAG#v}"
           test "$(node -p "require('./package.json').version")" = "${VERSION}"
           test -f "docs/releases/v${VERSION}.md"
-          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify and build
         run: npm run verify
@@ -71,16 +65,14 @@ jobs:
       - name: Create static release package
         run: npm run release:package
 
-      - name: Publish GitHub Release
+      - name: Confirm package exists
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ inputs.tag }}
         run: |
-          gh release create "${TAG}" \
-            "release/ForensicsPP-v${VERSION}-static.zip" \
-            "release/SHA256SUMS.txt" \
-            --verify-tag \
-            --title "Forensics++ v${VERSION}" \
-            --notes-file "docs/releases/v${VERSION}.md"
+          test -f "release/ForensicsPP-${VERSION}-static.zip"
+          test -f "release/SHA256SUMS.txt"
+
+# This workflow intentionally verifies and packages only. It never creates a
+# GitHub Release, deploys a site, or pushes tags. Publish through the loken
+# remote and its release interface after the local checks pass.

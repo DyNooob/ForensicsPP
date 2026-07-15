@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import { analyzeIocs, iocRecordsToStixBundle } from "../features/ioc/analyzer";
@@ -26,6 +27,7 @@ import { copy } from "../i18n";
 import type { IocAnalysis, IocRecord } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
+import { useStoredState } from "../utils/storage";
 
 const PAGE_SIZE = 200;
 
@@ -62,12 +64,12 @@ function serializableRecords(records: IocRecord[]) {
   }));
 }
 
-export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
+export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = React.useState("");
-  const [source, setSource] = React.useState("pasted text");
-  const [analyzedText, setAnalyzedText] = React.useState("");
-  const [analyzedSource, setAnalyzedSource] = React.useState("pasted text");
+  const [text, setText] = useStoredState("ioc.text.v2", "");
+  const [source, setSource] = useStoredState("ioc.source.v2", "pasted text");
+  const [analyzedText, setAnalyzedText] = useStoredState("ioc.analyzedText.v2", "");
+  const [analyzedSource, setAnalyzedSource] = useStoredState("ioc.analyzedSource.v2", "pasted text");
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [selectedId, setSelectedId] = React.useState("");
@@ -118,11 +120,28 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
     setPage(0);
   };
 
+  React.useEffect(() => {
+    if (!analyzedText.trim()) {
+      setAnalysis(analyzeIocs("", analyzedSource));
+      return;
+    }
+    setAnalysis(analyzeIocs(analyzedText, analyzedSource));
+    resetReview();
+  }, [analyzedSource, analyzedText]);
+
   const cancelAnalysis = () => {
     abortRef.current?.abort();
     abortRef.current = null;
     setAnalyzing(false);
   };
+
+  React.useEffect(() => {
+    if (active) return;
+    fileReadRef.current += 1;
+    cancelAnalysis();
+    setLoading(false);
+    setDropActive(false);
+  }, [active]);
 
   const handleText = (value: string) => {
     fileReadRef.current += 1;
@@ -137,7 +156,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const handleFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     cancelAnalysis();
     const requestId = ++fileReadRef.current;
     setLoading(true);
@@ -145,7 +164,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
     setDropActive(false);
     try {
       const value = await file.slice(0, 32 * 1024 * 1024).text();
-      if (requestId !== fileReadRef.current) return;
+      if (!active || requestId !== fileReadRef.current) return;
       setSource(file.name);
       setSourceSize(file.size);
       setText(value);
@@ -175,7 +194,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const analyze = async () => {
-    if (!text.trim() || analyzing) return;
+    if (!active || !text.trim() || analyzing) return;
     if (new TextEncoder().encode(text).length > 16 * 1024 * 1024) {
       setError(english ? "IOC text exceeds the 16 MiB analysis limit." : "IOC 文本超过 16 MiB 分析上限。");
       return;
@@ -194,7 +213,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
         signal: controller.signal,
         timeoutMs: 60_000
       });
-      if (controller.signal.aborted) return;
+      if (!active || controller.signal.aborted) return;
       setAnalyzedText(nextText);
       setAnalyzedSource(nextSource);
       setAnalysis(result);
@@ -209,7 +228,9 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
     }
   };
 
-  React.useEffect(() => () => abortRef.current?.abort(), []);
+  React.useEffect(() => () => {
+    abortRef.current?.abort();
+  }, []);
 
   const exportJson = () => downloadTextFile(
     `ioc-${Date.now()}.json`,
@@ -241,7 +262,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{source === "pasted text" ? t.dropFileTitle : source}</strong>
           <span>{source === "pasted text" ? t.dropFileHint : `${formatBytes(Math.min(sourceSize, 32 * 1024 * 1024))} / ${formatBytes(sourceSize)}`}</span>
@@ -259,8 +280,8 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
             title={t.indicators}
             subtitle={`${filteredRecords.length.toLocaleString()} / ${analysis.records.length.toLocaleString()}`}
             actions={<>
-              <AButton variant="outlined" disabled={!filteredRecords.length} onClick={() => void navigator.clipboard.writeText(filteredRecords.map((record) => record.normalized).join("\n"))}>{t.iocCopyNormalized}</AButton>
-              <AButton variant="text" disabled={!filteredRecords.length} onClick={() => void navigator.clipboard.writeText(filteredRecords.map((record) => record.defanged).join("\n"))}>{t.defangedUrl}</AButton>
+              <AButton variant="outlined" disabled={!filteredRecords.length} onClick={() => void copyText(filteredRecords.map((record) => record.normalized).join("\n"))}>{t.iocCopyNormalized}</AButton>
+              <AButton variant="text" disabled={!filteredRecords.length} onClick={() => void copyText(filteredRecords.map((record) => record.defanged).join("\n"))}>{t.defangedUrl}</AButton>
             </>}
           />
 
@@ -295,7 +316,7 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
                       <td>{record.count}</td>
                       <td>{record.lines.join(", ")}</td>
                       <td className="mono-cell ioc-simple-value">{record.defanged}</td>
-                      <td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void navigator.clipboard.writeText(record.normalized); }}>{t.copy}</AButton></td>
+                      <td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(record.normalized); }}>{t.copy}</AButton></td>
                     </tr>
                   ))}
                 </tbody>
@@ -318,8 +339,8 @@ export function IocTool({ t }: { t: (typeof copy)["zh"] }) {
           <ToolPanelHeader
             title={english ? "Selected indicator" : "当前 IOC"}
             actions={<>
-              <AButton variant="outlined" onClick={() => void navigator.clipboard.writeText(selected.normalized)}>{t.copy}</AButton>
-              <AButton variant="text" onClick={() => void navigator.clipboard.writeText(selected.defanged)}>{t.defangedUrl}</AButton>
+              <AButton variant="outlined" onClick={() => void copyText(selected.normalized)}>{t.copy}</AButton>
+              <AButton variant="text" onClick={() => void copyText(selected.defanged)}>{t.defangedUrl}</AButton>
             </>}
           />
           <InfoTable rows={[

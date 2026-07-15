@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import CryptoJS from "crypto-js";
@@ -132,6 +132,14 @@ export async function hashSelectedFile(file: Blob, algorithms: string[], options
 
 export function formatHashCase(value: string, mode: "lower" | "upper") {
   return mode === "upper" ? value.toUpperCase() : value.toLowerCase();
+}
+
+export function normalizeHashAlgorithms(value: unknown) {
+  const supported = new Set(["md5", "sha1", "sha256", "sha512", "sha3", "sm3"]);
+  const selected = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").map((item) => item.toLowerCase()).filter((item) => supported.has(item))
+    : [];
+  return selected.length ? Array.from(new Set(selected)) : ["sha256"];
 }
 
 export function detectHashType(value: string) {

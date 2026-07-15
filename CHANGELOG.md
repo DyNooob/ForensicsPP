@@ -4,7 +4,74 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
+- 暂无未发布变更。
+
+## [1.0.0-alpha.4] - 2026-07-14
+
+### Added
+
+- 哈希页会保存已经明确计算出的文本哈希和文件哈希结果；恢复后仍可复制、筛选和导出，但必须重新选择文件才能再次计算。
+- 字符串提取和熵值分析会保存已完成的分析结果，切换工具或刷新页面后可以继续查看。
+- 文件分析工作区只保存受控大小的字节预览；大文件恢复后保留结果表和导出能力，需要原始上下文时再重新选择文件。
+- 证据报告可以导出为不依赖外部资源的 HTML 文件，离线打开即可查看。
+- 时间线支持合并多个日志或文本文件，并在 JSON 导出中保留文件名、来源和行号。
+- 邮件附件和 PCAP 提取文件只在用户明确点击后计算 SHA-256。
+
+### Changed
+
+- 统一复制操作，在 `file://` 静态发布包和不支持 Clipboard API 的浏览器中使用降级方案。
+- 浏览器工作区写入采用短暂合并，长文本编辑不会每次按键都写入存储。
+- 密码、JWT 密钥/私钥和原始 `File` 对象继续保持会话内存，不写入持久化状态。
+
+### Fixed
+
+- 清理本地数据改为清空现有 IndexedDB 工作区记录，避免其他标签页打开数据库时出现“清理成功但数据仍在”的假成功。
+- 设置页在不支持 `navigator.storage.estimate()` 的浏览器中不再因调用不存在的方法报错。
+
+### Verification
+
+- 85 个测试通过。
+- TypeScript、版权头、生产构建、静态发布包和 36 个工具的桌面/窄屏布局审查通过。
+
+## [1.0.0-alpha.3] - 2026-07-14
+
+### Added
+
+- Timeline Builder events now travel with a report item when the user explicitly selects “Add to Report”.
+- Reports include parsed event count, source, format, line number, context, and the normalized timestamp in the Markdown, JSON, Bundle JSON, and preview timeline.
+- Large persisted report and workspace state now falls back to the existing IndexedDB store instead of silently failing at the localStorage quota.
+- Hash verification now respects filenames in standard checksum manifests while keeping standalone digest matching global.
+- Report Bundle JSON can now be imported with validation and an explicit replacement confirmation.
+- Reports can now verify registered source files against selected local files after an explicit SHA-256 action.
+
+### Fixed
+
+- Timeline report registration is kept in memory and does not add another browser-storage payload.
+
+### Verification
+
+- 83 tests passed.
+- TypeScript, copyright-header, production-build, and static-package verification passed.
+
 暂无未发布变更。
+
+## [1.0.0-alpha.2] - 2026-07-14
+
+### Added
+
+- “加入报告”现在会登记当前工具仍可读取的源文件，记录文件名、大小、类型、修改时间和 SHA-256。
+- 证据报告增加源文件清单，并把源文件数量、总大小和哈希写入 Markdown、CSV、JSON 和完整性摘要。
+- 只有用户明确点击“加入报告”时才计算源文件 SHA-256，不改变普通工具的计算行为。
+
+### Changed
+
+- 报告清单在桌面、平板和手机宽度下保持独立滚动，长文件名和长哈希不会撑破弹窗。
+
+### Verification
+
+- 74 项自动测试通过。
+- 36 个工具的桌面与窄屏布局审计通过。
+- TypeScript、版权头和生产构建检查通过。
 
 ## [1.0.0-alpha.1] - 2026-07-14
 
@@ -192,7 +259,7 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - The repository now publishes the complete React and TypeScript source instead of only compiled HTML, CSS and JavaScript.
 - Rebuilt the interface around React 19 and Ant Design 5 with a shared workbench layout.
-- GitHub Pages now installs locked dependencies, verifies the source and builds `dist/` in Actions.
+- The historical build workflow installs locked dependencies, verifies the source and builds `dist/`; site publishing is handled through Loken.
 - Added project copyright headers to first-party source and generated assets.
 
 ### Added
@@ -203,18 +270,21 @@ Forensics++ follows semantic versioning where practical. This file records user-
 ### Notes
 
 - `dist/` is generated output and is no longer committed to `main`.
-- Existing GitHub Pages deployments must use **GitHub Actions** as their Pages source.
+- Static deployments should use the generated `dist/` package through Loken or another configured static host.
 
 ## [0.2.0]
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.1...HEAD
-[1.0.0-alpha.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.9.0...v1.0.0-alpha.1
-[0.9.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.1...v0.9.0
-[0.8.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/DyNooob/ForensicsPP/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/DyNooob/ForensicsPP/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/DyNooob/ForensicsPP/releases/tag/v0.5.0
+[Unreleased]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.4...HEAD
+[1.0.0-alpha.4]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
+[1.0.0-alpha.3]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
+[1.0.0-alpha.2]: https://git.loken.cn/dynooob/ForensicsPP/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
+[1.0.0-alpha.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.9.0...v1.0.0-alpha.1
+[0.9.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.8.1...v0.9.0
+[0.8.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.8.0...v0.8.1
+[0.8.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.7.1...v0.8.0
+[0.7.1]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.7.0...v0.7.1
+[0.7.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.6.0...v0.7.0
+[0.6.0]: https://git.loken.cn/dynooob/ForensicsPP/compare/v0.5.0...v0.6.0
+[0.5.0]: https://git.loken.cn/dynooob/ForensicsPP/releases/tag/v0.5.0

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
@@ -24,6 +24,7 @@ import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable,
 import { copy } from "../i18n";
 import {
   browserArtifactRecordsToCsv,
+  persistableBrowserArtifactAnalysis,
   type BrowserArtifactAnalysis,
   type BrowserArtifactInput,
   type BrowserArtifactRecord
@@ -52,7 +53,7 @@ function viewLabel(view: View, english: boolean) {
   return labels[view][english ? 1 : 0];
 }
 
-export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
+export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [analysis, setAnalysis] = React.useState<BrowserArtifactAnalysis | null>(null);
@@ -70,7 +71,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   const directoryProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
   const workspace = useToolWorkspace<BrowserArtifactAnalysis>({
     id: "browser-artifacts",
-    version: 1,
+    version: 2,
     isValid: (value): value is BrowserArtifactAnalysis => Boolean(value && typeof value === "object" && Array.isArray((value as BrowserArtifactAnalysis).records) && Array.isArray((value as BrowserArtifactAnalysis).files)),
     onRestore: (value) => {
       setAnalysis(value);
@@ -80,6 +81,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   });
 
   const queueFiles = (files?: FileList | File[] | null) => {
+    if (!active) return;
     cancel();
     workspace.clear();
     const next = Array.from(files ?? []).filter((file) => {
@@ -123,7 +125,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const analyze = async () => {
-    if (!selectedFiles.length || loading) return;
+    if (!active || !selectedFiles.length || loading) return;
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -154,13 +156,16 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
         signal: controller.signal,
         timeoutMs: 120_000
       });
+      if (abortRef.current !== controller || controller.signal.aborted) return;
       setAnalysis(result);
-      workspace.save(result);
+      workspace.save(persistableBrowserArtifactAnalysis(result));
       if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setAnalysis(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (abortRef.current === controller && active) {
+        setAnalysis(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -192,6 +197,13 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+    setProgress("");
+  }, [active]);
 
   const categoryRecords = React.useMemo(() => analysis && view !== "overview" && view !== "files"
     ? analysis.records.filter((record) => record.category === view)
@@ -257,6 +269,8 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
               return <ASegmentedButton key={item} value={item} onClick={() => { setView(item); setSelectedRecordId(""); }}>{viewLabel(item, english)} ({count})</ASegmentedButton>;
             })}
           </ASegmentedGroup>
+          {analysis.files.some((file) => file.truncated) && <div className="pcap-stream-notice" role="status">{english ? "At least one source file reached the 50,000-record limit. Use the original database for a complete export." : "至少一个来源文件达到 50,000 条记录上限。如需完整导出，请使用原始数据库。"}</div>}
+          {analysis.snapshotLimited && <div className="pcap-stream-notice" role="status">{english ? "This restored workspace keeps a bounded record snapshot. Re-open the original files for a complete export." : "当前恢复的工作区只保留了受限记录快照。如需完整导出，请重新打开原始文件。"}</div>}
 
           {view === "overview" && (
             <div className="browser-artifact-overview">
@@ -272,7 +286,7 @@ export function BrowserArtifactTool({ t }: { t: (typeof copy)["zh"] }) {
             </div>
           )}
 
-          {view === "files" && <div className="table-scroll browser-artifact-table-scroll"><table className="data-table"><thead><tr><th>{english ? "File" : "文件"}</th><th>{english ? "Data type" : "数据类型"}</th><th>{english ? "Browser" : "浏览器"}</th><th>Profile</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Records" : "记录"}</th><th>{english ? "Status" : "状态"}</th></tr></thead><tbody>{analysis.files.map((file) => <tr key={file.path}><td>{file.path}</td><td>{file.artifact}</td><td>{file.browser}</td><td>{file.profile}</td><td>{formatBytes(file.size)}</td><td>{file.records}</td><td title={file.detail}>{file.status}</td></tr>)}</tbody></table></div>}
+          {view === "files" && <div className="table-scroll browser-artifact-table-scroll"><table className="data-table"><thead><tr><th>{english ? "File" : "文件"}</th><th>{english ? "Data type" : "数据类型"}</th><th>{english ? "Browser" : "浏览器"}</th><th>Profile</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Records" : "记录"}</th><th>{english ? "Status" : "状态"}</th></tr></thead><tbody>{analysis.files.map((file) => <tr key={file.path}><td>{file.path}</td><td>{file.artifact}</td><td>{file.browser}</td><td>{file.profile}</td><td>{formatBytes(file.size)}</td><td>{file.records}{file.truncated ? "+" : ""}</td><td title={file.detail}>{file.truncated ? (english ? "Limited" : "已限制") : file.status}</td></tr>)}</tbody></table></div>}
 
           {view !== "overview" && view !== "files" && (
             <>

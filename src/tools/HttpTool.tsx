@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,13 +16,15 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { formatBytes } from "../utils/files";
+import { useStoredState } from "../utils/storage";
 
 type HeaderRow = { name: string; value: string };
 type ParamRow = { source: "Query" | "Form"; name: string; value: string };
@@ -158,12 +160,16 @@ function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
   );
 }
 
-export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
+export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = React.useState("");
+  const [text, setText] = useStoredState("http.text.v4", "");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+  }, [active]);
   const parsed = React.useMemo(() => parseHttpMessage(text), [text]);
   const hasInput = Boolean(text.trim());
 
@@ -173,7 +179,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const loadFile = async (file?: File) => {
-    if (!file) return;
+    if (!file || !active) return;
     const requestId = ++requestRef.current;
     setError("");
     setText("");
@@ -183,9 +189,9 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
     }
     try {
       const value = await file.text();
-      if (requestId === requestRef.current) setText(value);
+      if (active && requestId === requestRef.current) setText(value);
     } catch (caught) {
-      if (requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+      if (active && requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
 
@@ -225,7 +231,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
         <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{english ? "Open file" : "打开文件"}</AButton>
-          <AButton variant="outlined" disabled={!text} onClick={() => void navigator.clipboard.writeText(text)}>{t.copy}</AButton>
+          <AButton variant="outlined" disabled={!text} onClick={() => void copyText(text)}>{t.copy}</AButton>
           <AButton variant="text" disabled={!text && !error} onClick={() => { setText(""); setError(""); }}>{t.clear}</AButton>
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
@@ -241,7 +247,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="tool-panel wide-panel http-headers-panel">
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Headers" : "请求头"} />
-              <AButton variant="text" disabled={!parsed.headers.length} onClick={() => void navigator.clipboard.writeText(parsed.headers.map((row) => `${row.name}: ${row.value}`).join("\n"))}>{t.copy}</AButton>
+              <AButton variant="text" disabled={!parsed.headers.length} onClick={() => void copyText(parsed.headers.map((row) => `${row.name}: ${row.value}`).join("\n"))}>{t.copy}</AButton>
             </div>
             <DataTable columns={[english ? "Name" : "名称", english ? "Value" : "值"]} rows={parsed.headers.map((row) => [row.name, row.value])} />
           </div>
@@ -267,7 +273,7 @@ export function HttpTool({ t }: { t: (typeof copy)["zh"] }) {
             <div className="tool-panel wide-panel http-body-panel">
               <div className="panel-heading-row">
                 <PanelTitle title={english ? "Body" : "正文"} />
-                <AButton variant="text" onClick={() => void navigator.clipboard.writeText(parsed.body)}>{t.copy}</AButton>
+                <AButton variant="text" onClick={() => void copyText(parsed.body)}>{t.copy}</AButton>
               </div>
               <textarea aria-label={english ? "HTTP body" : "HTTP 正文"} className="single-textarea http-body-textarea" value={parsed.body} spellCheck={false} readOnly />
             </div>

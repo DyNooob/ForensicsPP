@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
@@ -26,6 +26,7 @@ import type { EntropyAnalysis, EntropyBlock, EntropyRange } from "../models";
 import { hexPreview, previewText } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useStoredState } from "../utils/storage";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 export type EntropyToolServices = {
@@ -36,10 +37,27 @@ export type EntropyToolServices = {
 };
 
 const PAGE_SIZE = 200;
+const MAX_WORKSPACE_PREVIEW_BYTES = 4 * 1024 * 1024;
 
-export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services: EntropyToolServices }) {
+type EntropyWorkspace = {
+  sourceName: string;
+  sourceSize: number;
+  analysis: EntropyAnalysis;
+  previewBytes: Uint8Array;
+};
+
+function isEntropyWorkspace(value: unknown): value is EntropyWorkspace {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<EntropyWorkspace>;
+  return typeof candidate.sourceName === "string"
+    && typeof candidate.sourceSize === "number"
+    && Boolean(candidate.analysis && typeof candidate.analysis === "object")
+    && candidate.previewBytes instanceof Uint8Array;
+}
+
+export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: EntropyToolServices; active?: boolean }) {
   const english = t.waiting === "Waiting";
-  const [text, setText] = React.useState("");
+  const [text, setText] = useStoredState("entropy.text.v3", "");
   const [sourceName, setSourceName] = React.useState("text input");
   const [bytes, setBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(text));
   const [sourceSize, setSourceSize] = React.useState(() => new TextEncoder().encode(text).length);
@@ -53,14 +71,54 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const [loading, setLoading] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const inputRequestRef = React.useRef(0);
+  const restoredAnalysisRef = React.useRef(false);
   const effectiveBlockSize = Math.max(64, Number(blockSize) || 1024);
-  const hasInput = bytes.length > 0;
   const [analysis, setAnalysis] = React.useState<EntropyAnalysis>(() => services.analyzeEntropy(bytes, effectiveBlockSize));
+  const hasInput = bytes.length > 0 || analysis.blocks.length > 0;
+  const workspace = useToolWorkspace<EntropyWorkspace>({
+    id: "entropy.v1",
+    version: 1,
+    isValid: isEntropyWorkspace,
+    onRestore: (value) => {
+      restoredAnalysisRef.current = value.sourceSize > value.previewBytes.length;
+      setStorageNotice(value.sourceSize > value.previewBytes.length
+        ? (english ? "Only a preview is restored. Re-open the source file to view byte context." : "当前只恢复了预览数据；如需查看完整字节上下文，请重新选择源文件。")
+        : "");
+      setSourceName(value.sourceName);
+      setSourceSize(value.sourceSize);
+      setBytes(value.previewBytes.slice());
+      setAnalysis(value.analysis);
+      resetReview();
+    }
+  });
+
+  React.useEffect(() => () => {
+    inputRequestRef.current += 1;
+  }, []);
 
   React.useEffect(() => {
+    if (!text || sourceName !== "text input" || bytes.length) return;
+    const next = new TextEncoder().encode(text);
+    setSourceSize(next.length);
+    setBytes(next);
+  }, [bytes.length, sourceName, text]);
+
+  React.useEffect(() => {
+    if (!active) {
+      setAnalyzing(false);
+      return;
+    }
+    if (restoredAnalysisRef.current) {
+      setAnalyzing(false);
+      return;
+    }
     if (!bytes.length || bytes.length < 1024 * 1024 || typeof Worker === "undefined") {
-      setAnalysis(services.analyzeEntropy(bytes, effectiveBlockSize));
+      const result = services.analyzeEntropy(bytes, effectiveBlockSize);
+      setAnalysis(result);
+      if (bytes.length) workspace.save({ sourceName, sourceSize, analysis: result, previewBytes: bytes.slice(0, MAX_WORKSPACE_PREVIEW_BYTES) });
       setAnalyzing(false);
       return;
     }
@@ -75,14 +133,17 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
       signal: controller.signal,
       timeoutMs: 60_000
     }).then((result) => {
-      if (!controller.signal.aborted) setAnalysis(result);
+      if (!controller.signal.aborted) {
+        setAnalysis(result);
+        workspace.save({ sourceName, sourceSize, analysis: result, previewBytes: bytes.slice(0, MAX_WORKSPACE_PREVIEW_BYTES) });
+      }
     }).catch((caught) => {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     }).finally(() => {
       if (!controller.signal.aborted) setAnalyzing(false);
     });
     return () => controller.abort();
-  }, [bytes, effectiveBlockSize, services]);
+  }, [active, bytes, effectiveBlockSize, services, sourceName, sourceSize, workspace.save]);
 
   const classes = React.useMemo(() => analysis.classRows.map(([label]) => label), [analysis.classRows]);
   const filteredBlocks = React.useMemo(
@@ -96,6 +157,14 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
   const selected = selectedKey ? analysis.blocks.find((block) => services.entropyBlockKey(block) === selectedKey) ?? null : null;
   const selectedContext = React.useMemo(() => {
     if (!selected) return null;
+    if (!bytes.length) {
+      return {
+        start: selected.offset,
+        end: selected.endOffset,
+        hex: "--",
+        text: english ? "Select the source file again to view byte context." : "请重新选择源文件后查看字节上下文。"
+      };
+    }
     const start = Math.max(0, selected.offset - 96);
     const end = Math.min(bytes.length, selected.endOffset + 96);
     const windowBytes = bytes.slice(start, end);
@@ -105,7 +174,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
       hex: hexPreview(windowBytes, 256),
       text: previewText(windowBytes, 400).replace(/\s+/g, " ").trim() || "--"
     };
-  }, [bytes, selected]);
+  }, [bytes, english, selected]);
   const overallEntropy = analysis.rows.find(([label]) => label === "Entropy")?.[1] ?? "0.0000 / 8";
 
   React.useEffect(() => {
@@ -129,8 +198,13 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
   };
 
   const handleText = (value: string) => {
+    inputRequestRef.current += 1;
     setText(value);
+    workspace.clear();
+    restoredAnalysisRef.current = false;
+    setLoading(false);
     setSourceName("text input");
+    setStorageNotice("");
     const next = new TextEncoder().encode(value);
     setSourceSize(next.length);
     setBytes(next);
@@ -139,35 +213,48 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    const requestId = ++inputRequestRef.current;
+    workspace.clear();
+    restoredAnalysisRef.current = false;
     setLoading(true);
     setError("");
     setDropActive(false);
+    setStorageNotice(file.size > MAX_WORKSPACE_PREVIEW_BYTES
+      ? (english ? "Only a 4 MiB preview is retained across refreshes; the complete source remains available during this session." : "刷新后仅保留 4 MiB 预览；完整源文件仅在本次打开期间可用。")
+      : "");
     try {
+      const nextBytes = new Uint8Array(await file.slice(0, 64 * 1024 * 1024).arrayBuffer());
+      if (requestId !== inputRequestRef.current) return;
       setSourceName(file.name);
       setSourceSize(file.size);
-      setBytes(new Uint8Array(await file.slice(0, 64 * 1024 * 1024).arrayBuffer()));
+      setBytes(nextBytes);
       resetReview();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === inputRequestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (requestId === inputRequestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    inputRequestRef.current += 1;
     setText("");
     setSourceName("text input");
     setSourceSize(0);
     setBytes(new Uint8Array());
+    restoredAnalysisRef.current = false;
     setError("");
+    setStorageNotice("");
     if (inputRef.current) inputRef.current.value = "";
     resetReview();
+    workspace.clear();
   };
 
   return (
     <div className={`tool-grid entropy-simple-workbench entropy-workbench ${hasInput ? "has-entropy" : "empty-entropy"}`}>
       {(loading || analyzing) && <div className="wide-panel"><ALinearProgress /></div>}
       {error && <pre className="result-box wide-panel">{error}</pre>}
+      {storageNotice && <div className="tool-storage-note wide-panel" role="status">{storageNotice}</div>}
 
       <section className="tool-panel wide-panel entropy-simple-source-panel">
         <ToolPanelHeader
@@ -188,7 +275,7 @@ export function EntropyTool({ t, services }: { t: (typeof copy)["zh"]; services:
           }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
           onDragLeave={() => setDropActive(false)}
-          onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files?.[0]); }}
+          onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{sourceName === "text input" ? t.dropFileTitle : sourceName}</strong>
           <span>{sourceName === "text input" ? t.dropFileHint : `${formatBytes(bytes.length)} / ${formatBytes(sourceSize)}`}</span>

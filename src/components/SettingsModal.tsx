@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
@@ -57,6 +57,7 @@ type SettingsModalProps = {
   themeMode: ThemeMode;
   themeColor: string;
   cacheClearArmed: boolean;
+  cacheClearError: boolean;
   onClose: () => void;
   onThemeModeChange: (mode: ThemeMode) => void;
   onThemeColorChange: (color: string) => void;
@@ -82,6 +83,13 @@ function localStorageBytes() {
   }
 }
 
+type StorageSnapshot = {
+  local: number;
+  usage: number;
+  quota: number;
+  estimated: boolean;
+};
+
 export function SettingsModal({
   open,
   lang,
@@ -89,6 +97,7 @@ export function SettingsModal({
   themeMode,
   themeColor,
   cacheClearArmed,
+  cacheClearError,
   onClose,
   onThemeModeChange,
   onThemeColorChange,
@@ -99,15 +108,22 @@ export function SettingsModal({
   onCloseAllTools
 }: SettingsModalProps) {
   const [page, setPage] = React.useState<SettingsPage>("appearance");
-  const [storage, setStorage] = React.useState({ local: 0, usage: 0, quota: 0 });
+  const [storage, setStorage] = React.useState<StorageSnapshot>({ local: 0, usage: 0, quota: 0, estimated: false });
 
   React.useEffect(() => {
     if (!open || page !== "storage") return;
     let active = true;
     void (async () => {
       const local = localStorageBytes();
-      const estimate = await navigator.storage?.estimate?.().catch(() => null);
-      if (active) setStorage({ local, usage: Math.max(local, estimate?.usage ?? 0), quota: estimate?.quota ?? 0 });
+      const estimate = await (navigator.storage?.estimate ? navigator.storage.estimate() : Promise.resolve(null)).catch(() => null);
+      if (active) {
+        setStorage({
+          local,
+          usage: estimate ? Math.max(local, estimate.usage ?? 0) : 0,
+          quota: estimate?.quota ?? 0,
+          estimated: Boolean(estimate)
+        });
+      }
     })();
     return () => { active = false; };
   }, [open, page]);
@@ -262,7 +278,8 @@ export function SettingsModal({
                   ))}
                   <ColorPicker
                     value={themeColor}
-                    showText
+                    showText={false}
+                    aria-label={labels.themeColor}
                     onChangeComplete={(color) => onThemeColorChange(color.toHexString())}
                   />
                 </div>
@@ -291,7 +308,7 @@ export function SettingsModal({
                 <section>
                   <strong>{labels.projectAccess}</strong>
                   <div>
-                    <Button href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>GitHub</Button>
+                    <Button href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{lang === "zh" ? "代码仓库" : "Repository"}</Button>
                     <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
                   </div>
                 </section>
@@ -313,11 +330,11 @@ export function SettingsModal({
           {page === "storage" && (
             <div className="settings-storage-page">
               <div className="settings-storage-summary">
-                <div><span>{labels.siteUsage}</span><strong>{formatStorageMb(storage.usage)}</strong></div>
+                <div><span>{labels.siteUsage}</span><strong>{storage.estimated ? formatStorageMb(storage.usage) : "--"}</strong></div>
                 <div><span>{labels.localStorageUsage}</span><strong>{formatStorageMb(storage.local)}</strong></div>
                 <div><span>{labels.availableQuota}</span><strong>{storage.quota ? formatStorageMb(storage.quota) : "--"}</strong></div>
               </div>
-              <div className="settings-storage-meter" aria-hidden="true"><span style={{ width: `${storage.quota ? Math.max(1, Math.min(100, storage.usage / storage.quota * 100)) : 0}%` }} /></div>
+              <div className="settings-storage-meter" aria-hidden="true"><span style={{ width: `${storage.estimated && storage.quota ? Math.max(1, Math.min(100, storage.usage / storage.quota * 100)) : 0}%` }} /></div>
               <div className="settings-session-header">
                 <div className="settings-section-heading">
                   <strong>{labels.sessionTitle}</strong>
@@ -353,6 +370,7 @@ export function SettingsModal({
                   {cacheClearArmed ? t.confirmClearCache : t.clearLocalCache}
                 </Button>
               </div>
+              {cacheClearError && <div className="empty-state error-state settings-cache-error" role="alert">{t.cacheClearFailed}</div>}
             </div>
           )}
 

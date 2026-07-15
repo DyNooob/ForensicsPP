@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,12 +16,12 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
-import type { DocumentAnalysis } from "../features/document/analyzer";
+import { persistableDocumentAnalysis, type DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
@@ -49,7 +49,7 @@ function analyzeInWorker(file: File, signal: AbortSignal) {
   });
 }
 
-export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
+export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [file, setFile] = React.useState<File | null>(null);
   const [analysis, setAnalysis] = React.useState<DocumentAnalysis | null>(null);
@@ -64,7 +64,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   const abortRef = React.useRef<AbortController | null>(null);
   const workspace = useToolWorkspace<DocumentAnalysis>({
     id: "document-forensics",
-    version: 1,
+    version: 2,
     isValid: (value): value is DocumentAnalysis => Boolean(value && typeof value === "object" && typeof (value as DocumentAnalysis).name === "string" && Array.isArray((value as DocumentAnalysis).entries) && Array.isArray((value as DocumentAnalysis).findings)),
     onRestore: (value) => {
       setAnalysis(value);
@@ -102,7 +102,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
     try {
       const result = await analyzeInWorker(file, controller.signal);
       setAnalysis(result);
-      workspace.save(result);
+      workspace.save(persistableDocumentAnalysis(result));
       setView("summary");
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -138,6 +138,12 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
   React.useEffect(() => () => {
     abortRef.current?.abort();
   }, []);
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, [active]);
   const entries = React.useMemo(() => {
     const query = filter.trim().toLowerCase();
     return (analysis?.entries ?? []).filter((entry) => (structureKind === "all" || entry.kind === structureKind) && (!query || `${entry.name} ${entry.kind}`.toLowerCase().includes(query)));
@@ -193,7 +199,7 @@ export function DocumentForensicsTool({ t }: { t: (typeof copy)["zh"] }) {
 
       {view === "structure" && <><div className="document-forensics-filter document-structure-filter"><input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter path or stream" : "筛选路径或流"} aria-label={english ? "Filter document structure" : "筛选文档结构"} /><ASelect aria-label={english ? "Filter structure type" : "筛选结构类型"} value={structureKind} onChange={setStructureKind} options={[{ value: "all", label: english ? "All types" : "全部类型" }, ...structureKinds.map((kind) => ({ value: kind, label: kind }))]} /><span>{entries.length}/{analysis.entries.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Path / stream" : "路径 / 流"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th></tr></thead><tbody>{entries.map((entry, index) => <tr key={`${entry.name}:${index}`}><td>{entry.name}</td><td>{entry.kind}</td><td>{formatBytes(entry.size)}</td></tr>)}</tbody></table></div></>}
 
-      {view === "extracts" && (analysis.extracts.length ? <div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Action" : "操作"}</th></tr></thead><tbody>{analysis.extracts.map((extract, index) => <tr key={extract.id}><td>{extract.name}</td><td>{extract.kind}</td><td>{formatBytes(extract.size)}</td><td><AButton variant="text" onClick={() => downloadExtract(index)}>{english ? "Save" : "保存"}</AButton></td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No extractable embedded item." : "没有可提取的嵌入项。"}</div>)}
+      {view === "extracts" && (analysis.extracts.length ? <div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Action" : "操作"}</th></tr></thead><tbody>{analysis.extracts.map((extract, index) => { const available = extract.bytes.byteLength >= extract.size && extract.size > 0; return <tr key={extract.id}><td>{extract.name}</td><td>{extract.kind}</td><td>{formatBytes(extract.size)}</td><td><AButton variant="text" disabled={!available} title={!available ? (english ? "Re-analyze the document to extract this item." : "请重新分析文档后提取此项。") : undefined} onClick={() => downloadExtract(index)}>{available ? (english ? "Save" : "保存") : (english ? "Re-analyze" : "需重新分析")}</AButton></td></tr>; })}</tbody></table></div> : <div className="empty-state">{english ? "No extractable embedded item." : "没有可提取的嵌入项。"}</div>)}
     </section>}
   </div>;
 }

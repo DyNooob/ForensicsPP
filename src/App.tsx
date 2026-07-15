@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,23 +16,27 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "./utils/clipboard";
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CheckCircleFilled, CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
 import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField } from "./components/ui";
 import { GithubIconButton } from "./components/GithubIconButton";
 import { CommandPalette } from "./components/CommandPalette";
-import { SettingsModal } from "./components/SettingsModal";
 import { ToolHost } from "./components/ToolHost";
-import { CaseReporter } from "./features/reporter/CaseReporter";
-import { getToolTitle as resolveToolTitle, legalVersion, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
+import { getToolTitle as resolveToolTitle, isToolId, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
 import type { ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
 import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./models";
+import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFiles } from "./features/reporter/evidence";
+import { rememberedTimelineEvents } from "./features/reporter/timeline";
+
+const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
+const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
 
 function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
   return resolveToolTitle(tool, lang, copy[lang]);
@@ -118,29 +122,57 @@ function compactReportText(value: string, limit = 24000) {
   return normalized.length > limit ? `${normalized.slice(0, limit)}\n\n[内容已截断]` : normalized;
 }
 
+const isLangValue = (value: unknown): value is Lang => value === "zh" || value === "en";
+const isThemeModeValue = (value: unknown): value is ThemeMode => value === "light" || value === "dark" || value === "auto";
+const isToolIdValue = (value: unknown): value is ToolId => typeof value === "string" && isToolId(value);
+const isStringValue = (value: unknown): value is string => typeof value === "string";
+const isBooleanValue = (value: unknown): value is boolean => typeof value === "boolean";
+const isToolIdArrayValue = (value: unknown): value is ToolId[] => Array.isArray(value) && value.every((item) => isToolIdValue(item));
+
+function isCaseNotesValue(value: unknown): value is CaseNote[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const note = item as Partial<CaseNote>;
+    return typeof note.id === "string"
+      && typeof note.tool === "string"
+      && typeof note.content === "string"
+      && typeof note.createdAt === "string";
+  });
+}
+
+function isCaseReportMetaValue(value: unknown): value is CaseReportMeta {
+  if (!value || typeof value !== "object") return false;
+  const meta = value as Partial<CaseReportMeta>;
+  return ["caseName", "examiner", "organization", "evidenceId", "timezone", "classification", "remarks"]
+    .every((key) => typeof meta[key as keyof CaseReportMeta] === "string");
+}
+
 
 
 export function App() {
-  const [lang, setLang] = useStoredState<Lang>("app.lang", "zh");
-  const [storedActiveTool, setStoredActiveTool] = useStoredState<ToolId>("app.activeTool", "home");
+  const [lang, setLang] = useStoredState<Lang>("app.lang", "zh", isLangValue);
+  const [storedActiveTool, setStoredActiveTool] = useStoredState<ToolId>("app.activeTool", "home", isToolIdValue);
   const [routeTool, setRouteTool] = React.useState<ToolId | null>(() => toolIdFromHash());
-  const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", []);
-  const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", []);
-  const [query, setQuery] = useStoredState("app.query", "");
-  const [themeMode, setThemeMode] = useStoredState<ThemeMode>("app.themeMode", "light");
-  const [themeColor, setThemeColor] = useStoredState("app.themeColor", themePresets[0].hex);
-  const [themeDefaultMigrated, setThemeDefaultMigrated] = useStoredState("app.themeDefaultV070", false);
-  const [acceptedLegalVersion, setAcceptedLegalVersion] = useStoredState("legal.acceptedVersion", "");
+  const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
+  const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
+  const [query, setQuery] = useStoredState("app.query", "", isStringValue);
+  const [themeMode, setThemeMode] = useStoredState<ThemeMode>("app.themeMode", "light", isThemeModeValue);
+  const [themeColor, setThemeColor] = useStoredState("app.themeColor", themePresets[0].hex, isStringValue);
+  const [themeDefaultMigrated, setThemeDefaultMigrated] = useStoredState("app.themeDefaultV070", false, isBooleanValue);
+  const [acceptedLegalVersion, setAcceptedLegalVersion] = useStoredState("legal.acceptedVersion", "", isStringValue);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [cacheClearArmed, setCacheClearArmed] = React.useState(false);
+  const [cacheClearError, setCacheClearError] = React.useState(false);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState("");
   const [reporterOpen, setReporterOpen] = React.useState(false);
-  const [caseNotes, setCaseNotes] = useStoredState<CaseNote[]>("report.notes", []);
-  const [caseReportMeta, setCaseReportMeta] = useStoredState<CaseReportMeta>("report.meta", defaultCaseReportMeta());
+  const [reportAddBusy, setReportAddBusy] = React.useState(false);
+  const [caseNotes, setCaseNotes] = useStoredState<CaseNote[]>("report.notes", [], isCaseNotesValue);
+  const [caseReportMeta, setCaseReportMeta] = useStoredState<CaseReportMeta>("report.meta", defaultCaseReportMeta(), isCaseReportMetaValue);
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false, isBooleanValue);
   const [isNarrowShell, setIsNarrowShell] = React.useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
@@ -172,8 +204,32 @@ export function App() {
     clearLegacyEvidenceStorage();
   }, []);
   React.useEffect(() => {
-    setMountedTools((current) => current.includes(activeTool) ? current : [...current, activeTool]);
-  }, [activeTool]);
+    const rememberInputFiles = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === "file" && target.files?.length) {
+        rememberEvidenceFiles(target, target.files);
+      }
+    };
+    const rememberDroppedFiles = (event: DragEvent) => {
+      if (event.dataTransfer?.files.length) rememberEvidenceFiles(event.target, event.dataTransfer.files);
+    };
+    document.addEventListener("change", rememberInputFiles, true);
+    document.addEventListener("drop", rememberDroppedFiles, true);
+    return () => {
+      document.removeEventListener("change", rememberInputFiles, true);
+      document.removeEventListener("drop", rememberDroppedFiles, true);
+    };
+  }, []);
+  React.useEffect(() => {
+    setMountedTools((current) => {
+      const next = [...current.filter((tool) => tool !== activeTool), activeTool];
+      if (next.length <= maxMountedTools) return next;
+      const removable = next.filter((tool) => tool !== activeTool && tool !== "home" && !dirtyTools.includes(tool));
+      const overflow = next.length - maxMountedTools;
+      const remove = new Set(removable.slice(0, overflow));
+      return next.filter((tool) => !remove.has(tool));
+    });
+  }, [activeTool, dirtyTools]);
   const rememberToolUse = (tool: ToolId) => {
     if (tool === "home") return;
     setRecentTools((items) => [tool, ...items.filter((item) => item !== tool && tools.some((known) => known.id === item))].slice(0, maxRecentTools));
@@ -185,7 +241,8 @@ export function App() {
     writeToolHash(tool, options?.replaceHash);
     if (isNarrowShell) setSidebarCollapsed(true);
   };
-  const addCurrentToolToReport = () => {
+  const addCurrentToolToReport = async () => {
+    if (reportAddBusy) return;
     if (activeTool === "home") {
       setReporterOpen(true);
       return;
@@ -208,21 +265,35 @@ export function App() {
       setReporterOpen(true);
       return;
     }
-    const createdAt = new Date().toISOString();
-    const note: CaseNote = {
-      id: `${activeTool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      tool: getToolTitle(active, lang),
-      title: `${getToolTitle(active, lang)} · ${createdAt.slice(0, 10)}`,
-      content,
-      summary: content.replace(/\s+/g, " ").slice(0, 420),
-      markdown: ["```text", content, "```"].join("\n"),
-      description: t[active.desc],
-      route: `#${activeTool}`,
-      sourceUrl: window.location.href,
-      createdAt
-    };
-    setCaseNotes((current) => [note, ...current].slice(0, 40));
-    setReporterOpen(true);
+    setReportAddBusy(true);
+    try {
+      const selectedFiles = Array.from(toolView?.querySelectorAll<HTMLInputElement>('input[type="file"]') ?? [])
+        .flatMap((input) => Array.from(input.files ?? []));
+      const evidenceFiles = await fingerprintEvidenceFiles([
+        ...selectedFiles,
+        ...(toolView ? rememberedEvidenceFiles(toolView) : [])
+      ]);
+      const timelineEvents = toolView ? rememberedTimelineEvents(toolView) : [];
+      const createdAt = new Date().toISOString();
+      const note: CaseNote = {
+        id: `${activeTool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tool: getToolTitle(active, lang),
+        title: `${getToolTitle(active, lang)} · ${createdAt.slice(0, 10)}`,
+        content,
+        summary: content.replace(/\s+/g, " ").slice(0, 420),
+        markdown: ["```text", content, "```"].join("\n"),
+        description: t[active.desc],
+        route: `#${activeTool}`,
+        sourceUrl: window.location.href,
+        ...(evidenceFiles.length ? { evidenceFiles } : {}),
+        ...(timelineEvents.length ? { timelineEvents } : {}),
+        createdAt
+      };
+      setCaseNotes((current) => [note, ...current].slice(0, 40));
+      setReporterOpen(true);
+    } finally {
+      setReportAddBusy(false);
+    }
   };
   const updateCaseNote = (id: string, patch: Partial<CaseNote>) => {
     setCaseNotes((current) => current.map((note) => note.id === id ? { ...note, ...patch } : note));
@@ -406,7 +477,10 @@ export function App() {
 
 
   React.useEffect(() => {
-    if (!settingsOpen) setCacheClearArmed(false);
+    if (!settingsOpen) {
+      setCacheClearArmed(false);
+      setCacheClearError(false);
+    }
   }, [settingsOpen]);
 
   React.useEffect(() => {
@@ -486,11 +560,14 @@ export function App() {
         meta: lang === "zh" ? "浏览器存储" : "Browser storage",
         keywords: "clear reset cache localStorage indexedDB 清空 缓存 本地工作区",
         run: () => {
-          void clearForensicsStorage();
-          setRecentTools([]);
-          setFavoriteTools([]);
-          setQuery("");
-          setActiveTool("home");
+          void clearForensicsStorage().then(() => {
+            // Reload so mounted tools cannot write their in-memory state back after the clear.
+            window.location.hash = "#home";
+            window.location.reload();
+          }).catch(() => {
+            setCacheClearError(true);
+            openSettingsPanel();
+          });
         }
       },
       {
@@ -577,20 +654,19 @@ export function App() {
       setCacheClearArmed(true);
       return;
     }
-    await clearForensicsStorage();
-    window.location.hash = "#home";
-    window.location.reload();
+    try {
+      await clearForensicsStorage();
+      window.location.hash = "#home";
+      window.location.reload();
+    } catch {
+      setCacheClearArmed(false);
+      setCacheClearError(true);
+    }
   };
 
   const copyCurrentToolLink = () => {
     const url = `${window.location.origin}${window.location.pathname}${window.location.search}#${activeTool}`;
-    if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(url)
-        .then(() => setToolLinkMessage(t.toolLinkCopied))
-        .catch(() => setToolLinkMessage(url));
-      return;
-    }
-    setToolLinkMessage(url);
+    void copyText(url).then((copied) => setToolLinkMessage(copied ? t.toolLinkCopied : url));
   };
 
   return (
@@ -602,13 +678,15 @@ export function App() {
         token: {
           colorPrimary: displayThemeColor,
           colorTextLightSolid: appliedTheme === "dark" ? "#0f1822" : "#ffffff",
+          colorBgElevated: appliedTheme === "dark" ? "#202e3d" : "#ffffff",
+          colorBgSpotlight: appliedTheme === "dark" ? "#2a3a4b" : "#ffffff",
+          colorBorderSecondary: appliedTheme === "dark" ? "#2e4154" : "#d8e0e8",
           borderRadius: 6,
           fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif",
           fontSize: 14,
           controlHeight: 38,
           controlHeightSM: 34,
           colorBgContainer: appliedTheme === "dark" ? "#182330" : "#ffffff",
-          colorBgElevated: appliedTheme === "dark" ? "#182330" : "#ffffff",
           colorBgLayout: appliedTheme === "dark" ? "#0f1722" : "#f5f7fa",
           colorBorder: appliedTheme === "dark" ? "#2e4154" : "#d8e0e8",
           colorText: appliedTheme === "dark" ? "#e7edf5" : "#162130",
@@ -785,7 +863,9 @@ export function App() {
                     className="top-action-icon report-add-toggle"
                     type="button"
                     aria-label={t.addToReport}
-                    title={`${t.addToReport}${caseNotes.length ? ` · ${caseNotes.length}` : ""}`}
+                    title={reportAddBusy ? t.reportHashingSource : `${t.addToReport}${caseNotes.length ? ` · ${caseNotes.length}` : ""}`}
+                    aria-busy={reportAddBusy}
+                    disabled={reportAddBusy}
                     onClick={addCurrentToolToReport}
                   >
                     <FileAddOutlined aria-hidden="true" />
@@ -872,40 +952,51 @@ export function App() {
       </Modal>
 
       {reporterOpen && (
-        <CaseReporter
-          notes={caseNotes}
-          meta={caseReportMeta}
-          t={t}
-          onClose={() => setReporterOpen(false)}
-          onMetaChange={setCaseReportMeta}
-          onUpdateNote={updateCaseNote}
-          onDeleteNote={deleteCaseNote}
-          onClear={clearCaseNotes}
-        />
+        <React.Suspense fallback={<div className="tool-loading-state" role="status" aria-live="polite">{t.loadingTool}</div>}>
+          <CaseReporter
+            notes={caseNotes}
+            meta={caseReportMeta}
+            t={t}
+            onClose={() => setReporterOpen(false)}
+            onMetaChange={setCaseReportMeta}
+            onUpdateNote={updateCaseNote}
+            onDeleteNote={deleteCaseNote}
+            onClear={clearCaseNotes}
+            onImport={(bundle) => {
+              setCaseNotes(bundle.notes);
+              setCaseReportMeta(bundle.meta);
+            }}
+          />
+        </React.Suspense>
       )}
 
-      <SettingsModal
-        open={settingsOpen}
-        lang={lang}
-        t={t}
-        themeMode={themeMode}
-        themeColor={resolvedThemeColor}
-        cacheClearArmed={cacheClearArmed}
-        onClose={() => setSettingsOpen(false)}
-        onThemeModeChange={setThemeMode}
-        onThemeColorChange={applyThemeColor}
-        onResetAppearance={resetThemeAppearance}
-        onClearWorkspace={clearLocalWorkspace}
-        openTools={retainedTools
-          .filter((tool) => tool !== "home")
-          .map((tool) => ({
-            id: tool,
-            title: getToolTitle(tools.find((item) => item.id === tool) ?? tools[0], lang),
-            active: tool === activeTool
-          }))}
-        onCloseTool={closeMountedTool}
-        onCloseAllTools={closeAllMountedTools}
-      />
+      {settingsOpen && (
+        <React.Suspense fallback={<div className="tool-loading-state" role="status" aria-live="polite">{t.loadingTool}</div>}>
+          <SettingsModal
+            open
+            lang={lang}
+            t={t}
+            themeMode={themeMode}
+            themeColor={resolvedThemeColor}
+            cacheClearArmed={cacheClearArmed}
+            cacheClearError={cacheClearError}
+            onClose={() => setSettingsOpen(false)}
+            onThemeModeChange={setThemeMode}
+            onThemeColorChange={applyThemeColor}
+            onResetAppearance={resetThemeAppearance}
+            onClearWorkspace={clearLocalWorkspace}
+            openTools={retainedTools
+              .filter((tool) => tool !== "home")
+              .map((tool) => ({
+                id: tool,
+                title: getToolTitle(tools.find((item) => item.id === tool) ?? tools[0], lang),
+                active: tool === activeTool
+              }))}
+            onCloseTool={closeMountedTool}
+            onCloseAllTools={closeAllMountedTools}
+          />
+        </React.Suspense>
+      )}
       {commandOpen && (
         <CommandPalette
           t={t}

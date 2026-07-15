@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,15 +16,17 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { FileSignatureDef } from "../models";
 import { fileSignatures, hexPreview } from "../utils/binary";
 import { formatBytes } from "../utils/files";
+import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 type FileIdResult = {
   name: string;
@@ -37,6 +39,10 @@ type FileIdResult = {
   primary: FileSignatureDef | null;
   textLike: boolean;
 };
+
+function isFileIdResult(value: unknown): value is FileIdResult {
+  return Boolean(value && typeof value === "object" && "name" in value && "headerHex" in value && Array.isArray((value as FileIdResult).matches));
+}
 
 function extensionOf(name: string) {
   const base = name.split(/[\\/]/).pop() ?? name;
@@ -71,23 +77,43 @@ function isTextLike(bytes: Uint8Array) {
   return zero === 0 && printable / sample.length > 0.88;
 }
 
-export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
+export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [result, setResult] = React.useState<FileIdResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const requestRef = React.useRef(0);
+  const workspace = useToolWorkspace<FileIdResult>({
+    id: "file-id",
+    version: 1,
+    isValid: isFileIdResult,
+    onRestore: (restored) => {
+      setResult(restored);
+      setError("");
+    }
+  });
+  React.useEffect(() => () => { requestRef.current += 1; }, []);
+  React.useEffect(() => {
+    if (active) return;
+    requestRef.current += 1;
+    setLoading(false);
+    setDropActive(false);
+  }, [active]);
 
   const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
+    const requestId = ++requestRef.current;
     setDropActive(false);
+    workspace.clear();
     setLoading(true);
     setError("");
     try {
       const bytes = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer());
+      if (!active || requestId !== requestRef.current) return;
       const matches = signatureMatches(bytes);
-      setResult({
+      const nextResult = {
         name: file.name,
         size: file.size,
         mime: file.type || "--",
@@ -97,16 +123,22 @@ export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
         matches,
         primary: choosePrimary(matches),
         textLike: !matches.length && isTextLike(bytes)
-      });
+      } satisfies FileIdResult;
+      setResult(nextResult);
+      workspace.save(nextResult);
     } catch (caught) {
-      setResult(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (requestId === requestRef.current) {
+        setResult(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   };
 
   const clear = () => {
+    requestRef.current += 1;
+    workspace.clear();
     setResult(null);
     setError("");
     setLoading(false);
@@ -197,7 +229,7 @@ export function FileIdTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="tool-panel wide-panel fileid-header-panel">
             <div className="panel-heading-row">
               <PanelTitle title={english ? "Header bytes" : "文件头字节"} />
-              <AButton variant="text" onClick={() => void navigator.clipboard.writeText(result.headerHex)}>{t.copy}</AButton>
+              <AButton variant="text" onClick={() => void copyText(result.headerHex)}>{t.copy}</AButton>
             </div>
             <textarea aria-label={english ? "File header bytes" : "文件头字节"} className="single-textarea compact-textarea" value={result.headerHex || "--"} readOnly />
           </div>

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,15 +16,15 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { describe, expect, it } from "vitest";
 import { zipSync } from "fflate";
 import { analyzeIocs } from "../src/features/ioc/analyzer";
 import { parseSqlDump } from "../src/features/sql/analyzer";
-import { coerceSqliteEditValue, quoteSqlIdentifier, quoteSqlLiteral, sqliteFilterWhere, sqliteHexDump, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
-import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
+import { coerceSqliteEditValue, loadSqliteTableRows, quoteSqlIdentifier, quoteSqlLiteral, sqliteFilterWhere, sqliteHexDump, sqliteInternalRowidIdentifier, sqliteRowsToCsv } from "../src/features/sqlite/analyzer";
+import { parseFatPackedDateTime, parseMongoObjectIdTimestamp, parseTimestampCandidates, parseUlidTimestamp } from "../src/features/timestamp/analyzer";
 import { parseArchiveEntries } from "../src/tools/ArchiveTool";
 
 describe("forensic timestamp identifiers", () => {
@@ -39,6 +39,15 @@ describe("forensic timestamp identifiers", () => {
   it("decodes a FAT packed timestamp", () => {
     const packed = ((2026 - 1980) << 25) | (7 << 21) | (12 << 16) | (14 << 11) | (35 << 5) | 14;
     expect(parseFatPackedDateTime(packed)).toBe(Date.UTC(2026, 6, 12, 14, 35, 28));
+  });
+
+  it("keeps event identity separate when two sources share the same line", () => {
+    const first = parseTimestampCandidates("event at 2026-07-12T14:35:28Z", "auth.log")[0];
+    const second = parseTimestampCandidates("event at 2026-07-12T14:35:28Z", "system.log")[0];
+
+    expect(first?.source).toBe("auth.log");
+    expect(second?.source).toBe("system.log");
+    expect(first?.id).not.toBe(second?.id);
   });
 });
 
@@ -105,6 +114,46 @@ describe("SQLite value helpers", () => {
     const dump = sqliteHexDump(new Uint8Array([0x41, 0x00, 0xff, 0x42]));
     expect(dump).toContain("00000000  41 00 FF 42");
     expect(dump).toContain("A..B");
+  });
+
+  it("keeps a real column named like the internal rowid alias", () => {
+    const queries: string[] = [];
+    const result = loadSqliteTableRows(
+      {
+        exec: (sql) => {
+          queries.push(sql);
+          if (sql.startsWith("SELECT COUNT")) return [{ columns: ["COUNT(*)"], values: [[1]] }];
+          return [{ columns: ["___forensicspp_rowid__", "id", "__forensicspp_rowid__", "note"], values: [[7, 1, "real-column", "value"]] }];
+        }
+      },
+      { name: "records", type: "table", sql: "", rows: 1, columns: 3 },
+      [
+        { name: "id", type: "INTEGER", notNull: true, defaultValue: "NULL", primaryKey: true },
+        { name: "__forensicspp_rowid__", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false },
+        { name: "note", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false }
+      ],
+      100,
+      0,
+      "",
+      "",
+      "asc"
+    );
+    expect(queries.some((query) => query.includes('AS "___forensicspp_rowid__"'))).toBe(true);
+    expect(result.columns).toEqual(["id", "__forensicspp_rowid__", "note"]);
+    expect(result.rowids).toEqual([7]);
+    expect(result.values).toEqual([[1, "real-column", "value"]]);
+  });
+
+  it("does not treat a user rowid column as SQLite's internal rowid", () => {
+    expect(sqliteInternalRowidIdentifier([
+      { name: "rowid", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false },
+      { name: "_rowid_", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false }
+    ])).toBe("oid");
+    expect(sqliteInternalRowidIdentifier([
+      { name: "rowid", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false },
+      { name: "_rowid_", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false },
+      { name: "oid", type: "TEXT", notNull: false, defaultValue: "NULL", primaryKey: false }
+    ])).toBeNull();
   });
 });
 

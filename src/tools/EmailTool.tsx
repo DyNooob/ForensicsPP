@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { zipSync } from "fflate";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
@@ -30,10 +31,12 @@ import { isMsgFile } from "../features/email/msg";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
+import { hashBytesInWorker } from "../features/hash/task";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
+const MAX_PERSISTED_EMAIL_BYTES = 8 * 1024 * 1024;
 type EmailWorkerResult = { analysis: EmailAnalysis; source: string };
 type EmailWorkerRequest = { format: "eml"; source: string } | { format: "msg"; bytes: ArrayBuffer };
 type EmailWorkspace = {
@@ -42,6 +45,21 @@ type EmailWorkspace = {
   sourceBytes: Uint8Array | null;
   parsed: EmailAnalysis;
 };
+
+function persistableEmailWorkspace(value: EmailWorkspace): EmailWorkspace {
+  let retained = 0;
+  const inputBytes = new TextEncoder().encode(value.input).byteLength;
+  const input = value.sourceFormat === "eml" && inputBytes > MAX_PERSISTED_EMAIL_BYTES ? "" : value.input;
+  const sourceBytes = value.sourceBytes && value.sourceBytes.byteLength <= MAX_PERSISTED_EMAIL_BYTES ? value.sourceBytes.slice() : null;
+  const attachments = value.parsed.attachments.map((attachment) => {
+    if (attachment.content.byteLength > 0 && retained + attachment.content.byteLength <= MAX_PERSISTED_EMAIL_BYTES) {
+      retained += attachment.content.byteLength;
+      return { ...attachment, content: attachment.content.slice() };
+    }
+    return { ...attachment, content: new Uint8Array() };
+  });
+  return { ...value, input, sourceBytes, parsed: { ...value.parsed, attachments } };
+}
 
 function safeEmailFilename(value: string, fallback: string) {
   const cleaned = value
@@ -55,11 +73,12 @@ function safeEmailFilename(value: string, fallback: string) {
 function sanitizeEmailHtml(value: string) {
   if (!value.trim()) return "";
   const document = new DOMParser().parseFromString(value, "text/html");
-  document.querySelectorAll("script, iframe, object, embed, form, input, button, link, meta").forEach((node) => node.remove());
+  document.querySelectorAll("script, iframe, object, embed, form, input, button, link, meta, style").forEach((node) => node.remove());
   document.querySelectorAll<HTMLElement>("*").forEach((node) => {
     for (const attribute of Array.from(node.attributes)) {
       if (/^on/i.test(attribute.name)) node.removeAttribute(attribute.name);
       if (/^(src|srcset|background|poster|action|formaction)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if (attribute.name === "style" && /url\s*\(|expression\s*\(|behavior\s*:/i.test(attribute.value)) node.removeAttribute(attribute.name);
       if (attribute.name === "href" && !/^(?:#|mailto:|tel:)/i.test(attribute.value.trim())) node.setAttribute("href", "#");
     }
   });
@@ -67,7 +86,7 @@ function sanitizeEmailHtml(value: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${baseStyle}</style></head><body>${document.body.innerHTML}</body></html>`;
 }
 
-export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
+export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const [input, setInput] = React.useState("");
   const [sourceFormat, setSourceFormat] = React.useState<"eml" | "msg">("eml");
   const [sourceBytes, setSourceBytes] = React.useState<Uint8Array | null>(null);
@@ -75,19 +94,33 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [bodyMode, setBodyMode] = React.useState<"text" | "html">("text");
+  const [attachmentHashes, setAttachmentHashes] = React.useState<Record<string, string>>({});
+  const [attachmentHashingKey, setAttachmentHashingKey] = React.useState("");
+  const [attachmentHashError, setAttachmentHashError] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const attachmentHashAbortRef = React.useRef<AbortController | null>(null);
+  const attachmentHashRequestRef = React.useRef(0);
   const english = t.waiting === "Waiting";
+  const resetAttachmentHashes = React.useCallback(() => {
+    attachmentHashAbortRef.current?.abort();
+    attachmentHashAbortRef.current = null;
+    attachmentHashRequestRef.current += 1;
+    setAttachmentHashes({});
+    setAttachmentHashingKey("");
+    setAttachmentHashError("");
+  }, []);
   const workspace = useToolWorkspace<EmailWorkspace>({
     id: "email",
-    version: 1,
+    version: 2,
     isValid: (value): value is EmailWorkspace => Boolean(value && typeof value === "object" && typeof (value as EmailWorkspace).input === "string" && (value as EmailWorkspace).parsed),
     onRestore: (value) => {
       setInput(value.input);
       setSourceFormat(value.sourceFormat);
       setSourceBytes(value.sourceBytes);
       setParsed(value.parsed);
+      resetAttachmentHashes();
       setError("");
     }
   });
@@ -107,22 +140,25 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   }, [parsed]);
 
   const parseSource = async (source = input) => {
-    if (!source.trim()) return;
+    if (!source.trim() || !active) return;
     workspace.clear();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
     setLoading(true);
+    resetAttachmentHashes();
     try {
       const next = await parseInWorker({ format: "eml", source }, controller.signal);
-      if (controller.signal.aborted) return;
+      if (abortRef.current !== controller || controller.signal.aborted) return;
       setParsed(next.analysis);
       setError("");
-      workspace.save({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: next.analysis });
+      workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: next.analysis }));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setParsed(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (abortRef.current === controller && active) {
+        setParsed(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -132,7 +168,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
   };
 
   const handleFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !active) return;
     workspace.clear();
     const controller = new AbortController();
     abortRef.current?.abort();
@@ -143,6 +179,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     setSourceBytes(null);
     setSourceFormat("eml");
     setParsed(null);
+    resetAttachmentHashes();
     setBodyMode("text");
     if (file.size > EMAIL_FILE_LIMIT) {
       setError(english ? "Email exceeds the 64 MiB browser parsing limit." : "邮件超过 64 MiB 浏览器解析上限。");
@@ -153,32 +190,34 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     try {
       setError("");
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (controller.signal.aborted) return;
+      if (abortRef.current !== controller || controller.signal.aborted) return;
       if (isMsgFile(file, bytes)) {
         const workerBytes = bytes.slice();
         const result = await parseInWorker({ format: "msg", bytes: workerBytes.buffer }, controller.signal, [workerBytes.buffer]);
-        if (controller.signal.aborted) return;
+        if (abortRef.current !== controller || controller.signal.aborted) return;
         setInput(result.source);
         setSourceBytes(bytes);
         setSourceFormat("msg");
         setParsed(result.analysis);
         setError("");
-        workspace.save({ input: result.source, sourceFormat: "msg", sourceBytes: bytes, parsed: result.analysis });
+        workspace.save(persistableEmailWorkspace({ input: result.source, sourceFormat: "msg", sourceBytes: bytes, parsed: result.analysis }));
       } else {
         const source = new TextDecoder().decode(bytes);
         const result = await parseInWorker({ format: "eml", source }, controller.signal);
-        if (controller.signal.aborted) return;
+        if (abortRef.current !== controller || controller.signal.aborted) return;
         setInput(source);
         setSourceBytes(null);
         setSourceFormat("eml");
         setParsed(result.analysis);
-        workspace.save({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: result.analysis });
+        workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: result.analysis }));
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setParsed(null);
-      setSourceBytes(null);
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (abortRef.current === controller && active) {
+        setParsed(null);
+        setSourceBytes(null);
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -196,13 +235,28 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     setSourceFormat("eml");
     setSourceBytes(null);
     setParsed(null);
+    resetAttachmentHashes();
     setError("");
     setBodyMode("text");
     setDropActive(false);
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  React.useEffect(() => () => abortRef.current?.abort(), []);
+  React.useEffect(() => () => {
+    abortRef.current?.abort();
+    attachmentHashAbortRef.current?.abort();
+  }, []);
+
+  React.useEffect(() => {
+    if (active) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    attachmentHashAbortRef.current?.abort();
+    attachmentHashAbortRef.current = null;
+    attachmentHashRequestRef.current += 1;
+    setLoading(false);
+    setAttachmentHashingKey("");
+  }, [active]);
 
   const downloadRawEmail = () => {
     if (sourceFormat === "msg" && sourceBytes) {
@@ -211,7 +265,10 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     } else if (input.trim()) downloadTextFile(`email-source-${Date.now()}.eml`, input, "message/rfc822;charset=utf-8");
   };
 
+  const attachmentAvailable = (attachment: EmailAnalysis["attachments"][number]) => attachment.size === 0 || attachment.content.byteLength >= attachment.size;
+
   const downloadAttachment = (attachment: EmailAnalysis["attachments"][number]) => {
+    if (!attachmentAvailable(attachment)) return;
     const bytes = attachment.content.slice();
     const extension = emailAttachmentPreferredExtension(attachment);
     const fallback = `attachment.${extension}`;
@@ -220,8 +277,34 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
     downloadBlob(fileName, new Blob([bytes.buffer], { type: attachment.contentType || "application/octet-stream" }));
   };
 
+  const attachmentKey = (attachment: EmailAnalysis["attachments"][number], index: number) => `${index}:${attachment.filename}:${attachment.size}`;
+
+  const hashAttachment = async (attachment: EmailAnalysis["attachments"][number], index: number) => {
+    if (!active) return;
+    const key = attachmentKey(attachment, index);
+    if (attachmentHashes[key] || attachmentHashingKey) return;
+    const requestId = ++attachmentHashRequestRef.current;
+    setAttachmentHashingKey(key);
+    setAttachmentHashError("");
+    attachmentHashAbortRef.current?.abort();
+    const controller = new AbortController();
+    attachmentHashAbortRef.current = controller;
+    try {
+      const bytes = attachment.content.slice();
+      const result = await hashBytesInWorker(bytes, ["sha256"], { signal: controller.signal });
+      if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
+      if (attachmentHashAbortRef.current !== controller || controller.signal.aborted || requestId !== attachmentHashRequestRef.current) return;
+      setAttachmentHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
+    } catch (caught) {
+      if (attachmentHashAbortRef.current === controller && active && requestId === attachmentHashRequestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setAttachmentHashError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (attachmentHashAbortRef.current === controller) attachmentHashAbortRef.current = null;
+      if (requestId === attachmentHashRequestRef.current) setAttachmentHashingKey("");
+    }
+  };
+
   const downloadAttachmentsZip = () => {
-    if (!parsed?.attachments.length) return;
+    if (!parsed?.attachments.length || parsed.attachments.some((attachment) => !attachmentAvailable(attachment))) return;
     const files: Record<string, Uint8Array> = {};
     parsed.attachments.forEach((attachment, index) => {
       const fallback = `attachment-${index + 1}.${emailAttachmentPreferredExtension(attachment)}`;
@@ -258,7 +341,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
           onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />
-        {parsed ? <div className="email-loaded-source"><div><strong>{emailSummaryValue(parsed, "Subject") || (english ? "Parsed email" : "已解析邮件")}</strong><span>{sourceFormat.toUpperCase()} · {formatBytes(parsed.rawSize)} · {parsed.attachments.length} {t.attachments} · {storageState === "saved" ? (english ? "saved locally" : "已保留") : storageState === "saving" ? (english ? "saving" : "正在保留") : storageState === "failed" ? (english ? "not saved" : "未保留") : ""}</span></div><div className="button-row compact-buttons"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Replace" : "更换文件"}</AButton><AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton><AButton variant="text" onClick={clearEmail}>{t.clear}</AButton></div></div> : <><div
+        {parsed ? <div className="email-loaded-source"><div><strong>{emailSummaryValue(parsed, "Subject") || (english ? "Parsed email" : "已解析邮件")}</strong><span>{sourceFormat.toUpperCase()} · {formatBytes(parsed.rawSize)} · {parsed.attachments.length} {t.attachments} · {storageState === "saved" ? (english ? "saved locally" : "已保留") : storageState === "saving" ? (english ? "saving" : "正在保留") : storageState === "failed" ? (english ? "not saved" : "未保留") : ""}</span></div><div className="button-row compact-buttons"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Replace" : "更换文件"}</AButton><AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} title={sourceFormat === "msg" && !sourceBytes ? (english ? "Re-analyze the MSG file to download the original." : "请重新分析 MSG 文件后下载原始文件。") : undefined} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton><AButton variant="text" onClick={clearEmail}>{t.clear}</AButton></div></div> : <><div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"
           tabIndex={0}
@@ -286,7 +369,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
-          <AButton variant="text" disabled={!input.trim()} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
+          <AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>
         <textarea
@@ -359,7 +442,7 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
               <div className="button-row compact-buttons">
                 <AButton variant={bodyMode === "text" ? "filled" : "outlined"} onClick={() => setBodyMode("text")}>Text</AButton>
                 <AButton variant={bodyMode === "html" ? "filled" : "outlined"} disabled={!parsed.bodyHtml} onClick={() => setBodyMode("html")}>HTML</AButton>
-                <AButton variant="text" disabled={!displayedBody} onClick={() => void navigator.clipboard.writeText(displayedBody)}>{t.copy}</AButton>
+                <AButton variant="text" disabled={!displayedBody} onClick={() => void copyText(displayedBody)}>{t.copy}</AButton>
               </div>
             </div>
             {bodyMode === "html" && safeBodyHtml
@@ -370,12 +453,12 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="tool-panel wide-panel email-attachments-panel">
             <div className="panel-heading-row">
               <PanelTitle title={t.attachments} />
-              <AButton variant="text" disabled={!parsed.attachments.length} onClick={downloadAttachmentsZip}>ZIP</AButton>
+              <AButton variant="text" disabled={!parsed.attachments.length || parsed.attachments.some((attachment) => !attachmentAvailable(attachment))} title={parsed.attachments.some((attachment) => !attachmentAvailable(attachment)) ? (english ? "Re-analyze the email to download all attachments." : "请重新分析邮件后下载全部附件。") : undefined} onClick={downloadAttachmentsZip}>ZIP</AButton>
             </div>
             {parsed.attachments.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.emailSignature}</th><th>{t.emailDownloadAttachment}</th></tr></thead>
+                  <thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.emailSignature}</th><th>SHA-256</th><th>{t.emailDownloadAttachment}</th></tr></thead>
                   <tbody>
                     {parsed.attachments.map((attachment, index) => (
                       <tr key={`${attachment.filename}-${attachment.size}-${index}`}>
@@ -383,13 +466,19 @@ export function EmailTool({ t }: { t: (typeof copy)["zh"] }) {
                         <td>{attachment.contentType || "--"}</td>
                         <td>{formatBytes(attachment.size)}</td>
                         <td>{attachment.signature || "--"}</td>
-                        <td><AButton variant="text" onClick={() => downloadAttachment(attachment)}>{t.emailDownloadAttachment}</AButton></td>
+                        <td>
+                          {attachmentHashes[attachmentKey(attachment, index)]
+                            ? <button type="button" className="email-attachment-hash" title={t.copy} onClick={() => void copyText(attachmentHashes[attachmentKey(attachment, index)])}>{attachmentHashes[attachmentKey(attachment, index)]}</button>
+                            : <AButton variant="text" disabled={!attachmentAvailable(attachment) || Boolean(attachmentHashingKey)} onClick={() => void hashAttachment(attachment, index)}>{!attachmentAvailable(attachment) ? (english ? "Re-analyze" : "需重新分析") : attachmentHashingKey === attachmentKey(attachment, index) ? (english ? "Calculating..." : "计算中...") : (english ? "Calculate" : "计算")}</AButton>}
+                        </td>
+                        <td><AButton variant="text" disabled={!attachmentAvailable(attachment)} title={!attachmentAvailable(attachment) ? (english ? "Re-analyze the email to download this attachment." : "请重新分析邮件后下载此附件。") : undefined} onClick={() => downloadAttachment(attachment)}>{attachmentAvailable(attachment) ? t.emailDownloadAttachment : (english ? "Re-analyze" : "需重新分析")}</AButton></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : <div className="empty-state">--</div>}
+            {attachmentHashError && <div className="empty-state error-state">{attachmentHashError}</div>}
           </div>
 
           <details className="image-advanced-shell email-advanced-shell wide-panel">

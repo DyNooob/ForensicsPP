@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 export type EvtxEvent = {
@@ -55,6 +55,21 @@ export type EvtxFileAnalysis = {
   truncated: boolean;
   events: EvtxEvent[];
 };
+
+const MAX_PERSISTED_EVTX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+
+export function persistableEvtxResults(results: Array<EvtxFileAnalysis | { source: string; size: number; error: string }>) {
+  const estimatedBytes = results.reduce((total, file) => {
+    if (!("events" in file)) return total + file.source.length + file.error.length + 64;
+    return total + file.source.length + file.events.reduce((eventTotal, event) => eventTotal
+      + event.xml.length + event.message.length + event.provider.length + event.channel.length
+      + Object.entries(event.data).reduce((dataTotal, [key, value]) => dataTotal + key.length + value.length, 0), 0);
+  }, 0);
+  if (estimatedBytes <= MAX_PERSISTED_EVTX_SNAPSHOT_BYTES) return results;
+  return results.map((file) => "events" in file
+    ? { ...file, events: file.events.map((event) => ({ ...event, xml: "" })) }
+    : file);
+}
 
 const LEVEL_NAMES: Record<number, string> = {
   0: "LogAlways",

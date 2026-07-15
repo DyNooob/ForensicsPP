@@ -8,7 +8,7 @@ Forensics++ is currently a pre-1.0 project. Older snapshots and previously gener
 
 ## Reporting a Vulnerability
 
-Please use GitHub's private vulnerability reporting feature for the repository when it is available. If private reporting is unavailable, contact the maintainer through the contact information published on [loken.cn](https://www.loken.cn) and avoid including sensitive evidence or exploit details in the first message.
+Please contact the maintainer privately at [toolab@digiforensics.cn](mailto:toolab@digiforensics.cn). Do not open a public issue with exploit details, real evidence, credentials, or private email content. Keep the first message limited to the minimum synthetic reproduction needed to establish the issue.
 
 Please include:
 

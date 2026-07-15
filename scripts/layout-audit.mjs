@@ -7,7 +7,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { spawn } from "node:child_process";
@@ -40,7 +40,7 @@ const screenshotDir = process.env.AUDIT_SCREENSHOT_DIR || "layout-audit-screensh
 const legalVersion = "2026-07-13-v2";
 const legacyEvidenceCleanupVersion = "2026-07-13-v1";
 
-const tools = [
+const allTools = [
   "home",
   "cyberchef",
   "image",
@@ -78,6 +78,8 @@ const tools = [
   "pcap",
   "yara"
 ];
+const requestedTools = process.env.AUDIT_TOOLS?.split(",").map((tool) => tool.trim()).filter(Boolean) ?? [];
+const tools = requestedTools.length ? allTools.filter((tool) => requestedTools.includes(tool)) : allTools;
 
 const splitEmptyStartupTools = new Set([
   "password",
@@ -206,7 +208,7 @@ Attachment hash note: sha256=3D0f4c9a9bb0b9a1d90b770abfe4c313
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 
-<html><body><p>Evidence triage summary</p><p><a href=3D"https://case.example.org/review?id=3D42">Open case</a></p></body></html>
+<html><body><style>@import url("https://case.example.org/remote.css");</style><p style=3D"background-image:url(https://case.example.org/pixel.gif)">Evidence triage summary</p><p><a href=3D"https://case.example.org/review?id=3D42">Open case</a></p></body></html>
 
 --fpp-boundary
 Content-Type: text/plain; name="notes.txt"
@@ -380,7 +382,7 @@ async function createFileToolFixtures() {
   const png = Buffer.concat([createAuditPng(), Buffer.from("\nFPP_TRAILER_TEST\n", "utf8")]);
   await writeFile(pngPath, png);
 
-  const qr = QrCode.encodeText("https://github.com/DyNooob/ForensicsPP", Ecc.MEDIUM);
+  const qr = QrCode.encodeText("https://git.loken.cn/dynooob/ForensicsPP", Ecc.MEDIUM);
   const quietZone = 4;
   const viewSize = qr.size + quietZone * 2;
   const modules = [];
@@ -659,6 +661,22 @@ function visiblePanelAuditExpression(tool) {
           right: Math.round(r.right)
         };
       });
+    const sidebar = document.querySelector(".tool-sidebar");
+    const sidebarStyle = sidebar ? (() => {
+      const computed = getComputedStyle(sidebar);
+      const rect = sidebar.getBoundingClientRect();
+      return {
+        dataTheme: sidebar.getAttribute("data-theme-mode") || "",
+        rootTheme: document.documentElement.getAttribute("data-theme-mode") || "",
+        backgroundColor: computed.backgroundColor,
+        backgroundImage: computed.backgroundImage,
+        opacity: computed.opacity,
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      };
+    })() : null;
     return {
       tool: ${JSON.stringify(tool)},
       title: document.querySelector(".page-title")?.textContent || "",
@@ -682,6 +700,7 @@ function visiblePanelAuditExpression(tool) {
         cls: node.className?.toString?.() || ""
       })),
       emptyStateSplitRows,
+      sidebarStyle,
       panels: visiblePanels.slice(0, 6).map(rect),
       overlaps,
       overflowers
@@ -766,13 +785,39 @@ async function stopChrome(chrome) {
 }
 
 async function auditConsentBar(client) {
+  await client.send("Runtime.evaluate", {
+    expression: `new Promise((resolve) => {
+      const request = indexedDB.open("forensicspp-workspaces", 1);
+      request.onerror = () => resolve(false);
+      request.onsuccess = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains("tool-sessions")) {
+          database.close();
+          resolve(false);
+          return;
+        }
+        const transaction = database.transaction("tool-sessions", "readwrite");
+        transaction.objectStore("tool-sessions").delete("app-state:forensicspp:legal.acceptedVersion");
+        transaction.oncomplete = () => { database.close(); resolve(true); };
+        transaction.onerror = () => { database.close(); resolve(false); };
+      };
+    })`,
+    awaitPromise: true
+  });
   await loadToolState(client, "home", { cleanHome: true, legalAccepted: false });
+  await waitForRuntimeValue(
+    client,
+    "Boolean(document.querySelector('.legal-consent-modal .ant-modal-content')) && Boolean(document.querySelector('.ant-modal-mask'))",
+    5000
+  );
   const result = await client.send("Runtime.evaluate", {
     expression: `(() => {
-      const panel = document.querySelector(".legal-consent-modal .ant-modal-content");
-      const mask = document.querySelector(".ant-modal-mask");
+      const panel = document.querySelector(".legal-consent-modal .ant-modal-content")
+        || document.querySelector(".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal-content");
+      const modal = panel?.closest(".ant-modal");
+      const mask = modal?.parentElement?.previousElementSibling || document.querySelector(".ant-modal-mask");
       const panelRect = panel?.getBoundingClientRect();
-      const actions = [...document.querySelectorAll(".legal-consent-actions a, .legal-consent-actions button")];
+      const actions = [...(panel?.querySelectorAll(".legal-consent-actions a, .legal-consent-actions button") || [])];
       const ok = Boolean(panelRect)
         && Boolean(mask && getComputedStyle(mask).display !== "none")
         && panelRect.width <= Math.min(540, innerWidth - 24)
@@ -781,7 +826,7 @@ async function auditConsentBar(client) {
         && panelRect.top >= 8
         && panelRect.bottom <= innerHeight - 8
         && actions.length === 2
-        && !document.querySelector(".legal-consent-modal .ant-modal-close");
+        && !panel?.querySelector(".ant-modal-close");
       return {
         id: "home-consent",
         ok,
@@ -1016,6 +1061,22 @@ async function auditHashWorkflow(client) {
     }))()`,
     returnByValue: true
   });
+  await client.send("Runtime.evaluate", {
+    expression: `(() => {
+      const input = document.querySelector('.hash-simple-text-input');
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      if (!input || !setter) return false;
+      setter.call(input, 'hash audit changed');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`,
+    awaitPromise: true
+  });
+  await wait(180);
+  const changed = await client.send("Runtime.evaluate", {
+    expression: `Boolean(document.querySelector('.hash-simple-text-result'))`,
+    returnByValue: true
+  });
   return {
     id: "hash-workflow",
     ok: before.result.value?.result === false
@@ -1023,9 +1084,122 @@ async function auditHashWorkflow(client) {
       && /SHA[- ]?256/i.test(before.result.value?.checked?.[0] || "")
       && after.result.value?.result === true
       && after.result.value?.rows >= 1
-      && after.result.value?.overflowX <= 1,
+      && after.result.value?.overflowX <= 1
+      && changed.result.value === false,
     before: before.result.value,
-    after: after.result.value
+    after: after.result.value,
+    changed: changed.result.value
+  };
+}
+
+async function auditExplicitResultInvalidation(client) {
+  await loadToolState(client, "crypto", { cleanHome: false });
+  await client.send("Runtime.evaluate", {
+    expression: `[
+      "forensicspp:crypto.input.v2",
+      "forensicspp:crypto.output.v2",
+      "forensicspp:timestamp.input.v3",
+      "forensicspp:timestamp.submittedInput.v3",
+      "forensicspp:timestamp.batchInput.v3",
+      "forensicspp:timestamp.submittedBatchInput.v3"
+    ].forEach((key) => localStorage.removeItem(key));
+    location.reload();`,
+    awaitPromise: true
+  });
+  await wait(500);
+  await waitForRuntimeValue(client, "Boolean(document.querySelector('.crypto-simple-text-field textarea'))", 8000);
+
+  const setValue = async (selector, value, prototype) => {
+    const focused = await client.send("Runtime.evaluate", {
+      expression: `(() => {
+        const input = document.querySelector(${JSON.stringify(selector)});
+        if (!input) return false;
+        input.focus();
+        input.select?.();
+        return true;
+      })()`,
+      returnByValue: true
+    });
+    if (!focused.result.value) return false;
+    await client.send("Input.insertText", { text: value });
+    await client.send("Runtime.evaluate", {
+      expression: `(() => {
+        const input = document.querySelector(${JSON.stringify(selector)});
+        if (!input) return false;
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ${JSON.stringify(value)} }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return input.value === ${JSON.stringify(value)};
+      })()`,
+      returnByValue: true
+    });
+    await wait(180);
+    return true;
+  };
+
+  const cryptoSet = await setValue(".crypto-simple-text-field textarea", "crypto audit input", "HTMLTextAreaElement.prototype");
+  const cryptoReady = await waitForRuntimeValue(
+    client,
+    "Boolean(document.querySelector('.crypto-simple-text-field textarea')?.value) && document.querySelector('.crypto-simple-primary-action button')?.disabled === false",
+    5000
+  );
+  if (process.env.AUDIT_VERBOSE === "1") {
+    const cryptoInputState = await client.send("Runtime.evaluate", {
+      expression: `(() => { const input = document.querySelector('.crypto-simple-text-field textarea'); const button = document.querySelector('.crypto-simple-primary-action button'); return { found: Boolean(input), value: input?.value || '', disabled: button?.disabled ?? null, className: document.querySelector('.crypto-simple-workbench')?.className || '' }; })()`,
+      returnByValue: true
+    });
+    console.log("Crypto explicit input state:", JSON.stringify({ set: cryptoSet, ready: cryptoReady, state: cryptoInputState.result.value }));
+  }
+  await clickRuntimeButton(
+    client,
+    "document.querySelector('.crypto-simple-primary-action button')?.click();",
+    "Boolean(document.querySelector('.crypto-simple-result-panel'))"
+  );
+  const cryptoBefore = await client.send("Runtime.evaluate", {
+    expression: "Boolean(document.querySelector('.crypto-simple-result-panel'))",
+    returnByValue: true
+  });
+  await setValue(".crypto-simple-text-field textarea", "crypto audit changed", "HTMLTextAreaElement.prototype");
+  const cryptoAfter = await client.send("Runtime.evaluate", {
+    expression: "Boolean(document.querySelector('.crypto-simple-result-panel'))",
+    returnByValue: true
+  });
+
+  await loadToolState(client, "timestamp", { cleanHome: false });
+  await client.send("Runtime.evaluate", {
+    expression: `[
+      "forensicspp:timestamp.input.v3",
+      "forensicspp:timestamp.submittedInput.v3",
+      "forensicspp:timestamp.batchInput.v3",
+      "forensicspp:timestamp.submittedBatchInput.v3"
+    ].forEach((key) => localStorage.removeItem(key));
+    location.reload();`,
+    awaitPromise: true
+  });
+  await wait(500);
+  await setValue(".timestamp-simple-input-panel input[aria-label='时间戳数值'], .timestamp-simple-input-panel input[aria-label='Timestamp value']", "1719705600", "HTMLInputElement.prototype");
+  await clickRuntimeButton(
+    client,
+    `[...document.querySelectorAll('.timestamp-simple-input-panel button')].find((node) => ['转换', 'Convert'].includes((node.textContent || '').trim()))?.click();`,
+    "Boolean(document.querySelector('.timestamp-simple-result-panel'))"
+  );
+  const timestampBefore = await client.send("Runtime.evaluate", {
+    expression: "Boolean(document.querySelector('.timestamp-simple-result-panel'))",
+    returnByValue: true
+  });
+  await setValue(".timestamp-simple-input-panel input[aria-label='时间戳数值'], .timestamp-simple-input-panel input[aria-label='Timestamp value']", "1719705601", "HTMLInputElement.prototype");
+  const timestampAfter = await client.send("Runtime.evaluate", {
+    expression: "Boolean(document.querySelector('.timestamp-simple-result-panel'))",
+    returnByValue: true
+  });
+
+  return {
+    id: "explicit-result-invalidation",
+    ok: cryptoBefore.result.value === true
+      && cryptoAfter.result.value === false
+      && timestampBefore.result.value === true
+      && timestampAfter.result.value === false,
+    crypto: { before: cryptoBefore.result.value, after: cryptoAfter.result.value, set: cryptoSet, ready: cryptoReady },
+    timestamp: { before: timestampBefore.result.value, after: timestampAfter.result.value }
   };
 }
 
@@ -1250,6 +1424,59 @@ async function auditLoadedSqlite(client) {
     await client.send("Page.reload", { ignoreCache: true });
     await waitForRuntimeValue(client, "document.querySelector('.page-title')?.textContent.includes('SQLite')", 8000);
     const sessionRestored = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称')", 12000);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim().startsWith('修改'))?.click()`,
+      awaitPromise: true
+    });
+    const changesPageReady = await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-simple-changes-panel'))", 5000);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-simple-changes-panel button')].find((button) => (button.textContent || '').trim() === '导出数据库')?.click()`,
+      awaitPromise: true
+    });
+    await wait(1200);
+    const exportedBaselineSaved = await waitForRuntimeValue(client, "[...document.querySelectorAll('.sqlite-simple-changes-panel button')].some((button) => (button.textContent || '').trim() === '放弃修改' && button.disabled)", 3000);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '浏览')?.click()`,
+      awaitPromise: true
+    });
+    await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-browse-table'))", 5000);
+    await client.send("Runtime.evaluate", { expression: `(() => { const toggle = document.querySelector('.sqlite-edit-mode .ant-switch'); if (toggle?.getAttribute('aria-checked') !== 'true') toggle?.click(); })()`, awaitPromise: true });
+    await waitForRuntimeValue(client, "document.querySelector('.sqlite-edit-mode .ant-switch')?.getAttribute('aria-checked') === 'true'", 3000);
+    await client.send("Runtime.evaluate", {
+      expression: `document.querySelector('.sqlite-browse-table tbody tr')?.querySelectorAll('td')?.[4]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
+      awaitPromise: true
+    });
+    await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-inline-cell-editor'))", 5000);
+    await client.send("Runtime.evaluate", {
+      expression: `(() => { const input = document.querySelector('.sqlite-inline-cell-editor'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; if (input && setter) { setter.call(input, '二次修改'); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); } })()`,
+      awaitPromise: true
+    });
+    await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('二次修改')", 5000);
+    await wait(900);
+    await client.send("Page.reload", { ignoreCache: true });
+    await waitForRuntimeValue(client, "document.querySelector('.page-title')?.textContent.includes('SQLite')", 8000);
+    const secondEditRestored = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('二次修改')", 12000);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim().startsWith('修改'))?.click()`,
+      awaitPromise: true
+    });
+    await waitForRuntimeValue(client, "Boolean(document.querySelector('.sqlite-simple-changes-panel'))", 5000);
+    const changeRecorded = await waitForRuntimeValue(client, "document.querySelector('.sqlite-simple-changes-panel tbody')?.textContent.includes('cell-update')", 5000);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-simple-changes-panel button')].find((button) => (button.textContent || '').trim() === '放弃修改')?.click()`,
+      awaitPromise: true
+    });
+    const discardPromptReady = await waitForRuntimeValue(client, "Boolean(document.querySelector('.ant-popconfirm'))", 3000);
+    await client.send("Runtime.evaluate", {
+      expression: `document.querySelector('.ant-popconfirm .ant-popconfirm-buttons .ant-btn-primary')?.click()`,
+      awaitPromise: true
+    });
+    await wait(700);
+    await client.send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '浏览')?.click()`,
+      awaitPromise: true
+    });
+    const baselineRestorePassed = await waitForRuntimeValue(client, "document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('已更新名称') && !document.querySelector('.sqlite-browse-table tbody')?.textContent.includes('二次修改')", 5000);
     const resizeBefore = await client.send("Runtime.evaluate", {
       expression: `Math.round(document.querySelectorAll('.sqlite-browse-table thead th')[2]?.getBoundingClientRect().width || 0)`,
       returnByValue: true
@@ -1281,11 +1508,6 @@ async function auditLoadedSqlite(client) {
       awaitPromise: true
     });
     const sqlQueryPassed = await waitForRuntimeValue(client, "document.querySelector('.sqlite-query-table tbody')?.textContent.trim() === '3'", 5000);
-    await client.send("Runtime.evaluate", {
-      expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim().startsWith('修改'))?.click()`,
-      awaitPromise: true
-    });
-    const changeRecorded = await waitForRuntimeValue(client, "document.querySelector('.sqlite-simple-changes-panel tbody')?.textContent.includes('cell-update')", 5000);
     await client.send("Runtime.evaluate", {
       expression: `[...document.querySelectorAll('.sqlite-page-tabs button')].find((button) => (button.textContent || '').trim() === '浏览')?.click()`,
       awaitPromise: true
@@ -1321,6 +1543,11 @@ async function auditLoadedSqlite(client) {
             && ${JSON.stringify(cellEditSaved)}
             && ${JSON.stringify(toolStateRetained)}
             && ${JSON.stringify(sessionRestored)}
+            && ${JSON.stringify(changesPageReady)}
+            && ${JSON.stringify(exportedBaselineSaved)}
+            && ${JSON.stringify(secondEditRestored)}
+            && ${JSON.stringify(discardPromptReady)}
+            && ${JSON.stringify(baselineRestorePassed)}
             && ${JSON.stringify(columnResizePassed)}
             && ${JSON.stringify(sqlPageReady)}
             && ${JSON.stringify(sqlQueryPassed)}
@@ -1340,6 +1567,11 @@ async function auditLoadedSqlite(client) {
           cellEditSaved: ${JSON.stringify(cellEditSaved)},
           toolStateRetained: ${JSON.stringify(toolStateRetained)},
           sessionRestored: ${JSON.stringify(sessionRestored)},
+          changesPageReady: ${JSON.stringify(changesPageReady)},
+          exportedBaselineSaved: ${JSON.stringify(exportedBaselineSaved)},
+          secondEditRestored: ${JSON.stringify(secondEditRestored)},
+          discardPromptReady: ${JSON.stringify(discardPromptReady)},
+          baselineRestorePassed: ${JSON.stringify(baselineRestorePassed)},
           columnResizePassed: ${JSON.stringify(columnResizePassed)},
           sqlPageReady: ${JSON.stringify(sqlPageReady)},
           sqlQueryPassed: ${JSON.stringify(sqlQueryPassed)},
@@ -1439,6 +1671,8 @@ async function auditLoadedEmail(client) {
         const htmlPreviewReady = Boolean(
           htmlPreview?.getAttribute("srcdoc")?.includes("Evidence triage summary")
         );
+        const htmlPreviewSource = htmlPreview?.getAttribute("srcdoc") || "";
+        const htmlPreviewSafe = !/@import|url\\s*\\(/i.test(htmlPreviewSource);
         const rawSourceReady = Boolean(
           rawSource?.textContent?.includes("From:")
           && rawSource.textContent.includes("Subject:")
@@ -1447,20 +1681,29 @@ async function auditLoadedEmail(client) {
           id: "email-loaded",
           ok: Boolean(containerRect && source && summary && auth && route)
             && htmlPreviewReady
+            && htmlPreviewSafe
             && rawSourceReady
             && document.documentElement.scrollWidth === document.documentElement.clientWidth
-            && summaryRect.width >= containerRect.width * 0.9,
+            && Boolean(summaryRect && containerRect && summaryRect.width >= containerRect.width * 0.9),
           container: containerRect ? { w: Math.round(containerRect.width), h: Math.round(containerRect.height) } : null,
           summary: summaryRect ? { w: Math.round(summaryRect.width), h: Math.round(summaryRect.height) } : null,
           authRows: document.querySelectorAll('.email-auth-panel tbody tr').length,
           routeRows: document.querySelectorAll('.email-route-panel tbody tr').length,
           htmlPreviewReady,
+          htmlPreviewSafe,
           rawSourceReady,
           overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth
         };
       })()`,
       returnByValue: true
     });
+    if (!result.result.value) {
+      return {
+        id: "email-loaded",
+        ok: false,
+        error: result.exceptionDetails?.exception?.description || result.exceptionDetails?.text || "Email layout evaluation returned no result"
+      };
+    }
     return result.result.value;
   } finally {
     await rm(fixture.dir, { recursive: true, force: true });
@@ -1785,9 +2028,9 @@ const seededToolStates = [
     tool: "regex",
     readyClass: ".regex-workbench.has-regex",
     values: {
-      "regex.pattern": "\\bhttps?:\\/\\/[^\\s\\\"'<>]+|\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
-      "regex.flags": "gi",
-      "regex.text.v2": "2026-07-08T09:12:33Z user=analyst ip=203.0.113.42 visited https://case.example.org/login?token=abc123",
+      "regex.pattern.v3": "\\bhttps?:\\/\\/[^\\s\\\"'<>]+|\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+      "regex.flags.v3": "gi",
+      "regex.source.v3": "2026-07-08T09:12:33Z user=analyst ip=203.0.113.42 visited https://case.example.org/login?token=abc123",
       "regex.replacement": "[REDACTED]"
     }
   },
@@ -2086,6 +2329,7 @@ async function main() {
     const themeSwitchCheck = await auditThemeSwitch(client);
     const selectPopupCheck = await auditSelectPopup(client);
     const hashWorkflowCheck = await auditHashWorkflow(client);
+    const explicitResultInvalidationCheck = await auditExplicitResultInvalidation(client);
     const reporterCheck = await auditReporter(client);
     const fileInputAccessibilityCheck = await auditFileInputAccessibility(client);
     if (process.env.AUDIT_VERBOSE === "1") console.log("Auditing seeded states");
@@ -2132,7 +2376,7 @@ async function main() {
         (width >= 900 && item.container.w < 700) ||
         item.visiblePanelCount === 0;
     });
-    const specialChecks = [consentCheck, passwordFilledCheck, collapsedToolCenterCheck, loadedSqliteCheck, loadedEmailCheck, loadedSqlCheck, themeSwitchCheck, selectPopupCheck, hashWorkflowCheck, reporterCheck, fileInputAccessibilityCheck];
+    const specialChecks = [consentCheck, passwordFilledCheck, collapsedToolCenterCheck, loadedSqliteCheck, loadedEmailCheck, loadedSqlCheck, themeSwitchCheck, selectPopupCheck, hashWorkflowCheck, explicitResultInvalidationCheck, reporterCheck, fileInputAccessibilityCheck];
     const specialAbnormal = specialChecks.filter((item) => !item.ok);
     const seededAbnormal = seededResults.filter((item) => !item.ready || item.overflowX !== 0 || item.overlaps.length || item.badWritingCellCount || item.unnamedControlCount || item.legacyControlCount || !item.container || item.visiblePanelCount === 0);
     const fileAbnormal = loadedFileResults.filter((item) => !item.ready || item.overflowX !== 0 || item.overlaps?.length || item.badWritingCellCount || item.unnamedControlCount || item.legacyControlCount || !item.container || item.visiblePanelCount === 0);

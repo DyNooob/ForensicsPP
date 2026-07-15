@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,37 +16,24 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
 import { Spin } from "antd";
 import { ToolWorkspaceFrame } from "./ui";
+import { ToolErrorBoundary } from "./ToolErrorBoundary";
 import type { ToolId } from "../config/app";
 import type { Lang } from "../models";
 import { copy } from "../i18n";
-import { analyzeEntropy, entropyBlockKey, entropyBlocksToCsv, entropyRangesToCsv } from "../features/entropy/analyzer";
-import { androidApkEntriesToCsv, androidComponentKey, androidComponentsToCsv, androidManifestSecurityRows, androidPermissionsToCsv, componentExportedEffective, parseAndroidManifest } from "../features/android/analyzer";
-import { annotateBatchHashMatches, parseExpectedHashSet } from "../features/hash/matching";
-import { extractJwtTokens, inspectJwtToken, jwtCryptoAlgorithm, signJwtHS256, verifyJwtAsymmetricSignature } from "../features/jwt/analyzer";
-import { mysqlNativePassword, passwordRowsToCsv, randomSalt, verifyPasswordCandidates } from "../features/password/analyzer";
-import { classifyQrPayload, parseQrPayloadDetails, qrGeometryRows, qrPointRow } from "../features/qr/analyzer";
-import { defaultYaraSample, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates } from "../features/yara/analyzer";
-import { extractPrintableStrings, stringRowKey, stringsToCsv } from "../features/strings/analyzer";
-import { analyzeWindowsArtifact } from "../features/windows/analyzer";
-import { analyzeFileBytes, binaryHexDumpRows, parseByteOffset } from "../features/file/analyzer";
-import { buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls } from "../features/image/analyzer";
-import { analyzePngEvidence } from "../features/png/analyzer";
-import { base64DecodeLoose, transformText } from "../features/codec/analyzer";
-import { affine, atbash, baconDecode, baconEncode, caesar, morseDecode, morseEncode, railFence, railFenceDecode, rot47, vigenere } from "../features/crypto/algorithms";
-import { parseTimestampCandidates } from "../features/timestamp/analyzer";
-import { analyzeIocs, iocRisk } from "../features/ioc/analyzer";
-import { base64UrlDecode } from "../utils/base64";
 
 const CyberChefTool = React.lazy(() => import("../tools/CyberChefTool").then((module) => ({ default: module.CyberChefTool })));
 const BaseConvertTool = React.lazy(() => import("../tools/BaseConvertTool").then((module) => ({ default: module.BaseConvertTool })));
 const UuidTool = React.lazy(() => import("../tools/UuidTool").then((module) => ({ default: module.UuidTool })));
-const RegexTool = React.lazy(() => import("../tools/RegexTool").then((module) => ({ default: module.RegexTool })));
+const RegexTool = React.lazy(async () => {
+  const [{ RegexTool }, ioc] = await Promise.all([import("../tools/RegexTool"), import("../features/ioc/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof RegexTool>, "classifyIocRisk">) => <RegexTool {...props} classifyIocRisk={ioc.iocRisk} /> };
+});
 const JsonTool = React.lazy(() => import("../tools/JsonTool").then((module) => ({ default: module.JsonTool })));
 const SqlTool = React.lazy(() => import("../tools/SqlTool").then((module) => ({ default: module.SqlTool })));
 const HomeTool = React.lazy(() => import("../tools/HomeTool").then((module) => ({ default: module.HomeTool })));
@@ -61,41 +48,60 @@ const EmailTool = React.lazy(() => import("../tools/EmailTool").then((module) =>
 const TimestampTool = React.lazy(() => import("../tools/TimestampTool").then((module) => ({ default: module.TimestampTool })));
 const TimelineTool = React.lazy(() => import("../tools/TimelineTool").then((module) => ({ default: module.TimelineTool })));
 const PcapTool = React.lazy(() => import("../tools/PcapSimpleTool").then((module) => ({ default: module.PcapTool })));
-const ImageTool = React.lazy(() => import("../tools/ImageTool").then((module) => ({ default: module.ImageTool })));
-const CryptoTool = React.lazy(() => import("../tools/CryptoTool").then((module) => ({ default: module.CryptoTool })));
-const CodecTool = React.lazy(() => import("../tools/CodecTool").then((module) => ({ default: module.CodecTool })));
-const HashTool = React.lazy(() => import("../tools/HashTool").then((module) => ({ default: module.HashTool })));
-const JwtTool = React.lazy(() => import("../tools/JwtTool").then((module) => ({ default: module.JwtTool })));
-const PasswordTool = React.lazy(() => import("../tools/PasswordTool").then((module) => ({ default: module.PasswordTool })));
-const AndroidManifestTool = React.lazy(() => import("../tools/AndroidManifestTool").then((module) => ({ default: module.AndroidManifestTool })));
-const QrTool = React.lazy(() => import("../tools/QrTool").then((module) => ({ default: module.QrTool })));
-const YaraTool = React.lazy(() => import("../tools/YaraTool").then((module) => ({ default: module.YaraTool })));
-const StringsTool = React.lazy(() => import("../tools/StringsTool").then((module) => ({ default: module.StringsTool })));
-const EntropyTool = React.lazy(() => import("../tools/EntropyTool").then((module) => ({ default: module.EntropyTool })));
+const ImageTool = React.lazy(async () => {
+  const [{ ImageTool }, services] = await Promise.all([import("../tools/ImageTool"), import("../features/image/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof ImageTool>, "services">) => <ImageTool {...props} services={services} /> };
+});
+const CryptoTool = React.lazy(async () => {
+  const [{ CryptoTool }, services] = await Promise.all([import("../tools/CryptoTool"), import("../features/crypto/algorithms")]);
+  return { default: (props: Omit<React.ComponentProps<typeof CryptoTool>, "services">) => <CryptoTool {...props} services={services} /> };
+});
+const CodecTool = React.lazy(async () => {
+  const [{ CodecTool }, services] = await Promise.all([import("../tools/CodecTool"), import("../features/codec/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof CodecTool>, "services">) => <CodecTool {...props} services={services} /> };
+});
+const HashTool = React.lazy(async () => {
+  const [{ HashTool }, services] = await Promise.all([import("../tools/HashTool"), import("../features/hash/matching")]);
+  return { default: (props: Omit<React.ComponentProps<typeof HashTool>, "services">) => <HashTool {...props} services={services} /> };
+});
+const JwtTool = React.lazy(async () => {
+  const [{ JwtTool }, services] = await Promise.all([import("../tools/JwtTool"), import("../features/jwt/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof JwtTool>, "services">) => <JwtTool {...props} services={services} /> };
+});
+const PasswordTool = React.lazy(async () => {
+  const [{ PasswordTool }, services] = await Promise.all([import("../tools/PasswordTool"), import("../features/password/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof PasswordTool>, "services">) => <PasswordTool {...props} services={services} /> };
+});
+const AndroidManifestTool = React.lazy(async () => {
+  const [{ AndroidManifestTool }, services] = await Promise.all([import("../tools/AndroidManifestTool"), import("../features/android/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof AndroidManifestTool>, "services">) => <AndroidManifestTool {...props} services={services} /> };
+});
+const QrTool = React.lazy(async () => {
+  const [{ QrTool }, qr, image] = await Promise.all([import("../tools/QrTool"), import("../features/qr/analyzer"), import("../features/image/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof QrTool>, "services">) => <QrTool {...props} services={{ ...qr, detectImageFormat: image.detectImageFormat }} /> };
+});
+const YaraTool = React.lazy(async () => {
+  const [{ YaraTool }, services] = await Promise.all([import("../tools/YaraTool"), import("../features/yara/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof YaraTool>, "services">) => <YaraTool {...props} services={services} /> };
+});
+const StringsTool = React.lazy(async () => {
+  const [{ StringsTool }, services] = await Promise.all([import("../tools/StringsTool"), import("../features/strings/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof StringsTool>, "services">) => <StringsTool {...props} services={services} /> };
+});
+const EntropyTool = React.lazy(async () => {
+  const [{ EntropyTool }, services] = await Promise.all([import("../tools/EntropyTool"), import("../features/entropy/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof EntropyTool>, "services">) => <EntropyTool {...props} services={services} /> };
+});
 const FileIdTool = React.lazy(() => import("../tools/FileIdTool").then((module) => ({ default: module.FileIdTool })));
-const BinaryTool = React.lazy(() => import("../tools/BinaryTool").then((module) => ({ default: module.BinaryTool })));
+const BinaryTool = React.lazy(async () => {
+  const [{ BinaryTool }, services] = await Promise.all([import("../tools/BinaryTool"), import("../features/file/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof BinaryTool>, "services">) => <BinaryTool {...props} services={services} /> };
+});
 const HttpTool = React.lazy(() => import("../tools/HttpTool").then((module) => ({ default: module.HttpTool })));
 const WindowsArtifactTool = React.lazy(() => import("../tools/WindowsArtifactTool").then((module) => ({ default: module.WindowsArtifactTool })));
 const PngTool = React.lazy(() => import("../tools/PngTool").then((module) => ({ default: module.PngTool })));
 const UrlTool = React.lazy(() => import("../tools/UrlTool").then((module) => ({ default: module.UrlTool })));
 const ArchiveTool = React.lazy(() => import("../tools/ArchiveTool").then((module) => ({ default: module.ArchiveTool })));
-
-const services = {
-  png: { analyzePngEvidence },
-  windows: { analyzeWindowsArtifact },
-  binary: { analyzeFileBytes, binaryHexDumpRows, parseByteOffset },
-  strings: { extractPrintableStrings, stringRowKey, stringsToCsv },
-  entropy: { analyzeEntropy, entropyBlockKey, entropyBlocksToCsv, entropyRangesToCsv },
-  yara: { defaultYaraSample, yaraBatchRowsToCsv, yaraHitsToCsv, yaraRuleTemplates },
-  qr: { classifyQrPayload, detectImageFormat, parseQrPayloadDetails, qrGeometryRows, qrPointRow },
-  android: { androidComponentKey, androidManifestSecurityRows, componentExportedEffective, parseAndroidManifest, androidComponentsToCsv, androidPermissionsToCsv, androidApkEntriesToCsv },
-  password: { mysqlNativePassword, randomSalt, verifyPasswordCandidates, passwordRowsToCsv },
-  jwt: { inspectJwtToken, extractJwtTokens, jwtCryptoAlgorithm, verifyJwtAsymmetricSignature, signJwtHS256 },
-  hash: { annotateBatchHashMatches, parseExpectedHashSet },
-  codec: { transformText },
-  crypto: { caesar, atbash, rot47, vigenere, affine, morseEncode, morseDecode, baconEncode, baconDecode, railFence, railFenceDecode },
-  image: { buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, revokeImageObjectUrls }
-};
 
 type ToolHostProps = {
   toolId: ToolId;
@@ -111,49 +117,51 @@ export function ToolHost({ toolId, active, t, lang, recentTools, setActiveTool, 
   const handleDirtyChange = React.useCallback((dirty: boolean) => setToolDirty(toolId, dirty), [setToolDirty, toolId]);
   return (
     <div className="tool-retained-view" data-tool-id={toolId} hidden={!active}>
+      <ToolErrorBoundary title={t.toolErrorTitle} detail={t.toolErrorDetail} retryLabel={t.retryTool}>
       {toolId === "home" ? (
         <HomeTool t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} />
       ) : (
         <ToolWorkspaceFrame>
           <React.Suspense fallback={<div className="tool-loading-state" role="status" aria-live="polite"><Spin size="small" /><span>{t.loadingTool}</span></div>}>
             {toolId === "cyberchef" && <CyberChefTool t={t} />}
-            {toolId === "image" && <ImageTool t={t} services={services.image} />}
-            {toolId === "codec" && <CodecTool t={t} services={services.codec} />}
-            {toolId === "crypto" && <CryptoTool t={t} services={services.crypto} />}
-            {toolId === "jwt" && <JwtTool t={t} services={services.jwt} />}
-            {toolId === "password" && <PasswordTool t={t} services={services.password} />}
-            {toolId === "sql" && <SqlTool t={t} />}
-            {toolId === "sqlite" && <SqliteTool t={t} onDirtyChange={handleDirtyChange} />}
-            {toolId === "registry" && <RegistryTool t={t} />}
-            {toolId === "plist" && <PlistTool t={t} />}
-            {toolId === "browserartifacts" && <BrowserArtifactTool t={t} />}
-            {toolId === "evtx" && <EvtxTool t={t} />}
-            {toolId === "documentforensics" && <DocumentForensicsTool t={t} />}
-            {toolId === "android" && <AndroidManifestTool t={t} services={services.android} />}
-            {toolId === "ioc" && <IocTool t={t} />}
-            {toolId === "email" && <EmailTool t={t} />}
+            {toolId === "image" && <ImageTool t={t} active={active} />}
+            {toolId === "codec" && <CodecTool t={t} active={active} />}
+            {toolId === "crypto" && <CryptoTool t={t} />}
+            {toolId === "jwt" && <JwtTool t={t} active={active} />}
+            {toolId === "password" && <PasswordTool t={t} active={active} />}
+            {toolId === "sql" && <SqlTool t={t} active={active} />}
+            {toolId === "sqlite" && <SqliteTool t={t} active={active} onDirtyChange={handleDirtyChange} />}
+            {toolId === "registry" && <RegistryTool t={t} active={active} />}
+            {toolId === "plist" && <PlistTool t={t} active={active} />}
+            {toolId === "browserartifacts" && <BrowserArtifactTool t={t} active={active} />}
+            {toolId === "evtx" && <EvtxTool t={t} active={active} />}
+            {toolId === "documentforensics" && <DocumentForensicsTool t={t} active={active} />}
+            {toolId === "android" && <AndroidManifestTool t={t} active={active} />}
+            {toolId === "ioc" && <IocTool t={t} active={active} />}
+            {toolId === "email" && <EmailTool t={t} active={active} />}
             {toolId === "urltool" && <UrlTool t={t} />}
-            {toolId === "http" && <HttpTool t={t} />}
-            {toolId === "qr" && <QrTool t={t} services={services.qr} />}
-            {toolId === "fileid" && <FileIdTool t={t} />}
-            {toolId === "png" && <PngTool t={t} services={services.png} />}
-            {toolId === "archive" && <ArchiveTool t={t} />}
-            {toolId === "binary" && <BinaryTool t={t} services={services.binary} />}
-            {toolId === "windows" && <WindowsArtifactTool t={t} services={services.windows} />}
-            {toolId === "strings" && <StringsTool t={t} services={services.strings} />}
-            {toolId === "entropy" && <EntropyTool t={t} services={services.entropy} />}
-            {toolId === "hash" && <HashTool t={t} services={services.hash} />}
-            {toolId === "timestamp" && <TimestampTool t={t} />}
-            {toolId === "timeline" && <TimelineTool t={t} />}
+            {toolId === "http" && <HttpTool t={t} active={active} />}
+            {toolId === "qr" && <QrTool t={t} active={active} />}
+            {toolId === "fileid" && <FileIdTool t={t} active={active} />}
+            {toolId === "png" && <PngTool t={t} active={active} />}
+            {toolId === "archive" && <ArchiveTool t={t} active={active} />}
+            {toolId === "binary" && <BinaryTool t={t} active={active} />}
+            {toolId === "windows" && <WindowsArtifactTool t={t} active={active} />}
+            {toolId === "strings" && <StringsTool t={t} active={active} />}
+            {toolId === "entropy" && <EntropyTool t={t} active={active} />}
+            {toolId === "hash" && <HashTool t={t} active={active} />}
+            {toolId === "timestamp" && <TimestampTool t={t} active={active} />}
+            {toolId === "timeline" && <TimelineTool t={t} active={active} />}
             {toolId === "baseconvert" && <BaseConvertTool t={t} />}
             {toolId === "uuid" && <UuidTool t={t} />}
-            {toolId === "json" && <JsonTool t={t} analyzeIocs={analyzeIocs} parseTimestampCandidates={parseTimestampCandidates} decodeBase64Url={base64UrlDecode} decodeBase64Loose={base64DecodeLoose} />}
-            {toolId === "regex" && <RegexTool t={t} classifyIocRisk={iocRisk} />}
-            {toolId === "pcap" && <PcapTool t={t} />}
-            {toolId === "yara" && <YaraTool t={t} services={services.yara} />}
+            {toolId === "json" && <JsonTool t={t} active={active} />}
+            {toolId === "regex" && <RegexTool t={t} active={active} />}
+            {toolId === "pcap" && <PcapTool t={t} active={active} />}
+            {toolId === "yara" && <YaraTool t={t} active={active} />}
           </React.Suspense>
         </ToolWorkspaceFrame>
       )}
+      </ToolErrorBoundary>
     </div>
   );
 }

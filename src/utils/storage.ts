@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,34 +16,176 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import React from "react";
 import { storagePrefix } from "../config/app";
-import { clearToolSessions } from "./toolSessions";
+import { clearToolSessions, readToolSessionResult, removeToolSession, writeToolSession } from "./toolSessions";
 
-export function useStoredState<T>(key: string, initialValue: T) {
+const INDEXED_STATE_THRESHOLD = 128 * 1024;
+const indexedStateKeys = new Set<string>();
+const indexedStateQueues = new Map<string, Promise<unknown>>();
+
+type IndexedStateEnvelope<T> = {
+  version: 1;
+  value: T;
+};
+
+type StoredStateValidator<T> = (value: unknown) => value is T;
+
+export function isStoredValueCompatible(value: unknown, initialValue: unknown) {
+  if (Array.isArray(initialValue)) return Array.isArray(value);
+  if (initialValue === null) return value === null;
+  if (typeof initialValue === "object") return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === typeof initialValue;
+}
+
+function indexedStateId(storageKey: string) {
+  return `app-state:${storageKey}`;
+}
+
+function indexedStateMarkerKey(storageKey: string) {
+  return `${storageKey}:indexed`;
+}
+
+function enqueueIndexedState<T>(storageKey: string, task: () => Promise<T>) {
+  const previous = indexedStateQueues.get(storageKey) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  indexedStateQueues.set(storageKey, next.then(() => undefined, () => undefined));
+  return next;
+}
+
+export function shouldUseIndexedState(serialized: string) {
+  return serialized.length > INDEXED_STATE_THRESHOLD;
+}
+
+export function parseStoredState<T>(serialized: string | null, isValid?: StoredStateValidator<T>): { found: boolean; value?: T } {
+  if (serialized == null) return { found: false };
+  try {
+    const value: unknown = JSON.parse(serialized);
+    return !isValid || isValid(value) ? { found: true, value: value as T } : { found: false };
+  } catch {
+    return { found: false };
+  }
+}
+
+export function useStoredState<T>(key: string, initialValue: T, isValid?: StoredStateValidator<T>) {
   const storageKey = `${storagePrefix}${key}`;
+  const initialValueRef = React.useRef(initialValue);
+  const validateStoredValue = React.useCallback<StoredStateValidator<T>>((candidate): candidate is T => {
+    return isValid ? isValid(candidate) : isStoredValueCompatible(candidate, initialValueRef.current);
+  }, [isValid]);
   const [value, setValue] = React.useState<T>(() => {
     if (typeof window === "undefined") return initialValue;
     try {
-      const stored = window.localStorage.getItem(storageKey);
-      return stored == null ? initialValue : (JSON.parse(stored) as T);
+      const stored = parseStoredState<T>(window.localStorage.getItem(storageKey), validateStoredValue);
+      return stored.found ? (stored.value as T) : initialValue;
     } catch {
       return initialValue;
     }
   });
+  const [hydrated, setHydrated] = React.useState(false);
+  const userInteractedRef = React.useRef(false);
+  const persistValueRef = React.useRef<() => void>(() => undefined);
+  const storageKeyRef = React.useRef(storageKey);
+  if (storageKeyRef.current !== storageKey) {
+    storageKeyRef.current = storageKey;
+    userInteractedRef.current = false;
+  }
 
   React.useEffect(() => {
+    let active = true;
+    let hasLocalValue = false;
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(value));
+      hasLocalValue = parseStoredState<T>(window.localStorage.getItem(storageKey), validateStoredValue).found;
     } catch {
-      // Ignore storage quota and private-mode failures.
+      // Fall through to the IndexedDB restore path.
     }
-  }, [storageKey, value]);
+    if (hasLocalValue) {
+      setHydrated(true);
+      return () => { active = false; };
+    }
+    void enqueueIndexedState(storageKey, () => readToolSessionResult<IndexedStateEnvelope<T>>(indexedStateId(storageKey))).then(({ value: stored }) => {
+      if (!active) return;
+      const validStored = stored?.version === 1 && validateStoredValue(stored.value);
+      if (validStored && !userInteractedRef.current) {
+        setValue(stored.value);
+        indexedStateKeys.add(storageKey);
+      } else if (stored && !validStored) {
+        // Do not keep an obsolete workspace that will fail validation on every load.
+        void enqueueIndexedState(storageKey, () => removeToolSession(indexedStateId(storageKey))).catch(() => undefined);
+        try {
+          window.localStorage.removeItem(indexedStateMarkerKey(storageKey));
+        } catch {
+          // The invalid record has still been scheduled for removal.
+        }
+      }
+      setHydrated(true);
+    });
+    return () => { active = false; };
+  }, [storageKey, validateStoredValue]);
 
-  return [value, setValue] as const;
+  const persistValue = React.useCallback(() => {
+    if (!hydrated) return;
+    const indexedId = indexedStateId(storageKey);
+    let serialized = "";
+    try {
+      serialized = JSON.stringify(value);
+      if (shouldUseIndexedState(serialized)) {
+        window.localStorage.removeItem(storageKey);
+        window.localStorage.setItem(indexedStateMarkerKey(storageKey), "1");
+        indexedStateKeys.add(storageKey);
+        void enqueueIndexedState(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
+        return;
+      }
+      const hadIndexedState = indexedStateKeys.has(storageKey) || window.localStorage.getItem(indexedStateMarkerKey(storageKey)) === "1";
+      window.localStorage.setItem(storageKey, serialized);
+      window.localStorage.removeItem(indexedStateMarkerKey(storageKey));
+      indexedStateKeys.delete(storageKey);
+      if (hadIndexedState) void enqueueIndexedState(storageKey, () => removeToolSession(indexedId)).catch(() => undefined);
+    } catch {
+      // A quota failure can leave an older localStorage value behind. Remove it
+      // before using IndexedDB, otherwise the next load will prefer stale data.
+      try {
+        window.localStorage.removeItem(storageKey);
+        window.localStorage.removeItem(indexedStateMarkerKey(storageKey));
+      } catch {
+        // Continue with the IndexedDB fallback.
+      }
+      indexedStateKeys.add(storageKey);
+      void enqueueIndexedState(storageKey, () => writeToolSession<IndexedStateEnvelope<T>>(indexedId, { version: 1, value })).catch(() => undefined);
+    }
+  }, [hydrated, storageKey, value]);
+  persistValueRef.current = persistValue;
+
+  React.useEffect(() => {
+    if (!hydrated) return undefined;
+    const timer = window.setTimeout(() => persistValueRef.current(), 180);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, storageKey, value]);
+
+  React.useEffect(() => {
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") persistValueRef.current();
+    };
+    const flushOnPageHide = () => persistValueRef.current();
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    window.addEventListener("pagehide", flushOnPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      window.removeEventListener("pagehide", flushOnPageHide);
+    };
+  }, []);
+
+  React.useEffect(() => () => persistValueRef.current(), []);
+
+  const updateValue = React.useCallback<React.Dispatch<React.SetStateAction<T>>>((nextValue) => {
+    userInteractedRef.current = true;
+    setValue(nextValue);
+  }, []);
+
+  return [value, updateValue] as const;
 }
 
 export async function clearForensicsStorage() {

@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,11 +16,12 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
-import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
+import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
 import {
   COCOA_EPOCH_MS,
   dateRows,
@@ -29,7 +30,6 @@ import {
   generalizedTime,
   GPS_EPOCH_MS,
   HFS_EPOCH_OFFSET_MS,
-  parseTimestampCandidates,
   parseTimestampRows,
   timestampCandidateKey,
   timestampCandidateRows,
@@ -39,18 +39,24 @@ import {
 import { copy } from "../i18n";
 import { downloadTextFile } from "../utils/files";
 import { FILETIME_EPOCH_OFFSET_MS } from "../utils/forensics";
+import { useStoredState } from "../utils/storage";
+import { runWorkerTask } from "../utils/workerTask";
+import type { TimestampWorkerRequest, TimestampWorkerResult } from "../features/timestamp/timestamp.worker";
 
 type TimestampPage = "single" | "batch";
 
-export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
-  const [input, setInput] = React.useState("");
-  const [batchInput, setBatchInput] = React.useState("");
-  const [submittedInput, setSubmittedInput] = React.useState("");
-  const [submittedBatchInput, setSubmittedBatchInput] = React.useState("");
+export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
+  const [input, setInput] = useStoredState("timestamp.input.v3", "");
+  const [batchInput, setBatchInput] = useStoredState("timestamp.batchInput.v3", "");
+  const [submittedInput, setSubmittedInput] = useStoredState("timestamp.submittedInput.v3", "");
+  const [submittedBatchInput, setSubmittedBatchInput] = useStoredState("timestamp.submittedBatchInput.v3", "");
   const [page, setPage] = React.useState<TimestampPage>(() => input.trim() ? "single" : batchInput.trim() ? "batch" : "single");
   const [selectedCandidateKey, setSelectedCandidateKey] = React.useState("");
   const [batchFilter, setBatchFilter] = React.useState("");
   const [batchFormat, setBatchFormat] = React.useState("");
+  const [batchEvents, setBatchEvents] = React.useState<TimestampWorkerResult["events"]>([]);
+  const [batchParsing, setBatchParsing] = React.useState(false);
+  const [batchError, setBatchError] = React.useState("");
   const [outputScope, setOutputScope] = React.useState<"common" | "all">("common");
   const english = t.waiting === "Waiting";
   const hasInput = Boolean(submittedInput.trim());
@@ -73,7 +79,6 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
   const visibleConversions = React.useMemo(() => outputScope === "all" ? conversions : conversions.filter(([label]) => commonConversionLabels.has(label)), [commonConversionLabels, conversions, outputScope]);
   const conversionMap = React.useMemo(() => new Map(conversions), [conversions]);
 
-  const batchEvents = React.useMemo(() => parseTimestampCandidates(submittedBatchInput, "timestamp batch"), [submittedBatchInput]);
   const batchFormats = React.useMemo(() => Array.from(new Set(batchEvents.map((event) => event.format))).sort(), [batchEvents]);
   const visibleBatchEvents = React.useMemo(() => {
     const query = batchFilter.trim().toLowerCase();
@@ -82,6 +87,38 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
       return !query || [event.iso, event.local, event.raw, event.format, event.context].join(" ").toLowerCase().includes(query);
     });
   }, [batchEvents, batchFilter, batchFormat]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    if (!active) {
+      setBatchParsing(false);
+      return () => controller.abort();
+    }
+    if (!submittedBatchInput.trim()) {
+      setBatchEvents([]);
+      setBatchParsing(false);
+      setBatchError("");
+      return () => controller.abort();
+    }
+    setBatchParsing(true);
+    setBatchError("");
+    void runWorkerTask<TimestampWorkerRequest, TimestampWorkerResult>({
+      createWorker: () => new Worker(new URL("../features/timestamp/timestamp.worker.ts", import.meta.url), { type: "module" }),
+      request: { source: submittedBatchInput, name: "timestamp batch" },
+      signal: controller.signal,
+      timeoutMs: 120_000
+    }).then((result) => {
+      if (!controller.signal.aborted) setBatchEvents(result.events);
+    }).catch((caught) => {
+      if (!controller.signal.aborted) {
+        setBatchEvents([]);
+        setBatchError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setBatchParsing(false);
+    });
+    return () => controller.abort();
+  }, [active, submittedBatchInput]);
 
   const setSingleValue = (value: string) => {
     setInput(value);
@@ -127,7 +164,7 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
       {page === "single" && <>
         <div className="tool-panel wide-panel timestamp-simple-input-panel">
           <ToolPanelHeader title={english ? "Timestamp input" : "时间戳输入"} actions={<AButton variant="text" disabled={!hasInput} onClick={clearSingle}>{t.clear}</AButton>} />
-          <input className="text-input full-input" aria-label={english ? "Timestamp value" : "时间戳数值"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSelectedCandidateKey(""); }} placeholder="1719705600 / 133638048000000000 / 20260706083045Z" />
+          <input className="text-input full-input" aria-label={english ? "Timestamp value" : "时间戳数值"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSubmittedInput(""); setSelectedCandidateKey(""); }} placeholder="1719705600 / 133638048000000000 / 20260706083045Z" />
           <div className="timestamp-preset-row">
             <ASelect aria-label={english ? "Timestamp format" : "时间戳格式"} value={preset} onChange={(value) => setPreset(String(value))} options={currentTimePresets.map((item) => ({ value: item.id, label: item.label }))} />
             <AButton variant="outlined" onClick={applyPreset}>{english ? "Use current time" : "使用当前时间"}</AButton>
@@ -144,13 +181,13 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
                 <ASegmentedButton value="common" onClick={() => setOutputScope("common")}>{english ? "Common" : "常用"}</ASegmentedButton>
                 <ASegmentedButton value="all" onClick={() => setOutputScope("all")}>{english ? "All" : "全部"}</ASegmentedButton>
               </ASegmentedGroup>
-              <AButton variant="outlined" disabled={!selectedCandidate} onClick={() => selectedCandidate && void navigator.clipboard.writeText(selectedCandidate[1])}>{english ? "Copy ISO" : "复制 ISO"}</AButton>
-              <AButton variant="outlined" disabled={!conversionMap.get("Unix milliseconds")} onClick={() => void navigator.clipboard.writeText(conversionMap.get("Unix milliseconds") ?? "")}>{english ? "Copy Unix ms" : "复制 Unix ms"}</AButton>
+              <AButton variant="outlined" disabled={!selectedCandidate} onClick={() => selectedCandidate && void copyText(selectedCandidate[1])}>{english ? "Copy ISO" : "复制 ISO"}</AButton>
+              <AButton variant="outlined" disabled={!conversionMap.get("Unix milliseconds")} onClick={() => void copyText(conversionMap.get("Unix milliseconds") ?? "")}>{english ? "Copy Unix ms" : "复制 Unix ms"}</AButton>
               <AButton variant="text" disabled={!selectedCandidate} onClick={() => downloadTextFile(`timestamp-${Date.now()}.csv`, timestampRowsToCsv(rows, candidates), "text/csv;charset=utf-8")}>{t.exportTimestampCsv}</AButton>
             </>}
           />
           {selectedCandidate ? <div className="table-scroll compact-scroll"><table className="data-table timestamp-conversion-table"><thead><tr><th>{english ? "Format" : "格式"}</th><th>{english ? "Value" : "值"}</th><th>{t.copy}</th></tr></thead><tbody>
-            {visibleConversions.map(([label, value]) => <tr key={`${label}-${value}`}><td>{label}</td><td className="mono-cell">{value}</td><td><AButton variant="text" disabled={!value || value === "--"} onClick={() => void navigator.clipboard.writeText(value)}>{t.copy}</AButton></td></tr>)}
+            {visibleConversions.map(([label, value]) => <tr key={`${label}-${value}`}><td>{label}</td><td className="mono-cell">{value}</td><td><AButton variant="text" disabled={!value || value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></td></tr>)}
           </tbody></table></div> : <div className="empty-state error-state">{rows[0]?.[1] || (english ? "Unsupported timestamp" : "无法识别时间戳")}</div>}
         </div>}
 
@@ -159,7 +196,7 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
           <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{t.format}</th><th>ISO</th><th>{t.copy}</th></tr></thead><tbody>{candidates.map((candidate, index) => {
             const key = timestampCandidateKey(candidate, index);
             const active = selectedCandidate?.[0] === candidate[0] && selectedCandidate?.[1] === candidate[1];
-            return <tr className={active ? "selected-row" : ""} key={key} onClick={() => setSelectedCandidateKey(key)}><td>{candidate[0]}</td><td>{candidate[1]}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void navigator.clipboard.writeText(candidate[1]); }}>{t.copy}</AButton></td></tr>;
+            return <tr className={active ? "selected-row" : ""} key={key} onClick={() => setSelectedCandidateKey(key)}><td>{candidate[0]}</td><td>{candidate[1]}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(candidate[1]); }}>{t.copy}</AButton></td></tr>;
           })}</tbody></table></div>
         </details>}
       </>}
@@ -174,11 +211,13 @@ export function TimestampTool({ t }: { t: (typeof copy)["zh"] }) {
               <AButton variant="text" disabled={!batchInput && !submittedBatchInput} onClick={() => { setBatchInput(""); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }}>{t.clear}</AButton>
           </>}
         />
-        <textarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => setBatchInput(event.currentTarget.value)} placeholder={t.textPlaceholder} />
+        <textarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
         <div className="timestamp-simple-batch-filter">
           <input className="text-input" aria-label={english ? "Filter extracted timestamps" : "筛选提取的时间戳"} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={english ? "Filter raw value, ISO, or context" : "筛选原值、ISO 或上下文"} />
           <ASelect aria-label={english ? "Batch result format" : "批量结果格式"} value={batchFormat} onChange={(value) => setBatchFormat(String(value))} options={[{ value: "", label: english ? "All formats" : "全部格式" }, ...batchFormats.map((format) => ({ value: format, label: format }))]} />
         </div>
+        {batchParsing && <ALinearProgress />}
+        {batchError && <div className="empty-state error-state">{batchError}</div>}
         <div className="table-scroll timestamp-simple-batch-scroll">
           {visibleBatchEvents.length ? <table className="data-table timestamp-simple-batch-table"><thead><tr><th>ISO</th><th>{t.localTime}</th><th>{t.format}</th><th>{english ? "Raw" : "原值"}</th><th>{english ? "Line" : "行"}</th><th>{english ? "Context" : "上下文"}</th></tr></thead><tbody>{visibleBatchEvents.map((event) => <tr key={event.id}><td>{event.iso}</td><td>{event.local}</td><td>{event.format}</td><td>{event.raw}</td><td>{event.line}</td><td>{event.context}</td></tr>)}</tbody></table> : <div className="empty-state">{submittedBatchInput ? (english ? "No timestamp found" : "未提取到时间戳") : t.waiting}</div>}
         </div>

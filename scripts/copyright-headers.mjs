@@ -7,7 +7,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -17,7 +17,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -36,7 +36,7 @@ const lines = [
   "Author: DyNooob",
   "Website: https://www.loken.cn",
   "Platform: DigiForensics.cn",
-  "Project: https://github.com/DyNooob/ForensicsPP",
+  "Project: https://git.loken.cn/dynooob/ForensicsPP",
   "",
   "Forensics++ is an open-source, browser-side toolkit for CTF/MISC,",
   "lightweight forensic triage, encoding/decoding, metadata inspection,",
@@ -46,7 +46,7 @@ const lines = [
   "privacy infringement, or unlawful activity.",
   "",
   "Released under the MIT License.",
-  "Full source code: https://github.com/DyNooob/ForensicsPP"
+  "Full source code: https://git.loken.cn/dynooob/ForensicsPP"
 ];
 
 const cHeader = `/**\n${lines.map((line) => ` *${line ? ` ${line}` : ""}`).join("\n")}\n */\n\n`;
@@ -92,9 +92,13 @@ function stripExistingHeader(body, style) {
     }
   }
   if (style === "hash" && body.startsWith(`# ${projectMarker}`)) {
-    const sourceLine = "# Full source code: https://github.com/DyNooob/ForensicsPP";
-    const end = body.indexOf(sourceLine);
-    if (end !== -1) return body.slice(end + sourceLine.length).replace(/^\s*\n/, "");
+    const sourceLines = [
+      "# Full source code: https://git.loken.cn/dynooob/ForensicsPP"
+    ];
+    for (const sourceLine of sourceLines) {
+      const end = body.indexOf(sourceLine);
+      if (end !== -1) return body.slice(end + sourceLine.length).replace(/^\s*\n/, "");
+    }
   }
   return body;
 }

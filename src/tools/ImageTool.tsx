@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
@@ -26,12 +27,13 @@ import type { ImageInfo } from "../models";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
-import type { ImageAnalysisResult, ImageRepairWorkerResult, ImageWorkerRequest } from "../features/image/image.worker";
+import type { ImageAnalysisResult, ImageBasicsWorkerResult, ImageRepairWorkerResult, ImageWorkerRequest } from "../features/image/image.worker";
 
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
 type ImageWorkspace = { name: string; type: string; lastModified: number; bytes: Uint8Array };
 const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_PERSISTED_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function formatExifValue(value: unknown) {
   if (value == null) return "--";
@@ -74,7 +76,7 @@ export type ImageToolServices = {
   revokeImageObjectUrls: ImageService;
 };
 
-export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: ImageToolServices }) {
+export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: ImageToolServices; active?: boolean }) {
   const {
     buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels,
     detectImageFormat, emptyImageChannels, guessImageDimensions,
@@ -86,17 +88,19 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   const [loading, setLoading] = React.useState(false);
   const [advancedTask, setAdvancedTask] = React.useState<"hidden" | "channels" | "repair" | "">("");
   const [error, setError] = React.useState("");
+  const [storageNotice, setStorageNotice] = React.useState("");
   const [isImageDropActive, setIsImageDropActive] = React.useState(false);
   const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "repair">("overview");
   const [restoredSource, setRestoredSource] = React.useState<ImageWorkspace | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
   const abortRef = React.useRef<AbortController | null>(null);
+  const channelTimerRef = React.useRef<number | null>(null);
   const restoreStartedRef = React.useRef(false);
   const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
   const workspace = useToolWorkspace<ImageWorkspace>({
     id: "image",
-    version: 1,
+    version: 2,
     isValid: (value): value is ImageWorkspace => Boolean(value && typeof value === "object" && typeof (value as ImageWorkspace).name === "string" && (value as ImageWorkspace).bytes instanceof Uint8Array),
     onRestore: setRestoredSource
   });
@@ -104,8 +108,23 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   React.useEffect(() => () => {
     analysisIdRef.current += 1;
     abortRef.current?.abort();
+    if (channelTimerRef.current !== null) window.clearTimeout(channelTimerRef.current);
     services.revokeImageObjectUrls();
   }, [services]);
+
+  React.useEffect(() => {
+    if (active) return;
+    analysisIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (channelTimerRef.current !== null) {
+      window.clearTimeout(channelTimerRef.current);
+      channelTimerRef.current = null;
+    }
+    setLoading(false);
+    setAdvancedTask("");
+    setIsImageDropActive(false);
+  }, [active]);
 
   const runImageWorker = <T,>(request: ImageWorkerRequest, transfer: Transferable[], signal: AbortSignal) => runWorkerTask<ImageWorkerRequest, T>({
     createWorker: () => new Worker(new URL("../features/image/image.worker.ts", import.meta.url), { type: "module" }),
@@ -116,11 +135,16 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   });
 
   const handleImage = async (file: File | undefined, persist = true) => {
-    if (!file) return;
+    if (!file || !active) return;
     if (persist) workspace.clear();
+    if (persist) setStorageNotice("");
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    if (channelTimerRef.current !== null) {
+      window.clearTimeout(channelTimerRef.current);
+      channelTimerRef.current = null;
+    }
     services.revokeImageObjectUrls();
     sourceRef.current = null;
     setImageInfo(null);
@@ -139,7 +163,9 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     setError("");
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       const detectedFormat = detectImageFormat(bytes, file.type);
       const guessedDimensions = guessImageDimensions(bytes, detectedFormat);
       if (guessedDimensions.width * guessedDimensions.height > 50_000_000) {
@@ -147,17 +173,14 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       }
       const sourceMime = /^image\//i.test(file.type) ? file.type : imageMimeForFormat(detectedFormat, file.type || "application/octet-stream");
       const rawDataUrl = await bytesToDataUrl(bytes, sourceMime);
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       let image: HTMLImageElement | null = null;
       try { image = await loadBrowserImage(rawDataUrl); } catch { image = null; }
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       if (image && image.naturalWidth * image.naturalHeight > 50_000_000) {
         throw new Error(isEnglish ? "Decoded image dimensions exceed the 50 megapixel analysis limit." : "解码后的图片尺寸超过 5000 万像素分析上限。");
       }
       if (analysisId !== analysisIdRef.current) return;
-      const exifrModule = await import("exifr");
-      const exif =
-        ((await exifrModule
-          .parse(file, { tiff: true, xmp: true, iptc: true, icc: true, jfif: true, ihdr: true, gps: true })
-          .catch(() => null)) ?? {}) as Record<string, unknown>;
       const decoded = Boolean(image);
       const dimensions = image ? { width: image.naturalWidth, height: image.naturalHeight } : guessImageDimensions(bytes, detectedFormat);
       const placeholderDataUrl = imagePlaceholderDataUrl(
@@ -167,12 +190,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       );
       const effectiveDisplayDataUrl = image ? rawDataUrl : placeholderDataUrl;
       const workerBytes = bytes.slice();
-      const analysis = await runImageWorker<ImageAnalysisResult>({
+      const workerResult = await runImageWorker<ImageBasicsWorkerResult>({
         action: "basics",
         bytes: workerBytes.buffer,
-        fileType: file.type,
-        metadataFields: Object.keys(exif).length
+        fileType: file.type
       }, [workerBytes.buffer], controller.signal);
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
+      const { analysis, exif } = workerResult;
       sourceRef.current = { file, bytes, image, exif, rawDataUrl, format: detectedFormat };
       if (analysisId !== analysisIdRef.current) return;
       setImageInfo({
@@ -202,7 +226,15 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
         autoRevealPreviews: [],
         channelDataUrls: emptyImageChannels(placeholderDataUrl)
       });
-      if (persist) workspace.save({ name: file.name, type: file.type, lastModified: file.lastModified, bytes });
+      if (persist) {
+        if (file.size <= MAX_PERSISTED_IMAGE_BYTES) {
+          workspace.save({ name: file.name, type: file.type, lastModified: file.lastModified, bytes });
+        } else {
+          setStorageNotice(isEnglish
+            ? "This image is available for the current session only; images over 8 MiB are not restored automatically."
+            : "当前图片仅在本次打开期间保留；超过 8 MiB 的图片不会自动恢复。");
+        }
+      }
       setImagePage("overview");
     } catch (caught) {
       if (analysisId !== analysisIdRef.current) return;
@@ -217,16 +249,16 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     }
   };
   React.useEffect(() => {
-    if (!restoredSource || restoreStartedRef.current) return;
+    if (!active || !restoredSource || restoreStartedRef.current) return;
     restoreStartedRef.current = true;
     setRestoredSource(null);
     const bytes = restoredSource.bytes.slice();
     const file = new File([bytes.buffer], restoredSource.name, { type: restoredSource.type, lastModified: restoredSource.lastModified });
     void handleImage(file, false);
-  }, [restoredSource]);
+  }, [active, restoredSource]);
   const runHiddenAnalysis = async () => {
     const source = sourceRef.current;
-    if (!source || !imageInfo || advancedTask) return;
+    if (!active || !source || !imageInfo || advancedTask) return;
     const analysisId = analysisIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -256,7 +288,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
           recoveryRows: [["Original container", "failed"]]
         }, [workerBytes.buffer], controller.signal);
       }
-      if (analysisId !== analysisIdRef.current) return;
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       setImageInfo((current) => current ? { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks } : current);
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
@@ -267,23 +299,30 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
   };
   const runChannelAnalysis = () => {
     const source = sourceRef.current;
-    if (!source?.image || !imageInfo || advancedTask) return;
+    if (!active || !source?.image || !imageInfo || advancedTask) return;
     const analysisId = analysisIdRef.current;
     setAdvancedTask("channels");
     setError("");
-    window.setTimeout(() => {
-      try {
-        const channels = createChannelPreviews(source.image!);
-        if (analysisId !== analysisIdRef.current) return;
-        setImageInfo((current) => current ? { ...current, channelDataUrls: channels, autoRevealPreviews: buildAutoRevealPreviews(channels, false) } : current);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : String(caught));
-      } finally { if (analysisId === analysisIdRef.current) setAdvancedTask(""); }
+    if (channelTimerRef.current !== null) window.clearTimeout(channelTimerRef.current);
+    channelTimerRef.current = window.setTimeout(() => {
+      channelTimerRef.current = null;
+      void (async () => {
+        try {
+          if (!active || analysisId !== analysisIdRef.current) return;
+          const channels = await createChannelPreviews(source.image!, () => analysisId !== analysisIdRef.current);
+          if (!active || !channels || analysisId !== analysisIdRef.current) return;
+          setImageInfo((current) => current ? { ...current, channelDataUrls: channels, autoRevealPreviews: buildAutoRevealPreviews(channels, false) } : current);
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : String(caught));
+        } finally {
+          if (analysisId === analysisIdRef.current) setAdvancedTask("");
+        }
+      })();
     }, 0);
   };
   const runRepairAnalysis = async () => {
     const source = sourceRef.current;
-    if (!source || !imageInfo || advancedTask) return;
+    if (!active || !source || !imageInfo || advancedTask) return;
     const analysisId = analysisIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -299,11 +338,12 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       const previews: ImageInfo["repairPreviewItems"] = [];
       const rows: Array<[string, string]> = [];
       for (const candidate of candidates) {
+        if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
         const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
         try { await loadBrowserImage(src); previews.push({ label: candidate.label, src, detail: candidate.note }); rows.push([candidate.label, "decoded"]); }
         catch { rows.push([candidate.label, "failed"]); }
       }
-      if (analysisId !== analysisIdRef.current) return;
+      if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       setImageInfo((current) => current ? {
         ...current,
         repairedDataUrl: previews[0]?.src || "",
@@ -334,8 +374,13 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    if (channelTimerRef.current !== null) {
+      window.clearTimeout(channelTimerRef.current);
+      channelTimerRef.current = null;
+    }
     services.revokeImageObjectUrls();
     setImageInfo(null);
+    setStorageNotice("");
     setError("");
     setLoading(false);
     setAdvancedTask("");
@@ -374,7 +419,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
       ...imageInfo.pngTextEntries.map((entry) => `[PNG ${entry.chunk} ${entry.keyword} @ ${entry.offset}]\n${entry.text}`),
       imageInfo.trailerText ? `[Trailer]\n${imageInfo.trailerText}` : ""
     ].filter(Boolean).join("\n\n");
-    void navigator.clipboard.writeText(content || "");
+    void copyText(content || "");
   };
   const channelItems: Array<[string, string]> = imageInfo ? [
     [t.red, imageInfo.channelDataUrls.red],
@@ -407,6 +452,7 @@ export function ImageTool({ t, services }: { t: (typeof copy)["zh"]; services: I
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="text" disabled={!imageInfo && !error && !loading} onClick={clearImage}>{t.clear}</AButton>
         </div>
+        {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
         {(loading || advancedTask) && <ALinearProgress />}
         {error && <div className="empty-state error-state">{error}</div>}
       </div>

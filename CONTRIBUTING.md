@@ -14,7 +14,7 @@ The project favors practical, browser-local tools with clear inputs, explicit ex
 ## Local Development
 
 ```bash
-git clone https://github.com/DyNooob/ForensicsPP.git
+git clone https://git.loken.cn/dynooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
 npm run dev
@@ -54,7 +54,7 @@ Do not commit generated `dist/`, local screenshots, temporary evidence files, ed
 
 ## Security Issues
 
-Do not publish exploitable security details in a public issue. Follow [SECURITY.md](./SECURITY.md) instead.
+Please report vulnerabilities privately by email to [toolab@digiforensics.cn](mailto:toolab@digiforensics.cn). Do not publish exploit details, real evidence, credentials, or private email content in a public issue. See [SECURITY.md](./SECURITY.md) for the information to include.
 
 ## License
 

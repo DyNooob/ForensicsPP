@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,9 +16,10 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
+import { copyText } from "../../utils/clipboard";
 import React from "react";
 import { ASelect, InfoTable, PanelTitle } from "../../components/ui";
 import { formatBytes } from "../../utils/files";
@@ -122,7 +123,7 @@ export function SqliteForensicPanel({ analysis, english }: { analysis: SqliteFor
 
     <div className="tool-panel wide-panel sqlite-forensic-fragment-panel">
       <div className="panel-heading-row"><PanelTitle title={english ? "Free-space text fragments" : "空闲区文本片段"} /><span className="status-pill">{analysis.fragments.length}</span></div>
-      {analysis.fragments.length ? <div className="table-scroll sqlite-forensic-fragment-scroll"><table className="data-table sqlite-forensic-table"><thead><tr><th>{english ? "Page" : "页号"}</th><th>Offset</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Area" : "区域"}</th><th>{english ? "Encoding" : "编码"}</th><th>{english ? "Fragment" : "片段"}</th></tr></thead><tbody>{analysis.fragments.map((fragment, index) => <tr key={`${fragment.pageNumber}-${fragment.offset}-${fragment.encoding}-${index}`}><td>{fragment.pageNumber}</td><td><code>0x{fragment.offset.toString(16).toUpperCase()}</code></td><td>{fragment.source === "wal" ? "WAL" : english ? "Main" : "主库"}</td><td>{fragment.area}</td><td>{fragment.encoding}</td><td><button className="sqlite-fragment-copy" type="button" title={fragment.text} onClick={() => void navigator.clipboard.writeText(fragment.text)}>{fragment.text}</button></td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No printable fragments found in the scanned free space." : "扫描的空闲区域中未发现可打印文本片段。"}</div>}
+      {analysis.fragments.length ? <div className="table-scroll sqlite-forensic-fragment-scroll"><table className="data-table sqlite-forensic-table"><thead><tr><th>{english ? "Page" : "页号"}</th><th>Offset</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Area" : "区域"}</th><th>{english ? "Encoding" : "编码"}</th><th>{english ? "Fragment" : "片段"}</th></tr></thead><tbody>{analysis.fragments.map((fragment, index) => <tr key={`${fragment.pageNumber}-${fragment.offset}-${fragment.encoding}-${index}`}><td>{fragment.pageNumber}</td><td><code>0x{fragment.offset.toString(16).toUpperCase()}</code></td><td>{fragment.source === "wal" ? "WAL" : english ? "Main" : "主库"}</td><td>{fragment.area}</td><td>{fragment.encoding}</td><td><button className="sqlite-fragment-copy" type="button" title={fragment.text} onClick={() => void copyText(fragment.text)}>{fragment.text}</button></td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No printable fragments found in the scanned free space." : "扫描的空闲区域中未发现可打印文本片段。"}</div>}
     </div>
   </div>;
 }

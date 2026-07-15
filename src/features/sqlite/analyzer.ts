@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { fileSignatureForBytes, hexPreview, previewText } from "../../utils/binary";
@@ -242,6 +242,18 @@ export function sqliteEmptyDataSet(message = ""): SqliteDataSet {
   return { columns: [], values: [], rowids: [], editable: false, message, totalRows: null };
 }
 
+export function sqliteInternalRowidIdentifier(columns: SqliteColumnInfo[]) {
+  const columnNames = new Set(columns.map((column) => column.name.toLowerCase()));
+  return (["rowid", "_rowid_", "oid"] as const).find((identifier) => !columnNames.has(identifier)) ?? null;
+}
+
+function sqliteRowidAlias(columns: SqliteColumnInfo[]) {
+  const columnNames = new Set(columns.map((column) => column.name.toLowerCase()));
+  let alias = "__forensicspp_rowid__";
+  while (columnNames.has(alias.toLowerCase())) alias = `_${alias}`;
+  return alias;
+}
+
 export function getSqliteTables(db: { exec: (sql: string) => Array<{ columns: string[]; values: SqliteValue[][] }> }) {
   const rows = db.exec("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view') ORDER BY type, name")[0]?.values ?? [];
   return rows.map((row) => {
@@ -393,6 +405,8 @@ export function loadSqliteTableRows(
     : "";
   const boundedLimit = Math.min(1000, Math.max(10, limit));
   const boundedOffset = Math.max(0, offset);
+  const rowidAlias = sqliteRowidAlias(columns);
+  const rowidIdentifier = sqliteInternalRowidIdentifier(columns);
   let totalRows: number | null = null;
   try {
     const countValue = db.exec(`SELECT COUNT(*) FROM ${tableName}${where}`)[0]?.values?.[0]?.[0];
@@ -401,11 +415,11 @@ export function loadSqliteTableRows(
   } catch {
     totalRows = null;
   }
-  if (table.type === "table") {
+  if (table.type === "table" && rowidIdentifier) {
     try {
-      const result = db.exec(`SELECT rowid AS __rowid__, * FROM ${tableName}${where}${orderBy} LIMIT ${boundedLimit} OFFSET ${boundedOffset}`)[0];
+      const result = db.exec(`SELECT ${quoteSqlIdentifier(rowidIdentifier)} AS ${quoteSqlIdentifier(rowidAlias)}, * FROM ${tableName}${where}${orderBy} LIMIT ${boundedLimit} OFFSET ${boundedOffset}`)[0];
       if (result) {
-        const rowidIndex = result.columns.indexOf("__rowid__");
+        const rowidIndex = result.columns.indexOf(rowidAlias);
         return {
           columns: result.columns.filter((_, index) => index !== rowidIndex),
           values: result.values.map((row) => row.filter((_, index) => index !== rowidIndex)),

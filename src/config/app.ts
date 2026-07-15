@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 const toolDefinitions = [
@@ -71,6 +71,7 @@ export type ToolDefinition = {
 
 export const tools: readonly ToolDefinition[] = toolDefinitions;
 export const maxRecentTools = 6;
+export const maxMountedTools = 8;
 
 export const toolTitleOverrides: Partial<Record<ToolId, Record<"zh" | "en", string>>> = {
   home: { zh: "Forensics++ Workbench", en: "Forensics++ Workbench" }
@@ -80,13 +81,13 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
   return toolTitleOverrides[tool.id]?.[lang] ?? translations[tool.name];
 }
 
-export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
+export const projectLinks = { repo: "https://git.loken.cn/dynooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.0-alpha.1";
+export const appVersion = "1.0.0-alpha.4";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-07-14";
+export const lastUpdated = "2026-07-15";
 export const legalVersion = "2026-07-13-v2";
 export const feedbackEmail = "toolab@digiforensics.cn";
 

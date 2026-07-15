@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,12 +16,12 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { eventFromXml, evtxEventsToCsv } from "../src/features/evtx/analyzer";
+import { eventFromXml, evtxEventsToCsv, persistableEvtxResults } from "../src/features/evtx/analyzer";
 import { parseEvtxBytes } from "../src/features/evtx/parser";
 import { parseSigmaRules, runSigmaRules } from "../src/features/evtx/sigma";
 
@@ -63,6 +63,14 @@ describe("EVTX parsing", () => {
 
   it("rejects invalid files before attempting record parsing", () => {
     expect(() => parseEvtxBytes(new Uint8Array(4096), "invalid.evtx")).toThrow(/Invalid EVTX/);
+  });
+
+  it("removes oversized raw XML from the persisted snapshot only", () => {
+    const event = { ...eventFromXml(XML, "fixture.evtx"), xml: "x".repeat(9 * 1024 * 1024) };
+    const results = [{ source: "fixture.evtx", size: event.xml.length, chunkCount: 1, nextRecordNumber: "1", dirty: false, full: true, version: "3.1", parsedRecords: 1, skippedRecords: 0, truncated: false, events: [event] }];
+    const persisted = persistableEvtxResults(results);
+    expect(persisted[0].events[0].xml).toBe("");
+    expect(results[0].events[0].xml).toHaveLength(9 * 1024 * 1024);
   });
 });
 

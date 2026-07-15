@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,12 +16,13 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import { describe, expect, it } from "vitest";
 import { atbash, caesar, morseDecode, morseEncode, railFence, railFenceDecode, vigenere } from "../src/features/crypto/algorithms";
-import { detectHashType, formatHashCase, hashBytes, hashSelectedFile, SM3_FILE_SIZE_LIMIT } from "../src/utils/hash";
+import { annotateBatchHashMatches, parseExpectedHashSet } from "../src/features/hash/matching";
+import { detectHashType, formatHashCase, hashBytes, hashSelectedFile, normalizeHashAlgorithms, SM3_FILE_SIZE_LIMIT } from "../src/utils/hash";
 
 describe("standard digest vectors", () => {
   const input = new TextEncoder().encode("abc");
@@ -43,6 +44,37 @@ describe("standard digest vectors", () => {
     expect(detectHashType(hashes.md5)).toBe("MD5-like");
     expect(detectHashType(hashes.sha256)).toBe("SHA256-like");
     expect(detectHashType(`*${hashes.sha1.toUpperCase()}`)).toBe("MySQL native password");
+  });
+
+  it("ignores stale or unsupported persisted algorithm selections", () => {
+    expect(normalizeHashAlgorithms(["SHA256", "legacy", "sha256", "SM3"])).toEqual(["sha256", "sm3"]);
+    expect(normalizeHashAlgorithms(["legacy"])).toEqual(["sha256"]);
+  });
+});
+
+describe("checksum manifest matching", () => {
+  it("matches a labeled checksum only against its named file", () => {
+    const first = "a".repeat(64);
+    const second = "b".repeat(64);
+    const targets = parseExpectedHashSet(`${first}  evidence.bin\n${second}  other.bin`);
+    const rows = annotateBatchHashMatches([
+      { name: "evidence.bin", size: 1, sha256: first },
+      { name: "other.bin", size: 1, sha256: second },
+      { name: "wrong.bin", size: 1, sha256: first }
+    ], `${first}  evidence.bin\n${second}  other.bin`);
+
+    expect(targets[0]).toMatchObject({ hash: first, fileName: "evidence.bin" });
+    expect(rows.map((row) => row.matched)).toEqual([true, true, false]);
+  });
+
+  it("keeps a standalone digest as a global target", () => {
+    const digest = "c".repeat(64);
+    const rows = annotateBatchHashMatches([
+      { name: "one.bin", size: 1, sha256: digest },
+      { name: "two.bin", size: 1, sha256: digest }
+    ], digest);
+
+    expect(rows.every((row) => row.matched)).toBe(true);
   });
 });
 

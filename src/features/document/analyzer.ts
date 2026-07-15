@@ -6,7 +6,7 @@
  * Author: DyNooob
  * Website: https://www.loken.cn
  * Platform: DigiForensics.cn
- * Project: https://github.com/DyNooob/ForensicsPP
+ * Project: https://git.loken.cn/dynooob/ForensicsPP
  *
  * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
  * lightweight forensic triage, encoding/decoding, metadata inspection,
@@ -16,7 +16,7 @@
  * privacy infringement, or unlawful activity.
  *
  * Released under the MIT License.
- * Full source code: https://github.com/DyNooob/ForensicsPP
+ * Full source code: https://git.loken.cn/dynooob/ForensicsPP
  */
 
 import * as CFB from "cfb";
@@ -57,6 +57,25 @@ export type DocumentAnalysis = {
   encrypted: boolean;
   notes: string[];
 };
+
+// Keep the workspace useful after navigation without letting embedded objects
+// consume the whole browser quota. The live analysis still retains the full
+// extraction set; this limit applies only to the persisted snapshot.
+export const MAX_PERSISTED_DOCUMENT_EXTRACT_BYTES = 8 * 1024 * 1024;
+
+export function persistableDocumentAnalysis(analysis: DocumentAnalysis): DocumentAnalysis {
+  let retained = 0;
+  return {
+    ...analysis,
+    extracts: analysis.extracts.map((extract) => {
+      if (extract.bytes.byteLength > 0 && retained + extract.bytes.byteLength <= MAX_PERSISTED_DOCUMENT_EXTRACT_BYTES) {
+        retained += extract.bytes.byteLength;
+        return { ...extract, bytes: extract.bytes.slice() };
+      }
+      return { ...extract, bytes: new Uint8Array() };
+    })
+  };
+}
 
 const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const MAX_EXTRACT_BYTES = 128 * 1024 * 1024;
