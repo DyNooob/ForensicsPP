@@ -23,6 +23,7 @@ import { unzipSync } from "fflate";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../../models";
 import { fileSignatureForBytes, fileSignatures, previewText, shannonEntropy } from "../../utils/binary";
 import { archiveExtension, formatBytes } from "../../utils/files";
+import { PERM_CATEGORY_META, resolveAndroidPermission } from "./permissionCatalog";
 
 const androidNamespace = "http://schemas.android.com/apk/res/android";
 
@@ -486,27 +487,32 @@ function getDirectChildren(parent: Element | null | undefined, tagName: string) 
   return Array.from(parent.children).filter((child) => child.tagName === tagName);
 }
 
-const androidPermissionRiskPatterns: Array<[RegExp, string, string]> = [
-  [/READ_SMS|RECEIVE_SMS|SEND_SMS|READ_MMS/i, "SMS", "dangerous"],
-  [/READ_CONTACTS|WRITE_CONTACTS|GET_ACCOUNTS/i, "Contacts", "dangerous"],
-  [/ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|ACCESS_BACKGROUND_LOCATION/i, "Location", "dangerous"],
-  [/RECORD_AUDIO|CAMERA/i, "Sensor", "dangerous"],
-  [/READ_CALL_LOG|WRITE_CALL_LOG|READ_PHONE_STATE|CALL_PHONE|READ_PHONE_NUMBERS/i, "Phone", "dangerous"],
-  [/READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_MEDIA_/i, "Storage / media", "dangerous"],
-  [/REQUEST_INSTALL_PACKAGES|SYSTEM_ALERT_WINDOW|WRITE_SETTINGS|PACKAGE_USAGE_STATS|BIND_ACCESSIBILITY_SERVICE/i, "Special capability", "high"],
-  [/INTERNET|ACCESS_NETWORK_STATE|CHANGE_WIFI_STATE|BLUETOOTH/i, "Network", "normal"]
-];
-
-function analyzeAndroidPermission(permission: string) {
-  const matched = androidPermissionRiskPatterns.find(([pattern]) => pattern.test(permission));
-  const category = matched?.[1] ?? (permission.startsWith("android.permission.") ? "Other Android permission" : "Custom permission");
-  const severity = matched?.[2] ?? "";
+function analyzeAndroidPermission(permission: string): AndroidManifestInfo["permissionRows"][number] {
+  const { shortName, info, known } = resolveAndroidPermission(permission);
+  const categoryMeta = PERM_CATEGORY_META[info.category];
   const risk = [
-    severity === "dangerous" ? "dangerous permission" : "",
-    severity === "high" ? "special capability" : "",
-    !permission.startsWith("android.permission.") ? "custom permission" : ""
+    info.severity === "dangerous" ? "dangerous permission" : "",
+    info.severity === "special" ? "special capability" : "",
+    info.severity === "signature" ? "system/signature permission" : "",
+    !permission.startsWith("android.permission.") ? "custom permission" : "",
+    !known && permission.startsWith("android.permission.") ? "uncatalogued permission" : ""
   ].filter(Boolean);
-  return { permission, category, risk };
+  return {
+    permission,
+    shortName,
+    labelZh: info.zh,
+    labelEn: info.en,
+    descZh: info.descZh,
+    descEn: info.descEn,
+    // `category` keeps a stable English key for CSV/back-compat + security rows.
+    category: categoryMeta.en,
+    categoryKey: info.category,
+    categoryZh: categoryMeta.zh,
+    categoryEn: categoryMeta.en,
+    severity: info.severity,
+    known,
+    risk
+  };
 }
 
 function componentExportedEffective(component: Pick<AndroidComponent, "exported" | "actions" | "categories">, targetSdk: string) {
@@ -761,8 +767,8 @@ function androidComponentsToCsv(components: AndroidComponent[]) {
 function androidPermissionsToCsv(rows: AndroidManifestInfo["permissionRows"]) {
   const escape = (value: string) => /[",\n\r]/.test(value) ? `"${value.replace(/"/g, "\"\"")}"` : value;
   return [
-    ["permission", "category", "risk"].join(","),
-    ...rows.map((row) => [row.permission, row.category, row.risk.join("; ")].map(escape).join(","))
+    ["permission", "name_zh", "name_en", "category", "severity", "risk", "description"].join(","),
+    ...rows.map((row) => [row.permission, row.labelZh, row.labelEn, row.categoryEn, row.severity, row.risk.join("; "), row.descEn].map(escape).join(","))
   ].join("\n");
 }
 

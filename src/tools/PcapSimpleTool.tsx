@@ -52,6 +52,44 @@ function readableStreamText(bytes: Uint8Array) {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ".");
 }
 
+function PcapTrafficChart({ timeline, english }: { timeline: PcapInfo["timeline"]; english: boolean }) {
+  if (!timeline.length) return null;
+  const maxBytes = Math.max(...timeline.map((b) => b.bytes), 1);
+  const totalBytes = timeline.reduce((sum, b) => sum + b.bytes, 0);
+  const width = 680;
+  const height = 140;
+  const padLeft = 44;
+  const padRight = 12;
+  const padTop = 10;
+  const padBottom = 28;
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+  const barW = Math.max(2, chartW / timeline.length - 1);
+  const yTicks = [0, maxBytes / 2, maxBytes];
+  return (
+    <div className="pcap-traffic-chart">
+      <div className="pcap-chart-head">
+        <strong>{english ? "Traffic over time" : "流量趋势"}</strong>
+        <span>{english ? `${timeline.reduce((s, b) => s + b.packets, 0)} packets · ${formatBytes(totalBytes)}` : `${timeline.reduce((s, b) => s + b.packets, 0)} 个数据包 · ${formatBytes(totalBytes)}`}</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={english ? "Traffic over time" : "流量趋势图"}>
+        {yTicks.map((value, index) => {
+          const y = padTop + chartH - (value / maxBytes) * chartH;
+          return <g key={index}><line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="var(--app-line)" strokeDasharray="2,2" /><text x={padLeft - 6} y={y + 3} textAnchor="end" fill="var(--app-muted)" fontSize="9">{formatBytes(Math.round(value))}</text></g>;
+        })}
+        {timeline.map((bucket, index) => {
+          const x = padLeft + index * (chartW / timeline.length);
+          const barH = (bucket.bytes / maxBytes) * chartH;
+          const y = padTop + chartH - barH;
+          return <rect key={index} x={x} y={y} width={Math.max(1, barW)} height={barH} fill="var(--app-primary)" opacity={0.85}><title>{`${bucket.label}: ${bucket.packets} pkts, ${formatBytes(bucket.bytes)}`}</title></rect>;
+        })}
+        <text x={padLeft} y={height - 6} fill="var(--app-muted)" fontSize="9">{timeline[0]?.label ?? "--"}</text>
+        <text x={width - padRight} y={height - 6} textAnchor="end" fill="var(--app-muted)" fontSize="9">{timeline[timeline.length - 1]?.label ?? "--"}</text>
+      </svg>
+    </div>
+  );
+}
+
 function hexRows(bytes: Uint8Array, offset: number) {
   const rows: string[] = [];
   for (let index = 0; index < bytes.length; index += 16) {
@@ -99,7 +137,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   const english = t.waiting === "Waiting";
   const [pcap, setPcap] = React.useState<PcapInfo | null>(null);
   const [selectedPacketNo, setSelectedPacketNo] = React.useState<number | null>(null);
+  const [expandedPacketNo, setExpandedPacketNo] = React.useState<number | null>(null);
   const [packetFilter, setPacketFilter] = React.useState("");
+  const [protocolFilters, setProtocolFilters] = React.useState<string[]>([]);
+  const [packetSort, setPacketSort] = React.useState<"no" | "time" | "size" | "protocol">("no");
   const [conversationFilter, setConversationFilter] = React.useState("");
   const [networkFilter, setNetworkFilter] = React.useState("");
   const [streamFilter, setStreamFilter] = React.useState("");
@@ -140,11 +181,28 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   });
   const storageState = workspace.state;
 
+  const protocolOptions = React.useMemo(() => {
+    const protocols = new Set<string>();
+    for (const packet of pcap?.packets ?? []) protocols.add(packet.protocol);
+    return Array.from(protocols).sort();
+  }, [pcap?.packets]);
   const packets = React.useMemo(() => {
     const value = packetFilter.trim().toLowerCase();
-    const rows = pcap?.packets ?? [];
-    return rows.filter((packet) => !value || [packet.no, packet.protocol, packet.source, packet.destination, packet.sourcePort, packet.destinationPort, packet.info].join(" ").toLowerCase().includes(value));
-  }, [packetFilter, pcap]);
+    const rows = (pcap?.packets ?? []).filter((packet) => {
+      if (protocolFilters.length && !protocolFilters.includes(packet.protocol)) return false;
+      if (!value) return true;
+      return [packet.no, packet.protocol, packet.source, packet.destination, packet.sourcePort, packet.destinationPort, packet.info].join(" ").toLowerCase().includes(value);
+    });
+    const sorted = [...rows].sort((a, b) => {
+      switch (packetSort) {
+        case "time": return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime() || a.no - b.no;
+        case "size": return b.captured - a.captured || a.no - b.no;
+        case "protocol": return a.protocol.localeCompare(b.protocol) || a.no - b.no;
+        default: return a.no - b.no;
+      }
+    });
+    return sorted;
+  }, [packetFilter, protocolFilters, packetSort, pcap]);
   const packetPageCount = Math.max(1, Math.ceil(packets.length / 250));
   const visiblePackets = packets.slice(packetPage * 250, (packetPage + 1) * 250);
   const selectedPacket = pcap?.packets.find((packet) => packet.no === selectedPacketNo) ?? null;
@@ -181,7 +239,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     abortRef.current?.abort();
     setPcap(null);
     setSelectedPacketNo(null);
+    setExpandedPacketNo(null);
     setPacketFilter("");
+    setProtocolFilters([]);
+    setPacketSort("no");
     setConversationFilter("");
     setNetworkFilter("");
     setStreamFilter("");
@@ -216,7 +277,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       if (next.format === "Unknown") throw new Error(english ? "Unsupported or unrecognized packet capture." : "无法识别该流量包格式。");
       setPcap(next);
       setSelectedPacketNo(next.packets[0]?.no ?? null);
+      setExpandedPacketNo(null);
       setPacketFilter("");
+      setProtocolFilters([]);
+      setPacketSort("no");
       setConversationFilter("");
       setNetworkFilter("");
       setStreamFilter("");
@@ -252,7 +316,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     abortRef.current = null;
     setPcap(null);
     setSelectedPacketNo(null);
+    setExpandedPacketNo(null);
     setPacketFilter("");
+    setProtocolFilters([]);
+    setPacketSort("no");
     setConversationFilter("");
     setNetworkFilter("");
     setStreamFilter("");
@@ -387,7 +454,8 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
           {view === "overview" && <div className="pcap-simple-overview">
             {(pcap.streamBytesLimited || pcap.extractedBytesLimited) && <div className="pcap-stream-notice" role="status">{english ? "This restored workspace keeps metadata and previews, but not all raw stream or extracted-file bytes. Re-analyze the capture before exporting." : "当前工作区只保留了元数据和预览，未保留全部流及提取文件的原始字节。导出前请重新分析流量包。"}</div>}
-            <InfoTable rows={[[english ? "Format" : "格式", `${pcap.format} ${pcap.version}`.trim()], [english ? "File size" : "文件大小", formatBytes(pcap.size)], [english ? "HTTP / DNS" : "HTTP / DNS", `${pcap.httpItems.length} / ${pcap.dnsItems.length}`], [english ? "Extracted files" : "提取文件", String(pcap.extractedFiles.length)]]} />
+            <InfoTable rows={[[english ? "Format" : "格式", `${pcap.format} ${pcap.version}`.trim()], [english ? "File size" : "文件大小", formatBytes(pcap.size)], [english ? "HTTP / DNS" : "HTTP / DNS", `${pcap.httpItems.length} / ${pcap.dnsItems.length}`], [english ? "Extracted files" : "提取文件", String(pcap.extractedFiles.length)], [english ? "Events" : "事件", String(pcap.events.length)]]} />
+            <PcapTrafficChart timeline={pcap.timeline} english={english} />
             <div className="pcap-simple-stat-grid">
               <section><strong>{english ? "Protocols" : "协议"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Packets" : "数据包"}</th></tr></thead><tbody>{(pcap.summary?.protocols ?? []).map(([name, count]) => <tr key={name}><td>{name}</td><td>{count}</td></tr>)}</tbody></table></div></section>
               <section><strong>{english ? "Top endpoints" : "主要端点"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Endpoint" : "端点"}</th><th>{english ? "Traffic" : "流量"}</th></tr></thead><tbody>{pcap.endpoints.slice(0, 12).map((item) => <tr key={item.endpoint}><td>{item.endpoint}</td><td>{formatBytes(item.bytesSent + item.bytesReceived)}</td></tr>)}</tbody></table></div></section>
@@ -414,8 +482,68 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           </div>}
 
           {view === "packets" && <div className="pcap-simple-packets">
-            <input className="text-input pcap-filter" value={packetFilter} onChange={(event) => setPacketFilter(event.currentTarget.value)} placeholder={english ? "Filter protocol, host, port, or text" : "筛选协议、地址、端口或内容"} />
-            <div className="table-scroll pcap-packet-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Time" : "时间"}</th><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>{english ? "Length" : "长度"}</th><th>{english ? "Info" : "信息"}</th></tr></thead><tbody>{visiblePackets.map((packet) => <tr className={packet.no === selectedPacketNo ? "selected-row" : ""} key={packet.no} onClick={() => setSelectedPacketNo(packet.no)}><td>{packet.no}</td><td>{packet.timestamp.split("T")[1]?.replace("Z", "") ?? packet.timestamp}</td><td>{packet.protocol}</td><td>{endpoint(packet.source, packet.sourcePort)}</td><td>{endpoint(packet.destination, packet.destinationPort)}</td><td>{packet.captured}</td><td>{packet.info}</td></tr>)}</tbody></table></div>
+            <div className="pcap-packet-toolbar">
+              <input className="text-input pcap-filter" value={packetFilter} onChange={(event) => setPacketFilter(event.currentTarget.value)} placeholder={english ? "Filter protocol, host, port, or text" : "筛选协议、地址、端口或内容"} />
+              <div className="pcap-protocol-filters">
+                {protocolOptions.map((protocol) => {
+                  const active = protocolFilters.includes(protocol);
+                  return <button key={protocol} type="button" className={`pcap-protocol-chip ${active ? "is-active" : ""}`} onClick={() => setProtocolFilters((current) => active ? current.filter((p) => p !== protocol) : [...current, protocol])}>{protocol}</button>;
+                })}
+              </div>
+              <div className="pcap-sort-control">
+                <label>{english ? "Sort" : "排序"}</label>
+                <select className="text-input" value={packetSort} onChange={(event) => setPacketSort(event.target.value as typeof packetSort)}>
+                  <option value="no">{english ? "Packet #" : "包号"}</option>
+                  <option value="time">{english ? "Time" : "时间"}</option>
+                  <option value="size">{english ? "Size" : "大小"}</option>
+                  <option value="protocol">{english ? "Protocol" : "协议"}</option>
+                </select>
+              </div>
+              <span className="pcap-packet-count">{packets.length}/{pcap.packets.length}</span>
+            </div>
+            <div className="table-scroll pcap-packet-scroll"><table className="data-table pcap-packet-table"><thead><tr><th>#</th><th>{english ? "Time" : "时间"}</th><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>{english ? "Length" : "长度"}</th><th>{english ? "Info" : "信息"}</th></tr></thead><tbody>{visiblePackets.map((packet) => {
+              const expanded = expandedPacketNo === packet.no;
+              const stream = packet.tcpStreamKey ? streamByKey.get(packet.tcpStreamKey) : null;
+              const conversation = pcap.conversations.find((c) => c.key === `${packet.protocol}|${[endpoint(packet.source, packet.sourcePort), endpoint(packet.destination, packet.destinationPort)].sort().join("|")}`);
+              return (
+                <React.Fragment key={packet.no}>
+                  <tr className={packet.no === selectedPacketNo ? "selected-row" : ""} onClick={() => { setSelectedPacketNo(packet.no); setExpandedPacketNo(expanded ? null : packet.no); }}>
+                    <td>{packet.no}</td>
+                    <td>{packet.timestamp.split("T")[1]?.replace("Z", "") ?? packet.timestamp}</td>
+                    <td><span className={`pcap-proto-badge proto-${packet.protocol.toLowerCase().replace(/[^a-z0-9]/g, "_")}`}>{packet.protocol}</span></td>
+                    <td>{endpoint(packet.source, packet.sourcePort)}</td>
+                    <td>{endpoint(packet.destination, packet.destinationPort)}</td>
+                    <td>{packet.captured}</td>
+                    <td className="pcap-info-cell" title={packet.info}>{packet.info}</td>
+                  </tr>
+                  {expanded && (
+                    <tr className="pcap-packet-detail-row">
+                      <td colSpan={7}>
+                        <div className="pcap-packet-detail">
+                          <div className="pcap-packet-detail-head">
+                            <strong>{english ? "Packet" : "数据包"} #{packet.no}</strong>
+                            <div className="pcap-packet-actions">
+                              {stream && <AButton variant="text" onClick={() => { setSelectedStreamKey(stream.key); setView("streams"); }}>{english ? "Follow stream" : "跟踪 TCP 流"}</AButton>}
+                              {conversation && <AButton variant="text" onClick={() => { setPacketFilter(endpointHost(packet.source) === endpointHost(conversation.endpointA) ? conversation.endpointA : conversation.endpointB); }}>{english ? "Filter conversation" : "筛选会话"}</AButton>}
+                              <AButton variant="text" onClick={() => void copyText(packet.flow)}>{t.copy} flow</AButton>
+                            </div>
+                          </div>
+                          <InfoTable rows={[
+                            [english ? "Flow" : "流", packet.flow],
+                            [english ? "Timestamp" : "时间", packet.timestamp],
+                            [english ? "Captured / Original" : "捕获 / 原始", `${packet.captured} / ${packet.original}`],
+                            [english ? "Delta" : "相对时间", `${packet.deltaMs.toFixed(3)} ms`],
+                            ...(packet.tcpFlags ? [["TCP flags", packet.tcpFlags] as [string, string]] : []),
+                            ...(packet.tcpStreamKey ? [[english ? "TCP stream" : "TCP 流", packet.tcpStreamKey] as [string, string]] : [])
+                          ]} />
+                          <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={packet.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={packet.hexPreview || "--"} readOnly /></label></div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}</tbody></table></div>
             {packets.length > 250 && <div className="pcap-simple-pagination"><AButton variant="outlined" disabled={packetPage === 0} onClick={() => setPacketPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><span>{packetPage + 1} / {packetPageCount}</span><AButton variant="outlined" disabled={packetPage + 1 >= packetPageCount} onClick={() => setPacketPage((value) => Math.min(packetPageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div>}
           </div>}
 
@@ -429,7 +557,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           {extractedHashError && <div className="empty-state error-state">{extractedHashError}</div>}
         </section>
 
-        {view === "packets" && selectedPacket && <section className="tool-panel wide-panel pcap-simple-detail-panel">
+        {view === "packets" && selectedPacket && expandedPacketNo !== selectedPacket.no && <section className="tool-panel wide-panel pcap-simple-detail-panel">
           <ToolPanelHeader title={english ? "Selected packet" : "当前数据包"} subtitle={`#${selectedPacket.no} · ${selectedPacket.protocol}`} />
           <InfoTable rows={[["Flow", selectedPacket.flow], [english ? "Timestamp" : "时间", selectedPacket.timestamp], [english ? "Captured / Original" : "捕获 / 原始", `${selectedPacket.captured} / ${selectedPacket.original}`]]} />
           <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={selectedPacket.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={selectedPacket.hexPreview || "--"} readOnly /></label></div>

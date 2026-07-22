@@ -1059,7 +1059,21 @@ export type AndroidManifestInfo = {
   networkSecurityConfig: string;
   launcherActivity: string;
   permissions: string[];
-  permissionRows: Array<{ permission: string; category: string; risk: string[] }>;
+  permissionRows: Array<{
+    permission: string;
+    shortName: string;
+    labelZh: string;
+    labelEn: string;
+    descZh: string;
+    descEn: string;
+    category: string;
+    categoryKey: string;
+    categoryZh: string;
+    categoryEn: string;
+    severity: string;
+    known: boolean;
+    risk: string[];
+  }>;
   features: string[];
   libraries: string[];
   queries: string[];

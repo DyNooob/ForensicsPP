@@ -24,6 +24,7 @@ import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../models";
+import { PERM_CATEGORY_META, PERM_SEVERITY_META, type PermCategory, type PermSeverity } from "../features/android/permissionCatalog";
 import { hexPreview } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
@@ -59,6 +60,8 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
   const [sourceName, setSourceName] = useStoredState("android.sourceName.v2", "pasted AndroidManifest.xml");
   const [view, setView] = React.useState<AndroidView>("overview");
   const [componentFilter, setComponentFilter] = React.useState("");
+  const [permissionFilter, setPermissionFilter] = React.useState("");
+  const [severityFilter, setSeverityFilter] = React.useState<PermSeverity | "all">("all");
   const [entryFilter, setEntryFilter] = React.useState("");
   const [selectedComponentKey, setSelectedComponentKey] = React.useState("");
   const [selectedEntryName, setSelectedEntryName] = React.useState("");
@@ -85,6 +88,38 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     const query = entryFilter.trim().toLowerCase();
     return (info?.apkEntries ?? []).filter((entry) => !query || [entry.name, entry.directory, entry.extension, entry.role, entry.signature].join(" ").toLowerCase().includes(query));
   }, [entryFilter, info?.apkEntries]);
+
+  const permissionRows = info?.permissionRows ?? [];
+  const permissionSeverityCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const row of permissionRows) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
+    return counts;
+  }, [permissionRows]);
+  const visiblePermissionRows = React.useMemo(() => {
+    const query = permissionFilter.trim().toLowerCase();
+    return permissionRows.filter((row) => {
+      if (severityFilter !== "all" && row.severity !== severityFilter) return false;
+      if (!query) return true;
+      return [row.permission, row.labelZh, row.labelEn, row.descZh, row.descEn, row.categoryZh, row.categoryEn].join(" ").toLowerCase().includes(query);
+    });
+  }, [permissionRows, permissionFilter, severityFilter]);
+  const permissionGroups = React.useMemo(() => {
+    const groups = new Map<string, AndroidManifestInfo["permissionRows"]>();
+    for (const row of visiblePermissionRows) {
+      const key = row.categoryKey || "other";
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(row);
+      else groups.set(key, [row]);
+    }
+    const severityRank = (s: string) => PERM_SEVERITY_META[s as PermSeverity]?.order ?? 99;
+    return Array.from(groups.entries())
+      .map(([key, rows]) => ({
+        key,
+        meta: PERM_CATEGORY_META[key as PermCategory] ?? PERM_CATEGORY_META.other,
+        rows: [...rows].sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.shortName.localeCompare(b.shortName))
+      }))
+      .sort((a, b) => a.meta.order - b.meta.order);
+  }, [visiblePermissionRows]);
   const selectedComponent = selectedComponentKey && info
     ? info.components.find((component) => services.androidComponentKey(component) === selectedComponentKey) ?? null
     : null;
@@ -273,6 +308,8 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
             <span><small>Package</small><strong>{info.packageName || "--"}</strong></span>
             <span><small>Version</small><strong>{info.versionName || info.versionCode || "--"}</strong></span>
             <span><small>SDK</small><strong>{info.minSdk || "--"} / {info.targetSdk || "--"}</strong></span>
+            <span><small>{t.permissions}</small><strong>{info.permissionRows.length}</strong></span>
+            <span className={permissionSeverityCounts.dangerous ? "android-summary-danger" : ""}><small>{english ? "Dangerous" : "危险权限"}</small><strong>{permissionSeverityCounts.dangerous ?? 0}</strong></span>
             <span><small>{t.components}</small><strong>{info.components.length}</strong></span>
           </div>
           <ASegmentedGroup className="android-simple-tabs" value={view} selects="single">
@@ -305,15 +342,67 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           )}
 
           {view === "permissions" && (
-            <div className="android-simple-view">
-              <div className="android-simple-view-actions">
-                <AButton variant="outlined" disabled={!info.permissionRows.length} onClick={() => downloadTextFile(`android-permissions-${Date.now()}.csv`, services.androidPermissionsToCsv(info.permissionRows), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
-              </div>
-              {info.permissionRows.length ? (
-                <div className="table-scroll android-simple-table-scroll">
-                  <table className="data-table android-simple-permissions-table"><thead><tr><th>{t.permissions}</th><th>{t.category}</th></tr></thead><tbody>{info.permissionRows.map((row) => <tr key={row.permission}><td className="mono-cell">{row.permission}</td><td>{row.category}</td></tr>)}</tbody></table>
-                </div>
-              ) : <div className="empty-state">--</div>}
+            <div className="android-simple-view android-perm-view">
+              {permissionRows.length ? (
+                <>
+                  <div className="android-perm-summary">
+                    <button
+                      type="button"
+                      className={`android-perm-chip sev-all ${severityFilter === "all" ? "is-active" : ""}`}
+                      onClick={() => setSeverityFilter("all")}
+                    >
+                      <span className="android-perm-chip-count">{permissionRows.length}</span>
+                      <span className="android-perm-chip-label">{english ? "All" : "全部"}</span>
+                    </button>
+                    {(Object.keys(PERM_SEVERITY_META) as PermSeverity[])
+                      .filter((severity) => (permissionSeverityCounts[severity] ?? 0) > 0)
+                      .map((severity) => (
+                        <button
+                          type="button"
+                          key={severity}
+                          className={`android-perm-chip sev-${severity} ${severityFilter === severity ? "is-active" : ""}`}
+                          onClick={() => setSeverityFilter(severityFilter === severity ? "all" : severity)}
+                        >
+                          <span className="android-perm-chip-count">{permissionSeverityCounts[severity]}</span>
+                          <span className="android-perm-chip-label">{english ? PERM_SEVERITY_META[severity].en : PERM_SEVERITY_META[severity].zh}</span>
+                        </button>
+                      ))}
+                  </div>
+                  <div className="android-simple-view-actions android-simple-filter-actions">
+                    <input
+                      className="text-input"
+                      value={permissionFilter}
+                      onChange={(event) => setPermissionFilter(event.target.value)}
+                      placeholder={english ? "Filter by name, description, or category" : "按名称、说明或分类筛选"}
+                    />
+                    <AButton variant="outlined" disabled={!visiblePermissionRows.length} onClick={() => downloadTextFile(`android-permissions-${Date.now()}.csv`, services.androidPermissionsToCsv(visiblePermissionRows), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
+                  </div>
+                  {permissionGroups.length ? (
+                    <div className="android-perm-groups">
+                      {permissionGroups.map((group) => (
+                        <div className="android-perm-group" key={group.key}>
+                          <div className="android-perm-group-head">
+                            <span className="android-perm-group-title">{english ? group.meta.en : group.meta.zh}</span>
+                            <span className="android-perm-group-count">{group.rows.length}</span>
+                          </div>
+                          <div className="android-perm-list">
+                            {group.rows.map((row) => (
+                              <div className={`android-perm-card sev-${row.severity}`} key={row.permission}>
+                                <div className="android-perm-card-head">
+                                  <span className="android-perm-name">{english ? row.labelEn : row.labelZh}</span>
+                                  <span className={`android-perm-badge sev-${row.severity}`}>{english ? PERM_SEVERITY_META[row.severity as PermSeverity]?.en ?? row.severity : PERM_SEVERITY_META[row.severity as PermSeverity]?.zh ?? row.severity}</span>
+                                </div>
+                                <code className="android-perm-const" title={row.permission}>{row.permission}</code>
+                                <p className="android-perm-desc">{english ? row.descEn : row.descZh}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="empty-state">{english ? "No permissions match the filter." : "没有符合筛选条件的权限。"}</div>}
+                </>
+              ) : <div className="empty-state">{english ? "This app declares no permissions." : "该应用未声明任何权限。"}</div>}
             </div>
           )}
 

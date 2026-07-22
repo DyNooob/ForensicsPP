@@ -27,6 +27,7 @@ import { copy } from "../i18n";
 import type { PasswordVerifyRow } from "../models";
 import { downloadTextFile } from "../utils/files";
 import { detectHashType } from "../utils/hash";
+import { confidenceLabel, generateHintLabel, identifyHash } from "../utils/hashIdentify";
 import { useStoredState } from "../utils/storage";
 
 export type PasswordToolServices = {
@@ -49,8 +50,9 @@ async function djangoPbkdf2(password: string, salt: string, iterations = 390000)
 export function PasswordTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: PasswordToolServices; active?: boolean }) {
   const { mysqlNativePassword, randomSalt, verifyPasswordCandidates, passwordRowsToCsv } = services;
   const english = t.waiting === "Waiting";
-  const [mode, setMode] = React.useState<"generate" | "verify" | "sql">("generate");
+  const [mode, setMode] = React.useState<"generate" | "verify" | "sql" | "identify">("generate");
   const [password, setPassword] = React.useState("");
+  const [identifyText, setIdentifyText] = React.useState("");
   const [salt, setSalt] = React.useState(() => randomSalt());
   const [rounds, setRounds] = useStoredState("password.rounds", 10);
   const [pbkdf2Iterations, setPbkdf2Iterations] = useStoredState("password.pbkdf2Iterations", 390000);
@@ -114,7 +116,16 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
     ["bcrypt", bcryptHash && username ? `UPDATE ${table} SET ${column} = '${bcryptHash}' WHERE ${whereColumn} = '${escapedUsername}';` : "--"],
     ["Django PBKDF2", pbkdf2Hash && username ? `UPDATE ${table} SET ${column} = '${pbkdf2Hash}' WHERE ${whereColumn} = '${escapedUsername}';` : "--"]
   ], [bcryptHash, column, escapedPassword, escapedUsername, md5, password, pbkdf2Hash, table, username, whereColumn]);
-  const hasInput = Boolean(password || targetHash || candidatePasswords || generatedHashes.length || verifyRows.length || username);
+  const identifyResult = React.useMemo(() => identifyHash(identifyText), [identifyText]);
+  const hasInput = Boolean(password || targetHash || candidatePasswords || generatedHashes.length || verifyRows.length || username || identifyText);
+
+  const useIdentifiedAsPassword = () => {
+    const value = identifyText.trim();
+    if (!value) return;
+    setPassword(value);
+    clearGenerated();
+    setMode("generate");
+  };
 
   const clearGenerated = () => {
     operationRef.current += 1;
@@ -200,6 +211,7 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
     setCandidatePasswords("");
     setVerifyRows([]);
     setUsername("");
+    setIdentifyText("");
     setError("");
   };
 
@@ -211,6 +223,7 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
           actions={<>
             <ASegmentedGroup className="password-simple-mode" value={mode} selects="single">
               <ASegmentedButton value="generate" onClick={() => setMode("generate")}>{english ? "Generate" : "生成"}</ASegmentedButton>
+              <ASegmentedButton value="identify" onClick={() => setMode("identify")}>{t.identifyMode}</ASegmentedButton>
               <ASegmentedButton value="verify" onClick={() => setMode("verify")}>{english ? "Verify" : "验证"}</ASegmentedButton>
               <ASegmentedButton value="sql" onClick={() => setMode("sql")}>SQL</ASegmentedButton>
             </ASegmentedGroup>
@@ -232,10 +245,85 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
               <AButton variant="outlined" disabled={!password || !salt || Boolean(loading)} onClick={() => void generatePbkdf2()}>{loading === "pbkdf2" ? "PBKDF2..." : t.generatePbkdf2}</AButton>
               <AButton variant="text" onClick={() => { setSalt(randomSalt()); clearGenerated(); }}>{english ? "New salt" : "新盐值"}</AButton>
             </div>
+            {!password && <div className="empty-state">{t.passwordGenerateEmpty}</div>}
             {visibleGeneratedHashes.length > 0 && (
               <div className="password-simple-output">
                 <ToolPanelHeader title={english ? "Generated hash" : "生成结果"} actions={<AButton variant="text" onClick={() => void copyText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (english ? "Copy all" : "复制全部") : (english ? "Copy" : "复制")}</AButton>} />
                 <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{visibleGeneratedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void copyText(value)}>{value}</button></td></tr>)}</tbody></table></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === "identify" && (
+          <div className="password-simple-section password-identify">
+            <label className="stack-label">{t.identifyInput}
+              <textarea className="compact-textarea password-identify-input" value={identifyText} onChange={(event) => setIdentifyText(event.currentTarget.value)} placeholder={t.identifyPlaceholder} spellCheck={false} />
+            </label>
+            {!identifyText.trim() ? (
+              <div className="empty-state">{t.identifyEmpty}</div>
+            ) : (
+              <div className="password-identify-result">
+                <div className={`password-identify-kind kind-${identifyResult.kind}`}>
+                  <span className="password-identify-kind-badge">
+                    {identifyResult.kind === "hash" ? t.identifyHashKind : identifyResult.kind === "plaintext" ? t.identifyPlainKind : t.identifyUnknownKind}
+                  </span>
+                  <span className="password-identify-meta">{t.identifyLength}: {identifyResult.length} · {t.identifyCharset}: {english ? identifyResult.charsetEn : identifyResult.charsetZh}</span>
+                </div>
+
+                {identifyResult.kind === "hash" && identifyResult.candidates.length > 0 && (
+                  <div className="password-identify-block">
+                    <div className="password-identify-block-title">{t.identifyCandidates}</div>
+                    <div className="password-identify-list">
+                      {identifyResult.candidates.map((item) => (
+                        <div className={`password-identify-card conf-${item.confidence}`} key={item.id}>
+                          <div className="password-identify-card-head">
+                            <strong>{english ? item.name : item.zh}</strong>
+                            <span className={`password-identify-conf conf-${item.confidence}`}>{t.identifyConfidence}: {confidenceLabel(item.confidence, english)}</span>
+                          </div>
+                          <p className="password-identify-desc">{english ? item.descEn : item.descZh}</p>
+                          <div className="password-identify-tags">
+                            {item.generateHint && <span className="password-identify-tag tag-hint">{t.identifyGenerateHint}: {generateHintLabel(item.generateHint, english)}</span>}
+                            {item.hashcat && <span className="password-identify-tag">{t.identifyReference}: hashcat -m {item.hashcat}</span>}
+                            {item.john && <span className="password-identify-tag">john --format={item.john}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {identifyResult.kind === "plaintext" && identifyResult.strength && (
+                  <div className="password-identify-block">
+                    <div className="password-identify-block-title">{t.identifyStrength}</div>
+                    <div className="password-identify-strength">
+                      <div className={`password-identify-strength-bar score-${identifyResult.strength.score}`}>
+                        {[0, 1, 2, 3].map((slot) => <span key={slot} className={slot < identifyResult.strength!.score ? "on" : ""} />)}
+                      </div>
+                      <span className="password-identify-strength-label">{english ? identifyResult.strength.labelEn : identifyResult.strength.labelZh}</span>
+                    </div>
+                    <div className="password-identify-classes">
+                      <span className={identifyResult.strength.hasLower ? "on" : ""}>a-z</span>
+                      <span className={identifyResult.strength.hasUpper ? "on" : ""}>A-Z</span>
+                      <span className={identifyResult.strength.hasDigit ? "on" : ""}>0-9</span>
+                      <span className={identifyResult.strength.hasSymbol ? "on" : ""}>#$!</span>
+                    </div>
+                    {(english ? identifyResult.strength.notesEn : identifyResult.strength.notesZh).length > 0 && (
+                      <ul className="password-identify-notes">
+                        {(english ? identifyResult.strength.notesEn : identifyResult.strength.notesZh).map((note, index) => <li key={index}>{note}</li>)}
+                      </ul>
+                    )}
+                    <div className="button-row">
+                      <AButton variant="filled" onClick={useIdentifiedAsPassword}>{t.identifyUseAsPassword}</AButton>
+                    </div>
+                  </div>
+                )}
+
+                {identifyResult.kind === "unknown" && (
+                  <div className="button-row">
+                    <AButton variant="outlined" onClick={useIdentifiedAsPassword}>{t.identifyUseAsPassword}</AButton>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -246,6 +334,7 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
             <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "Paste the target password hash" : "粘贴目标密码哈希"} /></label>
             <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "One candidate password per line" : "每行输入一个候选口令"} /></label>
             <div className="button-row"><AButton variant="filled" disabled={!targetHash.trim() || !candidates.length || Boolean(loading)} onClick={() => void verify()}>{loading === "verify" ? (english ? "Verifying..." : "正在验证...") : t.verifyCandidates}</AButton></div>
+            {(!targetHash.trim() || !candidates.length) && <div className="empty-state">{t.passwordVerifyEmpty}</div>}
             {verifyRows.length > 0 && (
               <div className="password-simple-output">
                 <ToolPanelHeader title={english ? "Verification results" : "验证结果"} subtitle={`${matchedCount}/${verifyRows.length} MATCH`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`password-verify-${Date.now()}.csv`, passwordRowsToCsv(verifyRows), "text/csv;charset=utf-8")}>{english ? "Export CSV" : "导出 CSV"}</AButton>} />

@@ -19,7 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-const CACHE_VERSION = "forensicspp-v1.0.0-alpha.4";
+const CACHE_VERSION = "forensicspp-v1.0.0-beta.1";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -29,9 +29,11 @@ const CORE_ASSETS = [
   "./og-image.png",
   "./site.webmanifest",
   "./robots.txt",
-  "./sitemap.xml",
-  "./cyberchef/CyberChef_v10.19.4.html"
+  "./sitemap.xml"
 ];
+// NOTE: The CyberChef static bundle (~12MB+) is intentionally NOT pre-cached here.
+// It is loaded on demand (runtime cache) only when the user opens the CyberChef tool,
+// keeping first-paint fast. See src/tools/CyberChefTool.tsx.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -59,20 +61,37 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(new URL("./index.html", self.registration.scope).href)));
+    event.respondWith(
+      fetch(request).catch(() => caches.match(new URL("./index.html", self.registration.scope).href))
+    );
     return;
   }
 
+  // Network-first for app assets (JS/CSS/fonts/wasm). This guarantees a
+  // rebuilt app always fetches current chunks instead of stale cached ones
+  // whose content hash no longer matches index.html. Cache is only a fallback
+  // for offline use, so the local-first promise still holds.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response && response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
-        }
+    (async () => {
+      const cache = await caches.open(CACHE_VERSION);
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) cache.put(request, response.clone());
         return response;
-      });
-    })
+      } catch (networkError) {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        // Not cached and offline: answer navigations with the app shell,
+        // other missing assets with a neutral 504 so the caller can recover.
+        if (request.destination === "document") {
+          const shell = await caches.match(new URL("./index.html", self.registration.scope).href);
+          if (shell) return shell;
+        }
+        return new Response("Service temporarily unavailable", {
+          status: 504,
+          headers: { "Content-Type": "text/plain; charset=utf-8" }
+        });
+      }
+    })()
   );
 });

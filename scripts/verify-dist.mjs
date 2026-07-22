@@ -23,6 +23,7 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(projectRoot, "dist");
@@ -96,9 +97,15 @@ try {
 
 try {
   const serviceWorker = await readFile(join(distRoot, "sw.js"), "utf8");
-  const expectedCacheVersion = `forensicspp-v${packageJson.version}`;
+  const assetsDir = join(distRoot, "assets");
+  let fingerprint = "static";
+  try {
+    const names = (await readdir(assetsDir)).filter((name) => /\.(js|css)$/.test(name)).sort();
+    fingerprint = createHash("sha1").update(names.join("|")).digest("hex").slice(0, 10);
+  } catch {}
+  const expectedCacheVersion = `forensicspp-v${packageJson.version}-${fingerprint}`;
   if (!serviceWorker.includes(`const CACHE_VERSION = "${expectedCacheVersion}";`)) {
-    errors.push("sw.js cache version does not match package.json");
+    errors.push("sw.js cache version does not match package.json + asset fingerprint");
   }
 } catch {
   // The required-file check above reports a missing sw.js.

@@ -19,12 +19,47 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+/** Transient, dependency-free "copied" confirmation shown after a successful copy. */
+let copyToastLabel = "已复制";
+let copyToastTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Lets the app supply a localized label (e.g. on locale change). */
+export function setCopyToastLabel(label: string) {
+  if (label) copyToastLabel = label;
+}
+
+function showCopyToast(label?: string) {
+  if (typeof document === "undefined" || !document.body) return;
+  const probe = document.createElement("div");
+  // Guard against non-DOM mocks (e.g. unit tests stub document.createElement).
+  if (!("classList" in probe)) return;
+
+  let el = document.getElementById("copy-toast") as HTMLDivElement | null;
+  if (!el) {
+    el = probe;
+    el.id = "copy-toast";
+    el.className = "copy-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.textContent = "✓ " + (label || copyToastLabel);
+  // Restart the enter animation on repeated copies.
+  el.classList.remove("copy-toast--show");
+  void el.offsetWidth;
+  el.classList.add("copy-toast--show");
+  if (copyToastTimer) clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => el?.classList.remove("copy-toast--show"), 1500);
+}
+
 /** Copy text in secure contexts and fall back for static file:// releases. */
-export async function copyText(value: string) {
+export async function copyText(value: string, opts?: { feedback?: boolean }) {
   if (!value) return false;
+  const wantFeedback = opts?.feedback !== false;
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
+      if (wantFeedback) showCopyToast();
       return true;
     }
   } catch {
@@ -43,7 +78,9 @@ export async function copyText(value: string) {
   textarea.focus();
   textarea.select();
   try {
-    return document.execCommand("copy");
+    const ok = document.execCommand("copy");
+    if (ok && wantFeedback) showCopyToast();
+    return ok;
   } finally {
     textarea.remove();
   }

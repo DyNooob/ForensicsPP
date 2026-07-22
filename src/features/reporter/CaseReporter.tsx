@@ -21,9 +21,10 @@
 
 import { copyText } from "../../utils/clipboard";
 import React from "react";
-import { CloseOutlined } from "@ant-design/icons";
-import { Modal } from "antd";
-import { AButton, InfoTable, PanelTitle } from "../../components/ui";
+import { CloseOutlined, DownOutlined } from "@ant-design/icons";
+import { Dropdown, Modal } from "antd";
+import type { MenuProps } from "antd";
+import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../../components/ui";
 import { projectLinks } from "../../config/app";
 import { fingerprintEvidenceFiles } from "./evidence";
 import { readCaseBundleFile } from "./importer";
@@ -433,6 +434,20 @@ export function buildReportHtml(notes: CaseNote[], t: Translation, meta?: CaseRe
   return html;
 }
 
+function sanitizeReportName(value: string) {
+  const cleaned = value
+    .trim()
+    .replace(/[^\w一-龥\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return cleaned || "forensicspp-report";
+}
+
+function reportBaseName(meta: CaseReportMeta) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+  return `${sanitizeReportName(meta.caseName)}-${stamp}`;
+}
+
 export function CaseReporter({
   notes,
   meta,
@@ -463,6 +478,9 @@ export function CaseReporter({
   const importInputRef = React.useRef<HTMLInputElement | null>(null);
   const verificationInputRef = React.useRef<HTMLInputElement | null>(null);
   const verificationAbortRef = React.useRef<AbortController | null>(null);
+  const [previewMode, setPreviewMode] = React.useState<"html" | "markdown">("html");
+  const [tab, setTab] = React.useState<"evidence" | "report" | "integrity">("evidence");
+  const [caseInfoOpen, setCaseInfoOpen] = React.useState(!notes.length);
   const markdown = buildReportMarkdown(notes, t, meta);
   const htmlReport = React.useMemo(() => buildReportHtml(notes, t, meta), [meta, notes, t]);
   const summaryCards = React.useMemo(() => caseReportSummaryCards(notes, t), [notes, t]);
@@ -487,6 +505,26 @@ export function CaseReporter({
 
   const updateMetaField = (field: keyof CaseReportMeta, value: string) => {
     onMetaChange({ ...meta, [field]: value });
+  };
+
+  const openPrintReport = () => {
+    if (!notes.length) return;
+    const blob = new Blob([htmlReport], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (!win) return;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  const clearAll = () => {
+    Modal.confirm({
+      title: t.confirmClearTitle,
+      content: t.confirmClearText,
+      okText: t.clearNotes,
+      cancelText: t.cancelEdit,
+      okButtonProps: { danger: true },
+      onOk: onClear
+    });
   };
 
   const importBundle = async (file: File | undefined) => {
@@ -539,205 +577,244 @@ export function CaseReporter({
     }
   };
 
+  const exportMenuItems: MenuProps["items"] = [
+    { key: "md", label: t.exportReport },
+    { key: "html", label: t.exportReportHtml },
+    { key: "print", label: t.printReport },
+    { key: "copy", label: t.copyReportMarkdown },
+    { type: "divider" },
+    { key: "json", label: t.exportReportJson },
+    { key: "bundle", label: t.exportReportBundle },
+    { key: "csv", label: t.exportNotesCsv }
+  ];
+
+  const onExportClick: MenuProps["onClick"] = ({ key }) => {
+    if (key === "md") downloadTextFile(`${reportBaseName(meta)}.md`, markdown);
+    else if (key === "html") downloadTextFile(`${reportBaseName(meta)}.html`, htmlReport, "text/html;charset=utf-8");
+    else if (key === "print") openPrintReport();
+    else if (key === "copy") void copyText(markdown);
+    else if (key === "json") downloadTextFile(`${reportBaseName(meta)}.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8");
+    else if (key === "bundle") downloadTextFile(`${reportBaseName(meta)}-bundle.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8");
+    else if (key === "csv") downloadTextFile(`${reportBaseName(meta)}-notes.csv`, caseNotesToCsv(notes), "text/csv;charset=utf-8");
+  };
+
+  const reviewCount = notes.filter((note) => caseNoteRiskLevel(note) === "review").length;
+  const toolCount = caseReportToolCount(notes);
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div className="modal-panel reporter-panel" role="dialog" aria-modal="true" aria-labelledby="reporter-title" onClick={(event) => event.stopPropagation()}>
-        <div className="command-title-row">
-          <div>
+        <div className="reporter-header">
+          <div className="reporter-header-info">
             <h2 id="reporter-title">{t.caseReporter}</h2>
-            <span>{notes.length} {t.tools} · {visibleNotes.length} {t.visibleNotes}</span>
+            <span className="reporter-header-stats">{notes.length} {t.evidenceItems} · {toolCount} {t.uniqueTools}{reviewCount ? ` · ${reviewCount} ${t.riskReview}` : ""}</span>
           </div>
           <AButton className="modal-close-button" variant="text" icon={<CloseOutlined aria-hidden="true" />} aria-label={t.close} title={t.close} onClick={onClose} />
         </div>
-        <div className="reporter-actions">
-          <input ref={importInputRef} className="hidden-file-input" type="file" accept="application/json,.json" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void importBundle(file); }} />
-          <AButton variant="outlined" onClick={() => importInputRef.current?.click()}>
-            {t.importReport}
-          </AButton>
-          <AButton variant="filled" disabled={!notes.length} onClick={() => downloadTextFile(`forensicspp-report-${Date.now()}.md`, markdown)}>
-            {t.exportReport}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={() => downloadTextFile(`forensicspp-report-${Date.now()}.html`, htmlReport, "text/html;charset=utf-8")}>
-            {t.exportReportHtml}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={() => void copyText(markdown)}>
-            {t.copyReportMarkdown}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={() => downloadTextFile(`forensicspp-report-${Date.now()}.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8")}>
-            {t.exportReportJson}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={() => downloadTextFile(`forensicspp-report-bundle-${Date.now()}.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8")}>
-            {t.exportReportBundle}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={() => downloadTextFile(`forensicspp-notes-index-${Date.now()}.csv`, caseNotesToCsv(notes), "text/csv;charset=utf-8")}>
-            {t.exportNotesCsv}
-          </AButton>
-          <AButton variant="outlined" disabled={!notes.length} onClick={onClear}>
-            {t.clearNotes}
-          </AButton>
-        </div>
-        {importError && <div className="empty-state error-state reporter-import-error">{importError}</div>}
-        <div className="reporter-meta-panel">
-          <PanelTitle title={t.reportMeta} />
-          <div className="reporter-meta-grid">
-            <label>{t.caseName}<input value={meta.caseName} onChange={(event) => updateMetaField("caseName", event.target.value)} /></label>
-            <label>{t.examiner}<input value={meta.examiner} onChange={(event) => updateMetaField("examiner", event.target.value)} /></label>
-            <label>{t.organization}<input value={meta.organization} onChange={(event) => updateMetaField("organization", event.target.value)} /></label>
-            <label>{t.evidenceId}<input value={meta.evidenceId} onChange={(event) => updateMetaField("evidenceId", event.target.value)} /></label>
-            <label>{t.timezone}<input value={meta.timezone} onChange={(event) => updateMetaField("timezone", event.target.value)} /></label>
-            <label>{t.classification}<input value={meta.classification} onChange={(event) => updateMetaField("classification", event.target.value)} /></label>
-            <label className="reporter-meta-wide">{t.reportRemarks}<textarea value={meta.remarks} onChange={(event) => updateMetaField("remarks", event.target.value)} /></label>
+
+        <div className="reporter-toolbar">
+          <div className="reporter-toolbar-left">
+            <input ref={importInputRef} className="hidden-file-input" type="file" accept="application/json,.json" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void importBundle(file); }} />
+            <AButton variant="outlined" onClick={() => importInputRef.current?.click()}>{t.importReport}</AButton>
+            <AButton variant="outlined" disabled={!notes.length} onClick={clearAll}>{t.clearNotes}</AButton>
           </div>
+          <Dropdown menu={{ items: exportMenuItems, onClick: onExportClick }} trigger={["click"]} disabled={!notes.length}>
+            <AButton variant="filled" disabled={!notes.length} icon={<DownOutlined aria-hidden="true" />} iconPosition="end">{t.exportMenu}</AButton>
+          </Dropdown>
         </div>
-        {notes.length ? (
-          <div className="reporter-summary-panel">
-            <PanelTitle title={t.reportSummary} />
-            <div className="reporter-summary-grid">
-              {summaryCards.map((card) => (
-                <div className={`reporter-summary-card ${card.tone}`} key={card.label}>
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <small>{card.detail}</small>
-                </div>
-              ))}
+
+        {importError && <div className="empty-state error-state reporter-import-error">{importError}</div>}
+
+        <div className="reporter-caseinfo">
+          <button type="button" className="reporter-caseinfo-toggle" aria-expanded={caseInfoOpen} onClick={() => setCaseInfoOpen((open) => !open)}>
+            <PanelTitle title={t.reportMeta} />
+            <span className={`reporter-chevron${caseInfoOpen ? " open" : ""}`} aria-hidden="true" />
+          </button>
+          {caseInfoOpen && (
+            <div className="reporter-meta-grid">
+              <label>{t.caseName}<input value={meta.caseName} onChange={(event) => updateMetaField("caseName", event.target.value)} /></label>
+              <label>{t.examiner}<input value={meta.examiner} onChange={(event) => updateMetaField("examiner", event.target.value)} /></label>
+              <label>{t.organization}<input value={meta.organization} onChange={(event) => updateMetaField("organization", event.target.value)} /></label>
+              <label>{t.evidenceId}<input value={meta.evidenceId} onChange={(event) => updateMetaField("evidenceId", event.target.value)} /></label>
+              <label>{t.timezone}<input value={meta.timezone} onChange={(event) => updateMetaField("timezone", event.target.value)} /></label>
+              <label>{t.classification}<input value={meta.classification} onChange={(event) => updateMetaField("classification", event.target.value)} /></label>
+              <label className="reporter-meta-wide">{t.reportRemarks}<textarea value={meta.remarks} onChange={(event) => updateMetaField("remarks", event.target.value)} /></label>
             </div>
+          )}
+        </div>
+
+        {notes.length ? (
+          <div className="reporter-stat-strip">
+            {summaryCards.map((card) => (
+              <div className={`reporter-stat ${card.tone}`} key={card.label}>
+                <strong>{card.value}</strong>
+                <span>{card.label}</span>
+              </div>
+            ))}
           </div>
         ) : null}
+
         {notes.length ? (
-          <div className="reporter-layout">
-            <div className="reporter-notes-panel">
-              <div className="reporter-section-head">
-                <PanelTitle title={t.reportItems} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.searchNotes} aria-label={t.searchNotes} />
-              </div>
-              <div className="reporter-notes">
-                {visibleNotes.map((note) => {
-                  const risk = caseNoteRiskLevel(note);
-                  return (
-                  <button
-                    className={`reporter-note-card ${risk}${selectedNote?.id === note.id ? " active" : ""}`}
-                    key={note.id}
-                    type="button"
-                    onClick={() => setSelectedId(note.id)}
-                  >
-                    <div className="reporter-note-card-head">
-                      <strong>{note.title}</strong>
-                      <em>{caseRiskLabel(risk, t)}</em>
-                    </div>
-                    <span>{note.tool} · {note.route ?? "--"} · {note.createdAt}</span>
-                    <p>{note.summary || note.content}</p>
-                  </button>
-                  );
-                })}
-                {!visibleNotes.length && <div className="empty-state">{t.noNotes}</div>}
-              </div>
+          <>
+            <div className="reporter-tabs">
+              <ASegmentedGroup value={tab} selects="single">
+                <ASegmentedButton value="evidence" onClick={() => setTab("evidence")}>{t.tabEvidence}</ASegmentedButton>
+                <ASegmentedButton value="report" onClick={() => setTab("report")}>{t.tabReport}</ASegmentedButton>
+                <ASegmentedButton value="integrity" onClick={() => setTab("integrity")}>{t.tabIntegrity}</ASegmentedButton>
+              </ASegmentedGroup>
             </div>
-            <div className="reporter-detail-panel">
-              <div className="reporter-section-head">
-                <PanelTitle title={t.selectedNote} />
-                <div className="button-row compact-buttons">
-                  <AButton variant="outlined" disabled={!selectedNote} onClick={() => selectedNote && void copyText(selectedNote.markdown || selectedNote.content)}>
-                    {t.copyNote}
-                  </AButton>
-                  <AButton variant="outlined" disabled={!selectedNote} onClick={() => selectedNote && onDeleteNote(selectedNote.id)}>
-                    {t.deleteNote}
-                  </AButton>
+
+            {tab === "evidence" && (
+              <div className="reporter-evidence-layout">
+                <div className="reporter-notes-panel">
+                  <div className="reporter-section-head">
+                    <PanelTitle title={t.reportItems} />
+                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.searchNotes} aria-label={t.searchNotes} />
+                  </div>
+                  <div className="reporter-notes">
+                    {visibleNotes.map((note) => {
+                      const risk = caseNoteRiskLevel(note);
+                      return (
+                        <button
+                          className={`reporter-note-card ${risk}${selectedNote?.id === note.id ? " active" : ""}`}
+                          key={note.id}
+                          type="button"
+                          onClick={() => setSelectedId(note.id)}
+                        >
+                          <div className="reporter-note-card-head">
+                            <strong>{note.title}</strong>
+                            <em>{caseRiskLabel(risk, t)}</em>
+                          </div>
+                          <span>{note.tool} · {note.route ?? "--"} · {note.createdAt}</span>
+                          <p>{note.summary || note.content}</p>
+                        </button>
+                      );
+                    })}
+                    {!visibleNotes.length && <div className="empty-state">{t.noNotes}</div>}
+                  </div>
+                </div>
+                <div className="reporter-detail-panel">
+                  <div className="reporter-section-head">
+                    <PanelTitle title={t.selectedNote} />
+                    <div className="button-row compact-buttons">
+                      <AButton variant="outlined" disabled={!selectedNote} onClick={() => selectedNote && void copyText(selectedNote.markdown || selectedNote.content)}>{t.copyNote}</AButton>
+                      <AButton variant="outlined" disabled={!selectedNote} onClick={() => selectedNote && onDeleteNote(selectedNote.id)}>{t.deleteNote}</AButton>
+                    </div>
+                  </div>
+                  {selectedNote ? (
+                    <>
+                      <label className="reporter-title-edit">
+                        {t.noteTitle}
+                        <input value={selectedNote.title} onChange={(event) => onUpdateNote(selectedNote.id, { title: event.target.value })} />
+                      </label>
+                      <InfoTable rows={[
+                        [t.sourceRole, selectedNote.tool],
+                        [t.riskLevel, caseRiskLabel(caseNoteRiskLevel(selectedNote), t)],
+                        [t.lastUpdated, selectedNote.createdAt],
+                        ["Route", selectedNote.route ?? "--"],
+                        ["Source URL", selectedNote.sourceUrl ?? "--"],
+                        [t.sourceFiles, selectedNote.evidenceFiles?.map((file) => file.name).join(", ") || "--"],
+                        [t.timelineEvents, String(selectedNote.timelineEvents?.length ?? 0)],
+                        [t.noteContentHash, selectedDigest]
+                      ]} />
+                      <textarea
+                        className="reporter-note-content"
+                        value={selectedNote.markdown || selectedNote.content}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          onUpdateNote(selectedNote.id, {
+                            markdown: value,
+                            content: value,
+                            summary: limitReportText(value.replace(/\s+/g, " "), 420),
+                            contentSha256: sha256Bytes(new TextEncoder().encode(value))
+                          });
+                        }}
+                        aria-label={t.selectedNote}
+                      />
+                    </>
+                  ) : (
+                    <div className="empty-state">{t.noNotes}</div>
+                  )}
                 </div>
               </div>
-              {selectedNote ? (
-                <>
-                  <label className="reporter-title-edit">
-                    {t.noteTitle}
-                    <input value={selectedNote.title} onChange={(event) => onUpdateNote(selectedNote.id, { title: event.target.value })} />
-                  </label>
-                  <InfoTable rows={[
-                    [t.sourceRole, selectedNote.tool],
-                    [t.riskLevel, caseRiskLabel(caseNoteRiskLevel(selectedNote), t)],
-                    [t.lastUpdated, selectedNote.createdAt],
-                    ["Route", selectedNote.route ?? "--"],
-                    ["Source URL", selectedNote.sourceUrl ?? "--"],
-                    [t.sourceFiles, selectedNote.evidenceFiles?.map((file) => file.name).join(", ") || "--"],
-                    [t.timelineEvents, String(selectedNote.timelineEvents?.length ?? 0)],
-                    [t.noteContentHash, selectedDigest]
-                  ]} />
-                  <textarea
-                    className="reporter-note-content"
-                    value={selectedNote.markdown || selectedNote.content}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      onUpdateNote(selectedNote.id, {
-                        markdown: value,
-                        content: value,
-                        summary: limitReportText(value.replace(/\s+/g, " "), 420),
-                        contentSha256: sha256Bytes(new TextEncoder().encode(value))
-                      });
-                    }}
-                    aria-label={t.selectedNote}
-                  />
-                </>
-              ) : (
-                <div className="empty-state">{t.noNotes}</div>
-              )}
-            </div>
-            <div className="reporter-preview-panel">
-              <PanelTitle title={t.reportPreview} />
-              <div className="reporter-integrity-box">
-                <PanelTitle title={t.reportIntegrity} />
-                <InfoTable rows={integrityRows} />
-              </div>
-              <div className="reporter-timeline-box">
-                <PanelTitle title={t.reportTimeline} />
-                <div className="reporter-timeline-list">
-                  {timelineRows.slice(-6).map((row) => (
-                    <div className={`reporter-timeline-row ${row.risk}`} key={`${row.at}-${row.digest}`}>
-                      <span>{row.at}</span>
-                      <strong>{row.title}</strong>
-                      <em>{row.detail || row.tool}</em>
-                    </div>
-                  ))}
+            )}
+
+            {tab === "report" && (
+              <div className="reporter-report-tab">
+                <div className="reporter-preview-toolbar">
+                  <ASegmentedGroup value={previewMode} selects="single">
+                    <ASegmentedButton value="html" onClick={() => setPreviewMode("html")}>{t.previewHtml}</ASegmentedButton>
+                    <ASegmentedButton value="markdown" onClick={() => setPreviewMode("markdown")}>{t.previewMarkdown}</ASegmentedButton>
+                  </ASegmentedGroup>
+                  <AButton variant="outlined" onClick={openPrintReport}>{t.printReport}</AButton>
                 </div>
+                {previewMode === "html" ? (
+                  <iframe className="reporter-preview-frame" title={t.reportPreview} srcDoc={htmlReport} sandbox="allow-same-origin" />
+                ) : (
+                  <textarea className="reporter-markdown" value={markdown} readOnly aria-label="Evidence report markdown" />
+                )}
               </div>
-              <div className="reporter-evidence-box">
-                <div className="reporter-section-head">
-                  <PanelTitle title={t.evidenceRegister} />
-                  <>
+            )}
+
+            {tab === "integrity" && (
+              <div className="reporter-integrity-tab">
+                <div className="reporter-integrity-grid">
+                  <div className="reporter-integrity-box">
+                    <PanelTitle title={t.reportIntegrity} />
+                    <InfoTable rows={integrityRows} />
+                  </div>
+                  <div className="reporter-timeline-box">
+                    <PanelTitle title={t.reportTimeline} />
+                    <div className="reporter-timeline-list">
+                      {timelineRows.map((row) => (
+                        <div className={`reporter-timeline-row ${row.risk}`} key={`${row.at}-${row.digest}`}>
+                          <span>{row.at}</span>
+                          <strong>{row.title}</strong>
+                          <em>{row.detail || row.tool}</em>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="reporter-evidence-box">
+                  <div className="reporter-section-head">
+                    <PanelTitle title={t.evidenceRegister} />
                     <input ref={verificationInputRef} className="hidden-file-input" type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { const files = event.currentTarget.files; event.currentTarget.value = ""; void verifySourceFiles(files); }} />
                     <AButton variant="outlined" disabled={!caseReportSourceFiles(notes).length || verificationBusy} onClick={() => verificationInputRef.current?.click()} aria-busy={verificationBusy}>
                       {verificationBusy ? t.verifyingEvidence : t.verifyEvidence}
                     </AButton>
-                  </>
-                </div>
-                {caseReportSourceFiles(notes).length ? (
-                  <div className="table-scroll reporter-evidence-table">
-                    <table className="data-table">
-                      <thead><tr><th>{t.sourceFile}</th><th>{t.sourceBytes}</th><th>{t.sourceHash}</th><th>{t.sourceRole}</th><th>{t.evidenceVerification}</th></tr></thead>
-                      <tbody>
-                        {caseReportSourceFiles(notes).map(({ file, note }, index) => (
-                          <tr key={`${file.name}:${file.size}:${file.sha256 ?? index}`}>
-                            <td title={file.name}>{file.name}</td>
-                            <td>{formatBytes(file.size)}</td>
-                            <td><code>{file.sha256 || "--"}</code></td>
-                            <td>{note.tool}</td>
-                            <td>{verification ? verificationStatusLabel(verification.rows[index]?.status, t) : "--"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
-                ) : <div className="empty-state">{t.noSourceFiles}</div>}
-                {verification && <div className="reporter-verification-summary">
-                  <span>{t.evidenceVerified}: {verification.matchedCount}</span>
-                  <span>{t.evidenceMismatch}: {verification.mismatchCount}</span>
-                  <span>{t.evidenceMissing}: {verification.missingCount}</span>
-                  {verification.unregisteredCount > 0 && <span>{t.evidenceUnregistered}: {verification.unregisteredCount}</span>}
-                </div>}
-                {verificationError && <div className="empty-state error-state">{verificationError}</div>}
+                  {caseReportSourceFiles(notes).length ? (
+                    <div className="table-scroll reporter-evidence-table">
+                      <table className="data-table">
+                        <thead><tr><th>{t.sourceFile}</th><th>{t.sourceBytes}</th><th>{t.sourceHash}</th><th>{t.sourceRole}</th><th>{t.evidenceVerification}</th></tr></thead>
+                        <tbody>
+                          {caseReportSourceFiles(notes).map(({ file, note }, index) => (
+                            <tr key={`${file.name}:${file.size}:${file.sha256 ?? index}`}>
+                              <td title={file.name}>{file.name}</td>
+                              <td>{formatBytes(file.size)}</td>
+                              <td><code>{file.sha256 || "--"}</code></td>
+                              <td>{note.tool}</td>
+                              <td>{verification ? verificationStatusLabel(verification.rows[index]?.status, t) : "--"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <div className="empty-state">{t.noSourceFiles}</div>}
+                  {verification && <div className="reporter-verification-summary">
+                    <span>{t.evidenceVerified}: {verification.matchedCount}</span>
+                    <span>{t.evidenceMismatch}: {verification.mismatchCount}</span>
+                    <span>{t.evidenceMissing}: {verification.missingCount}</span>
+                    {verification.unregisteredCount > 0 && <span>{t.evidenceUnregistered}: {verification.unregisteredCount}</span>}
+                  </div>}
+                  {verificationError && <div className="empty-state error-state">{verificationError}</div>}
+                </div>
               </div>
-              <textarea className="reporter-markdown" value={markdown} readOnly aria-label="Evidence report markdown" />
-            </div>
-          </div>
+            )}
+          </>
         ) : (
-          <div className="empty-state">{t.noNotes}</div>
+          <div className="empty-state reporter-empty">{t.noNotes}</div>
         )}
       </div>
     </div>

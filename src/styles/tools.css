@@ -2213,6 +2213,166 @@ pre.result-box {
   overflow-wrap: anywhere;
 }
 
+/* Permission review: severity colours, summary chips, category groups, cards. */
+.android-perm-view {
+  --sev-dangerous: var(--app-danger);
+  --sev-special: var(--app-warn);
+  --sev-signature: #7c3aed;
+  --sev-normal: var(--app-muted);
+  --sev-unknown: var(--app-muted);
+  min-width: 0;
+}
+
+.android-summary-danger strong {
+  color: var(--app-danger);
+}
+
+.android-perm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.android-perm-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-surface-soft);
+  padding: 5px 12px;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.android-perm-chip:hover {
+  border-color: var(--app-line-strong);
+}
+
+.android-perm-chip-count {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.android-perm-chip.sev-dangerous { color: var(--sev-dangerous); border-color: color-mix(in srgb, var(--sev-dangerous) 40%, var(--app-line)); }
+.android-perm-chip.sev-special { color: var(--sev-special); border-color: color-mix(in srgb, var(--sev-special) 40%, var(--app-line)); }
+.android-perm-chip.sev-signature { color: var(--sev-signature); border-color: color-mix(in srgb, var(--sev-signature) 40%, var(--app-line)); }
+
+.android-perm-chip.is-active {
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface));
+  border-color: var(--app-primary);
+}
+.android-perm-chip.sev-dangerous.is-active { background: color-mix(in srgb, var(--sev-dangerous) 14%, var(--app-surface)); border-color: var(--sev-dangerous); }
+.android-perm-chip.sev-special.is-active { background: color-mix(in srgb, var(--sev-special) 16%, var(--app-surface)); border-color: var(--sev-special); }
+.android-perm-chip.sev-signature.is-active { background: color-mix(in srgb, var(--sev-signature) 14%, var(--app-surface)); border-color: var(--sev-signature); }
+
+.android-perm-groups {
+  display: grid;
+  gap: 16px;
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.android-perm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.android-perm-group-title {
+  color: var(--app-text);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.android-perm-group-count {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--app-surface-soft);
+  border: 1px solid var(--app-line);
+  padding: 0 6px;
+  color: var(--app-muted);
+  font-size: 11.5px;
+}
+
+.android-perm-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.android-perm-card {
+  border: 1px solid var(--app-line);
+  border-left: 3px solid var(--sev-normal);
+  border-radius: 7px;
+  background: var(--app-surface);
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.android-perm-card.sev-dangerous { border-left-color: var(--sev-dangerous); }
+.android-perm-card.sev-special { border-left-color: var(--sev-special); }
+.android-perm-card.sev-signature { border-left-color: var(--sev-signature); }
+
+.android-perm-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.android-perm-name {
+  color: var(--app-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.android-perm-badge {
+  flex: none;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--sev-normal) 14%, var(--app-surface));
+  color: var(--sev-normal);
+  border: 1px solid color-mix(in srgb, var(--sev-normal) 32%, transparent);
+}
+
+.android-perm-badge.sev-dangerous { background: color-mix(in srgb, var(--sev-dangerous) 14%, var(--app-surface)); color: var(--sev-dangerous); border-color: color-mix(in srgb, var(--sev-dangerous) 32%, transparent); }
+.android-perm-badge.sev-special { background: color-mix(in srgb, var(--sev-special) 16%, var(--app-surface)); color: var(--sev-special); border-color: color-mix(in srgb, var(--sev-special) 32%, transparent); }
+.android-perm-badge.sev-signature { background: color-mix(in srgb, var(--sev-signature) 14%, var(--app-surface)); color: var(--sev-signature); border-color: color-mix(in srgb, var(--sev-signature) 32%, transparent); }
+
+.android-perm-const {
+  display: block;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.android-perm-desc {
+  margin: 6px 0 0;
+  color: var(--app-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 /* Packet capture: one result workspace with task-oriented views. */
 .pcap-workspace-panel {
   min-width: 0;
@@ -2321,9 +2481,159 @@ pre.result-box {
   font-size: 13px;
 }
 
-.pcap-simple-packets > .pcap-filter {
-  width: min(460px, 100%);
+.pcap-packet-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 12px;
+}
+
+.pcap-packet-toolbar .pcap-filter {
+  width: min(320px, 100%);
+  margin-bottom: 0;
+}
+
+.pcap-protocol-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pcap-protocol-chip {
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-surface-soft);
+  padding: 3px 10px;
+  color: var(--app-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.pcap-protocol-chip:hover {
+  border-color: var(--app-line-strong);
+}
+
+.pcap-protocol-chip.is-active {
+  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface));
+  border-color: var(--app-primary);
+  color: var(--app-text);
+}
+
+.pcap-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.pcap-sort-control label {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.pcap-sort-control select {
+  width: auto;
+  min-width: 110px;
+  padding: 4px 8px;
+}
+
+.pcap-packet-count {
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pcap-proto-badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 650;
+  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface));
+  color: var(--app-primary);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 32%, transparent);
+}
+
+.pcap-proto-badge.proto-http { background: color-mix(in srgb, #22c55e 14%, var(--app-surface)); color: #15803d; border-color: color-mix(in srgb, #22c55e 32%, transparent); }
+.pcap-proto-badge.proto-dns { background: color-mix(in srgb, #a855f7 14%, var(--app-surface)); color: #7e22ce; border-color: color-mix(in srgb, #a855f7 32%, transparent); }
+.pcap-proto-badge.proto-tcp,
+.pcap-proto-badge.proto-tcpv6 { background: color-mix(in srgb, #3b82f6 14%, var(--app-surface)); color: #1d4ed8; border-color: color-mix(in srgb, #3b82f6 32%, transparent); }
+.pcap-proto-badge.proto-udp,
+.pcap-proto-badge.proto-udpv6 { background: color-mix(in srgb, #f59e0b 14%, var(--app-surface)); color: #b45309; border-color: color-mix(in srgb, #f59e0b 32%, transparent); }
+.pcap-proto-badge.proto-icmp,
+.pcap-proto-badge.proto-icmpv6 { background: color-mix(in srgb, #ef4444 14%, var(--app-surface)); color: #b91c1c; border-color: color-mix(in srgb, #ef4444 32%, transparent); }
+.pcap-proto-badge.proto-arp { background: color-mix(in srgb, #6366f1 14%, var(--app-surface)); color: #4338ca; border-color: color-mix(in srgb, #6366f1 32%, transparent); }
+
+.pcap-info-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcap-packet-detail-row {
+  background: var(--app-surface-soft);
+}
+
+.pcap-packet-detail-row > td {
+  padding: 0;
+}
+
+.pcap-packet-detail {
+  padding: 14px 16px;
+  border-top: 1px dashed var(--app-line);
+}
+
+.pcap-packet-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pcap-packet-detail-head strong {
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.pcap-packet-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.pcap-traffic-chart {
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  background: var(--app-surface);
+  padding: 12px 14px;
+}
+
+.pcap-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pcap-chart-head strong {
+  color: var(--app-text);
+  font-size: 13.5px;
+}
+
+.pcap-chart-head span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.pcap-traffic-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .pcap-simple-pagination {
@@ -4481,4 +4791,199 @@ textarea {
 .android-xml-details[open] > .manifest-textarea {
   margin: 0 12px 12px;
   width: calc(100% - 24px);
+}
+
+/* Password auto-identify view */
+.password-identify-input {
+  min-height: 88px;
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.password-identify-result {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.password-identify-kind {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.password-identify-kind-badge {
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface-soft);
+  color: var(--app-text);
+}
+
+.password-identify-kind.kind-hash .password-identify-kind-badge {
+  background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface));
+  color: var(--app-primary);
+  border-color: color-mix(in srgb, var(--app-primary) 34%, transparent);
+}
+
+.password-identify-kind.kind-plaintext .password-identify-kind-badge {
+  background: color-mix(in srgb, var(--app-warn) 16%, var(--app-surface));
+  color: var(--app-warn);
+  border-color: color-mix(in srgb, var(--app-warn) 34%, transparent);
+}
+
+.password-identify-meta {
+  color: var(--app-muted);
+  font-size: 12.5px;
+}
+
+.password-identify-block-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--app-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.password-identify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.password-identify-card {
+  border: 1px solid var(--app-line);
+  border-left: 3px solid var(--app-muted);
+  border-radius: 7px;
+  background: var(--app-surface);
+  padding: 10px 12px;
+}
+
+.password-identify-card.conf-high { border-left-color: var(--app-primary); }
+.password-identify-card.conf-medium { border-left-color: var(--app-warn); }
+.password-identify-card.conf-low { border-left-color: var(--app-muted); }
+
+.password-identify-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.password-identify-card-head strong {
+  color: var(--app-text);
+  font-size: 13.5px;
+}
+
+.password-identify-conf {
+  flex: none;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--app-muted) 14%, var(--app-surface));
+  color: var(--app-muted);
+  border: 1px solid color-mix(in srgb, var(--app-muted) 30%, transparent);
+}
+
+.password-identify-conf.conf-high { background: color-mix(in srgb, var(--app-primary) 14%, var(--app-surface)); color: var(--app-primary); border-color: color-mix(in srgb, var(--app-primary) 32%, transparent); }
+.password-identify-conf.conf-medium { background: color-mix(in srgb, var(--app-warn) 16%, var(--app-surface)); color: var(--app-warn); border-color: color-mix(in srgb, var(--app-warn) 32%, transparent); }
+
+.password-identify-desc {
+  margin: 0 0 8px;
+  color: var(--app-text-soft, var(--app-text));
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.password-identify-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.password-identify-tag {
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  border: 1px solid var(--app-line);
+}
+
+.password-identify-tag.tag-hint {
+  font-family: inherit;
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface));
+  color: var(--app-primary);
+  border-color: color-mix(in srgb, var(--app-primary) 30%, transparent);
+}
+
+.password-identify-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.password-identify-strength-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.password-identify-strength-bar span {
+  width: 34px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--app-line);
+}
+
+.password-identify-strength-bar span.on { background: var(--app-danger); }
+.password-identify-strength-bar.score-2 span.on { background: var(--app-warn); }
+.password-identify-strength-bar.score-3 span.on { background: var(--app-primary); }
+.password-identify-strength-bar.score-4 span.on { background: var(--app-ok, #16a34a); }
+
+.password-identify-strength-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.password-identify-classes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.password-identify-classes span {
+  border-radius: 5px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+  border: 1px solid var(--app-line);
+  opacity: 0.55;
+}
+
+.password-identify-classes span.on {
+  opacity: 1;
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface));
+  color: var(--app-primary);
+  border-color: color-mix(in srgb, var(--app-primary) 30%, transparent);
+}
+
+.password-identify-notes {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--app-warn);
+  font-size: 12.5px;
+  line-height: 1.6;
 }

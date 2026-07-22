@@ -6,6 +6,29 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - 暂无未发布变更。
 
+## [1.0.0-beta.1] - 2026-07-23
+
+### Changed
+
+- 版本号从 `1.0.0-alpha.4` 升级为 `1.0.0-beta.1`。
+- **案件记录 / 证据报告 全面重构**：导出按钮合并为「导出」下拉菜单，改为标签页布局（证据列表 / 报告预览 / 完整性 & 时间线），案件信息可折叠，摘要改为紧凑状态条，报告预览支持全宽查看。
+- Service Worker 从 cache-first 改为 **network-first**，`CACHE_VERSION` 增加构建指纹（dist/assets 文件名 SHA1），每次重建自动清旧缓存，根除重建后工具页全挂的问题。
+- 证据报告预览工具栏改为分段按钮（渲染预览 / Markdown 源码）+ 打印按钮。
+- 全局复制操作增加「已复制」提示浮层，72 个 `copyText` 调用站点统一受益。
+- 滚动条样式改为主题色自适应（深色模式下滚动条更清晰可见）。
+
+### Fixed
+
+- 修复 6 个 CSS token 从未定义的问题（`--app-mono` 被 40 处引用但从未定义，导致所有等宽 UI 回退到 sans-serif；`--app-border`、`--border-subtle`、`--text-secondary`、`--app-ok`、`--app-text-soft` 等同样缺失）。
+- 修复密码工具分段按钮布局：SQL 按钮不再折行。
+- 修复 `--app-mono` 未定义导致的等宽字体回退 bug（哈希值、十六进制数据、代码查看器等 40 处受影响）。
+
+### Verification
+
+- 137 个测试通过。
+- TypeScript、版权头、生产构建、静态发布包验证通过。
+- 36 个工具的布局审计通过。
+
 ## [1.0.0-alpha.4] - 2026-07-14
 
 ### Added
@@ -276,7 +299,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.4...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.4...v1.0.0-beta.1
 [1.0.0-alpha.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
 [1.0.0-alpha.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
 [1.0.0-alpha.2]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.1...v1.0.0-alpha.2

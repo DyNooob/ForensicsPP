@@ -73,6 +73,14 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  --app-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ui-monospace, monospace;
+  --app-font-mono: var(--app-mono);
+  --app-border: var(--app-line);
+  --border-subtle: color-mix(in srgb, var(--app-line) 64%, transparent);
+  --text-secondary: var(--app-muted);
+  --app-text-soft: color-mix(in srgb, var(--app-text) 82%, var(--app-muted));
+  --app-ok: var(--app-green);
+  --swatch: var(--app-primary);
 }
 
 [data-theme-mode="dark"] {
@@ -100,10 +108,18 @@
   --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), 0 12px 28px rgba(0, 0, 0, 0.18);
   --app-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 18px rgba(0, 0, 0, 0.14);
   --app-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.38), 0 3px 12px rgba(0, 0, 0, 0.24);
+  scrollbar-color: rgba(154, 178, 203, 0.45) transparent;
+}
+
+[data-theme-mode="dark"] ::selection {
+  background: color-mix(in srgb, var(--app-primary) 34%, var(--app-primary-soft));
+  color: var(--app-text);
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--app-muted) 52%, transparent) transparent;
 }
 
 html,
@@ -131,6 +147,11 @@ body {
   font-size: var(--text-md);
   color: var(--app-text);
   transition: background 160ms ease, color 160ms ease;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--app-primary) 24%, var(--app-primary-soft));
+  color: var(--app-text);
 }
 
 button,
@@ -173,7 +194,7 @@ textarea {
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
-  background: rgba(100, 116, 139, 0.48);
+  background: color-mix(in srgb, var(--app-muted) 52%, transparent);
   background-clip: content-box;
 }
 
@@ -201,6 +222,44 @@ textarea {
 
 .skip-link:focus {
   transform: translateY(0);
+}
+
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.copy-toast--show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast {
+    transition: opacity 160ms ease;
+    transform: translateX(-50%);
+  }
+  .copy-toast--show {
+    transform: translateX(-50%);
+  }
 }
 
 .workbench-shell {
@@ -1143,10 +1202,26 @@ input[type="radio"] {
   }
 }
 
-@media (max-width: 1120px) {
-}
-
 @media (max-width: 520px) {
+  :root {
+    --content-gutter: 12px;
+  }
+
+  .tool-topbar {
+    padding: 8px var(--content-gutter);
+  }
+
+  .tool-body {
+    padding: 12px var(--content-gutter) 18px;
+  }
+
+  .page-title {
+    font-size: 17px;
+  }
+
+  .tool-subtitle {
+    font-size: 12px;
+  }
 }
 
 /* Ant Design alignment: shared controls stay flat, predictable, and restrained. */
@@ -1472,12 +1547,14 @@ textarea {
 }
 
 .password-simple-mode {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 .password-simple-mode .app-button.ant-btn {
-  width: 100%;
+  width: auto;
+  min-width: 64px;
 }
 
 .password-simple-generate-grid {
@@ -2466,5 +2543,16 @@ textarea {
 
   .binary-hex-controls {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -107,10 +107,10 @@ export function parsePcap(bytes: Uint8Array, name: string, size: number, sha256:
   });
   const iocs: PcapInfo["iocs"] = [];
   const findings: PcapInfo["findings"] = [];
-  const timeline: PcapInfo["timeline"] = [];
-  const events: PcapInfo["events"] = [];
   const evidenceMatrix: PcapInfo["evidenceMatrix"] = [];
   const briefing = "";
+  const timeline = buildPcapTimeline(parsed.packets);
+  const events = buildPcapTimelineEvents(parsed.packets, conversations, httpItems, parsed.dnsItems, extractedFiles, iocs, findings, timeline);
 
   if (pcapMagic.format === "PCAPNG") {
     return {

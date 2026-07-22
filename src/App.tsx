@@ -19,18 +19,21 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { copyText } from "./utils/clipboard";
+import { copyText, setCopyToastLabel } from "./utils/clipboard";
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
-import { CheckCircleFilled, CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
-import { AButton, AList, AListItem, AListSubheader, ASegmentedButton, ASegmentedGroup, ATextField } from "./components/ui";
-import { GithubIconButton } from "./components/GithubIconButton";
 import { CommandPalette } from "./components/CommandPalette";
 import { ToolHost } from "./components/ToolHost";
-import { getToolTitle as resolveToolTitle, isToolId, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
-import type { ToolId } from "./config/app";
+import { Sidebar } from "./components/Sidebar";
+import type { ToolGroup } from "./components/Sidebar";
+import { Topbar } from "./components/Topbar";
+import { LegalConsentModal } from "./components/LegalConsentModal";
+import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
+import type { ToolCategory, ToolDefinition, ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
+import { normalizeHexColor, themeDisplayColor, themeSoftColor } from "./utils/themeColors";
+import { compactReportText, defaultCaseReportMeta, isBooleanValue, isCaseNotesValue, isCaseReportMetaValue, isLangValue, isStringValue, isThemeModeValue, isToolIdArrayValue, isToolIdValue } from "./utils/appGuards";
 import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./models";
 import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFiles } from "./features/reporter/evidence";
 import { rememberedTimelineEvents } from "./features/reporter/timeline";
@@ -40,112 +43,6 @@ const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter")
 
 function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
   return resolveToolTitle(tool, lang, copy[lang]);
-}
-
-
-
-function normalizeHexColor(value: string) {
-  const normalized = value.trim().startsWith("#") ? value.trim() : `#${value.trim()}`;
-  return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toUpperCase() : null;
-}
-
-function hexToRgb(value: string) {
-  const normalized = normalizeHexColor(value);
-  if (!normalized) return null;
-  const hex = normalized.slice(1);
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16)
-  };
-}
-
-function mixHexColors(base: string, target: string, amount: number) {
-  const from = hexToRgb(base);
-  const to = hexToRgb(target);
-  if (!from || !to) return base;
-  const mix = (start: number, end: number) => Math.round(start + (end - start) * amount);
-  const toHex = (value: number) => value.toString(16).padStart(2, "0").toUpperCase();
-  return `#${toHex(mix(from.r, to.r))}${toHex(mix(from.g, to.g))}${toHex(mix(from.b, to.b))}`;
-}
-
-function relativeLuminance(hex: string) {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return 0;
-  const channel = (value: number) => {
-    const normalized = value / 255;
-    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
-}
-
-function contrastRatio(first: string, second: string) {
-  const lighter = Math.max(relativeLuminance(first), relativeLuminance(second));
-  const darker = Math.min(relativeLuminance(first), relativeLuminance(second));
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function themeDisplayColor(hex: string, mode: "light" | "dark") {
-  const normalized = normalizeHexColor(hex) ?? themePresets[0].hex;
-  if (mode === "light") return normalized;
-  const darkSurface = "#1D2A38";
-  if (contrastRatio(normalized, darkSurface) >= 4.5) return normalized;
-  for (let amount = 0.08; amount <= 0.8; amount += 0.04) {
-    const candidate = mixHexColors(normalized, "#FFFFFF", amount);
-    if (contrastRatio(candidate, darkSurface) >= 4.5) return candidate;
-  }
-  return mixHexColors(normalized, "#FFFFFF", 0.8);
-}
-
-function themeSoftColor(hex: string, mode: "light" | "dark") {
-  const rgb = hexToRgb(hex);
-  if (!rgb) {
-    return mode === "dark" ? "rgba(8, 126, 164, 0.15)" : "rgba(8, 126, 164, 0.08)";
-  }
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${mode === "dark" ? "0.15" : "0.08"})`;
-}
-
-function defaultCaseReportMeta(): CaseReportMeta {
-  return {
-    caseName: "",
-    examiner: "",
-    organization: "",
-    evidenceId: "",
-    timezone: typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC",
-    classification: "",
-    remarks: ""
-  };
-}
-
-function compactReportText(value: string, limit = 24000) {
-  const normalized = value.replace(/\n{3,}/g, "\n\n").trim();
-  return normalized.length > limit ? `${normalized.slice(0, limit)}\n\n[内容已截断]` : normalized;
-}
-
-const isLangValue = (value: unknown): value is Lang => value === "zh" || value === "en";
-const isThemeModeValue = (value: unknown): value is ThemeMode => value === "light" || value === "dark" || value === "auto";
-const isToolIdValue = (value: unknown): value is ToolId => typeof value === "string" && isToolId(value);
-const isStringValue = (value: unknown): value is string => typeof value === "string";
-const isBooleanValue = (value: unknown): value is boolean => typeof value === "boolean";
-const isToolIdArrayValue = (value: unknown): value is ToolId[] => Array.isArray(value) && value.every((item) => isToolIdValue(item));
-
-function isCaseNotesValue(value: unknown): value is CaseNote[] {
-  if (!Array.isArray(value)) return false;
-  return value.every((item) => {
-    if (!item || typeof item !== "object") return false;
-    const note = item as Partial<CaseNote>;
-    return typeof note.id === "string"
-      && typeof note.tool === "string"
-      && typeof note.content === "string"
-      && typeof note.createdAt === "string";
-  });
-}
-
-function isCaseReportMetaValue(value: unknown): value is CaseReportMeta {
-  if (!value || typeof value !== "object") return false;
-  const meta = value as Partial<CaseReportMeta>;
-  return ["caseName", "examiner", "organization", "evidenceId", "timezone", "classification", "remarks"]
-    .every((key) => typeof meta[key as keyof CaseReportMeta] === "string");
 }
 
 
@@ -187,6 +84,7 @@ export function App() {
   });
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const t = copy[lang];
+  const toolTitle = React.useCallback((tool: ToolDefinition) => getToolTitle(tool, lang), [lang]);
   const resolvedThemeColor = React.useMemo(
     () => {
       const normalized = normalizeHexColor(themeColor) ?? themePresets[0].hex;
@@ -207,6 +105,9 @@ export function App() {
   React.useEffect(() => {
     clearLegacyEvidenceStorage();
   }, []);
+  React.useEffect(() => {
+    setCopyToastLabel(t.copyDone);
+  }, [t]);
   React.useEffect(() => {
     const rememberInputFiles = (event: Event) => {
       const target = event.target;
@@ -379,7 +280,7 @@ export function App() {
     .map((id) => filteredTools.find((tool) => tool.id === id))
     .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
     .filter((tool) => tool.id !== "home");
-  const groupedTools = (["featured", "analysis", "transform", "network"] as Array<keyof typeof copy.zh>)
+  const groupedTools: ToolGroup[] = (["featured", "analysis", "transform", "network"] as ToolCategory[])
     .map((category) => ({
       category,
       items: filteredTools.filter((tool) => tool.category === category && !favoriteIds.has(tool.id))
@@ -681,7 +582,7 @@ export function App() {
 
   const copyCurrentToolLink = () => {
     const url = `${window.location.origin}${window.location.pathname}${window.location.search}#${activeTool}`;
-    void copyText(url).then((copied) => setToolLinkMessage(copied ? t.toolLinkCopied : url));
+    void copyText(url, { feedback: false }).then((copied) => setToolLinkMessage(copied ? t.toolLinkCopied : url));
   };
 
   return (
@@ -754,168 +655,40 @@ export function App() {
         aria-hidden={sidebarCollapsed && !isNarrowShell ? true : undefined}
         inert={sidebarCollapsed && !isNarrowShell ? true : undefined}
       >
-        <div className="sidebar-inner">
-        <div className="sidebar-head">
-          <a className="brand" href="#home" title="Forensics++">
-            <span>F++</span>
-            <strong>{t.product}</strong>
-            <small>{t.subtitle}</small>
-          </a>
-          <button
-            className="sidebar-toggle"
-            type="button"
-            aria-label={sidebarCollapsed ? t.expandSidebar : t.collapseSidebar}
-            title={sidebarCollapsed ? t.expandSidebar : t.collapseSidebar}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            {sidebarCollapsed ? <MenuUnfoldOutlined aria-hidden="true" /> : <MenuFoldOutlined aria-hidden="true" />}
-          </button>
-        </div>
-        {!sidebarCollapsed && (
-          <>
-            <ATextField
-              className="tool-search"
-              variant="outlined"
-              type="search"
-              clearable
-              placeholder={t.search}
-              value={query}
-              aria-label={t.search}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-            <nav className="tool-nav" aria-label={t.toolDirectory}>
-              {favoriteNavTools.length ? (
-                <AList className="favorite-tool-section tool-nav-list">
-                  <AListSubheader>{t.favoriteTools}</AListSubheader>
-                  {favoriteNavTools.map((tool) => (
-                    <AListItem
-                      className={tool.id === activeTool ? "active favorite-tool-item" : "favorite-tool-item"}
-                      key={`favorite-${tool.id}`}
-                      rounded
-                      active={tool.id === activeTool}
-                      description={t[tool.category]}
-                      description-line={1}
-                      title={`${getToolTitle(tool, lang)} - ${t[tool.desc]}`}
-                      aria-current={tool.id === activeTool ? "page" : undefined}
-                      onClick={() => setActiveTool(tool.id)}
-                    >
-                      {getToolTitle(tool, lang)}
-                    </AListItem>
-                  ))}
-                </AList>
-              ) : null}
-              {groupedTools.map((group) => (
-                <AList className="tool-nav-list" key={group.category}>
-                  <AListSubheader>{t[group.category]}</AListSubheader>
-                  {group.items.map((tool) => (
-                    <AListItem
-                      className={tool.id === activeTool ? "active" : ""}
-                      key={tool.id}
-                      rounded
-                      active={tool.id === activeTool}
-                      description={t[tool.category]}
-                      description-line={1}
-                      title={`${t[tool.name]} - ${t[tool.desc]}`}
-                      aria-current={tool.id === activeTool ? "page" : undefined}
-                      onClick={() => setActiveTool(tool.id)}
-                    >
-                      {t[tool.name]}
-                    </AListItem>
-                  ))}
-                </AList>
-              ))}
-              {!groupedTools.length && <div className="nav-empty">{t.noToolMatches}</div>}
-            </nav>
-          </>
-        )}
-        <div className="sidebar-footer">
-          <AButton variant="outlined" aria-label={t.openCommandPalette} title={t.openCommandPalette} onClick={openCommandPalette}>
-            <CodeOutlined className="sidebar-action-icon" aria-hidden="true" />
-            <strong>{t.openCommandPalette}</strong>
-          </AButton>
-          <AButton variant="outlined" aria-label={t.settings} onClick={() => openSettingsPanel()}>
-            <SettingOutlined className="sidebar-action-icon" aria-hidden="true" />
-            <strong>{t.settings}</strong>
-          </AButton>
-        </div>
-        </div>
+        <Sidebar
+          t={t}
+          query={query}
+          onQueryChange={setQuery}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed(!sidebarCollapsed)}
+          favoriteNavTools={favoriteNavTools}
+          groupedTools={groupedTools}
+          activeTool={activeTool}
+          onSelectTool={(id) => setActiveTool(id)}
+          onOpenCommandPalette={openCommandPalette}
+          onOpenSettings={() => openSettingsPanel()}
+          toolTitle={toolTitle}
+        />
       </aside>
 
       <main className="tool-main" id="main-content" tabIndex={-1}>
-        <header className={`tool-topbar ${activeTool === "home" ? "home-topbar" : ""}`}>
-          <div className="tool-topbar-frame">
-            <button
-              className="top-action-icon top-menu-toggle"
-              type="button"
-              aria-label={sidebarCollapsed ? t.expandSidebar : t.collapseSidebar}
-              title={sidebarCollapsed ? t.expandSidebar : t.collapseSidebar}
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            >
-              {sidebarCollapsed ? <MenuUnfoldOutlined aria-hidden="true" /> : <MenuFoldOutlined aria-hidden="true" />}
-            </button>
-            <div className="tool-title-block">
-              <span className="tool-kicker">{t[active.category]}</span>
-              <strong className="page-title">{getToolTitle(active, lang)}</strong>
-              <span className="tool-subtitle">{t[active.desc]}</span>
-              {toolLinkMessage && <span className="tool-link-feedback">{toolLinkMessage}</span>}
-            </div>
-            <div className="top-actions">
-              <div className="top-action-group">
-                <GithubIconButton label={t.repositoryLabel} />
-                {activeTool !== "home" && (
-                  <button
-                    className="top-action-icon link-toggle"
-                    type="button"
-                    aria-label={t.copyToolLink}
-                    title={t.copyToolLink}
-                    onClick={copyCurrentToolLink}
-                  >
-                    <LinkOutlined aria-hidden="true" />
-                  </button>
-                )}
-                {activeTool !== "home" && (
-                  <button
-                    className="top-action-icon report-add-toggle"
-                    type="button"
-                    aria-label={t.addToReport}
-                    title={reportAddBusy ? t.reportHashingSource : `${t.addToReport}${caseNotes.length ? ` · ${caseNotes.length}` : ""}`}
-                    aria-busy={reportAddBusy}
-                    disabled={reportAddBusy}
-                    onClick={addCurrentToolToReport}
-                  >
-                    <FileAddOutlined aria-hidden="true" />
-                  </button>
-                )}
-                <button
-                  className="top-action-icon settings-toggle"
-                  type="button"
-                  aria-label={t.settings}
-                  title={t.settings}
-                  onClick={() => openSettingsPanel()}
-                >
-                  <SettingOutlined aria-hidden="true" />
-                </button>
-                <button
-                  className="top-action-icon command-toggle"
-                  type="button"
-                  aria-label={t.openCommandPalette}
-                  title={t.openCommandPalette}
-                  onClick={openCommandPalette}
-                >
-                  <CodeOutlined aria-hidden="true" />
-                </button>
-              </div>
-              <ASegmentedGroup className="language-switch" value={lang} selects="single" aria-label={t.language}>
-                <ASegmentedButton value="zh" onClick={() => setLang("zh")}>
-                  中文
-                </ASegmentedButton>
-                <ASegmentedButton value="en" onClick={() => setLang("en")}>
-                  EN
-                </ASegmentedButton>
-              </ASegmentedGroup>
-            </div>
-          </div>
-        </header>
+        <Topbar
+          t={t}
+          lang={lang}
+          active={active}
+          activeTool={activeTool}
+          toolTitle={toolTitle}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed(!sidebarCollapsed)}
+          toolLinkMessage={toolLinkMessage}
+          onCopyLink={copyCurrentToolLink}
+          reportAddBusy={reportAddBusy}
+          caseNotesCount={caseNotes.length}
+          onAddToReport={addCurrentToolToReport}
+          onOpenSettings={() => openSettingsPanel()}
+          onOpenCommandPalette={openCommandPalette}
+          onSetLang={setLang}
+        />
 
         <section className={detailsExpanded || activeTool === "home" ? "tool-body" : "tool-body compact-results"}>
           {retainedTools.map((mountedTool) => (
@@ -924,29 +697,11 @@ export function App() {
         </section>
       </main>
 
-      <Modal
-        className="legal-consent-modal"
+      <LegalConsentModal
+        t={t}
         open={acceptedLegalVersion !== legalVersion}
-        centered
-        width={520}
-        title={t.legalNoticeTitle}
-        closable={false}
-        maskClosable={false}
-        keyboard={false}
-        footer={(
-          <div className="legal-consent-actions">
-            <AButton href="./legal.html" target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
-            <AButton variant="filled" onClick={() => setAcceptedLegalVersion(legalVersion)}>{t.acceptTerms}</AButton>
-          </div>
-        )}
-      >
-        <p className="legal-consent-body">{t.legalNoticeBody}</p>
-        <ul className="legal-consent-list">
-          {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview, t.legalDataCare].map((item) => (
-            <li key={item}><CheckCircleFilled aria-hidden="true" /><span>{item}</span></li>
-          ))}
-        </ul>
-      </Modal>
+        onAccept={() => setAcceptedLegalVersion(legalVersion)}
+      />
 
       <Modal
         open={Boolean(pendingToolClose)}
