@@ -17,7 +17,7 @@
 # Released under the MIT License.
 # Full source code: https://github.com/DyNooob/ForensicsPP
 
-name: Verify static build
+name: Deploy static build
 
 on:
   push:
@@ -26,6 +26,12 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -54,5 +60,21 @@ jobs:
           test ! -e dist/.git
           test -z "$(find dist -type d -name .git -print -quit)"
 
-# The canonical site is published from the GitHub repository. This workflow is
-# deliberately limited to build verification and has no deployment permission.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+# The canonical site is deployed to GitHub Pages from the built `dist/` artifact
+# produced by this workflow. Build verification runs before any deployment.
