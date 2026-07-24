@@ -19,7 +19,6 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "@ant-design/v5-patch-for-react-19";
 import "antd/dist/reset.css";

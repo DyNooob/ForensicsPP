@@ -220,7 +220,6 @@ function decodeAndroidBinaryXml(bytes: Uint8Array) {
       const uri = androidString(strings, view.getInt32(offset + 20, true));
       if (prefix && uri) namespaces[prefix] = uri;
     } else if (type === 0x0102) {
-      const nsIndex = view.getInt32(offset + 16, true);
       const nameIndex = view.getInt32(offset + 20, true);
       const tagName = androidString(strings, nameIndex);
       const attrStart = view.getUint16(offset + 24, true);

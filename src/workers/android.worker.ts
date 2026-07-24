@@ -27,7 +27,7 @@
 import { decodeAndroidManifestBytes, inspectAndroidArchive, inspectAndroidBinaryXml } from "../features/android/analyzer";
 
 self.onmessage = (event: MessageEvent<{ bytes: Uint8Array; name: string; size: number }>) => {
-  const { bytes, name, size } = event.data;
+  const { bytes } = event.data;
   try {
     const archive = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? inspectAndroidArchive(bytes) : undefined;
     const manifestBytes = archive?.manifest ?? bytes;

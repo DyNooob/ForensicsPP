@@ -44,9 +44,22 @@ function copyrightCssPlugin(): Plugin {
   };
 }
 
+function cspMetaPlugin(): Plugin {
+  return {
+    name: "forensicspp-csp-meta",
+    apply: "build",
+    transformIndexHtml(html) {
+      const csp =
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+        "font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'self'";
+      return html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${csp}">`);
+    }
+  };
+}
+
 export default defineConfig({
   base: "./",
-  plugins: [react(), copyrightCssPlugin()],
+  plugins: [react(), copyrightCssPlugin(), cspMetaPlugin()],
   build: {
     target: "es2022",
     rollupOptions: {

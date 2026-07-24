@@ -19,7 +19,6 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { analyzeIocs } from "../ioc/analyzer";
 import type {
   IocRecord,
   PcapConversation,
@@ -1640,7 +1639,6 @@ export function pcapEvidenceMatrixRows(info: {
 }) {
   const totalBytes = info.summary?.totalCaptured ?? info.packets.reduce((sum, packet) => sum + packet.captured, 0);
   const dangerFindings = info.findings.filter((finding) => finding.level === "danger").length;
-  const warnFindings = info.findings.filter((finding) => finding.level === "warn").length;
   const topConversation = info.conversations[0];
   const topEndpoint = info.endpoints[0];
   const topService = info.portStats[0];

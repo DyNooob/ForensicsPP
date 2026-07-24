@@ -19,7 +19,6 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import React from "react";
 import { MenuFoldOutlined, MenuUnfoldOutlined, CodeOutlined, SettingOutlined } from "@ant-design/icons";
 import { AButton, AList, AListItem, AListSubheader, ATextField } from "./ui";
 import type { ToolCategory, ToolDefinition } from "../config/app";

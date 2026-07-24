@@ -25,7 +25,6 @@ import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable,
 import { copy } from "../i18n";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../models";
 import { PERM_CATEGORY_META, PERM_SEVERITY_META, type PermCategory, type PermSeverity } from "../features/android/permissionCatalog";
-import { hexPreview } from "../utils/binary";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
 import { useStoredState } from "../utils/storage";

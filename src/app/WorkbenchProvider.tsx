@@ -19,13 +19,20 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { WorkbenchProvider } from "./app/WorkbenchProvider";
-import { WorkbenchShell } from "./app/WorkbenchShell";
+import React from "react";
+import { useWorkbenchController, type Workbench } from "./useWorkbenchController";
 
-export function App() {
-  return (
-    <WorkbenchProvider>
-      <WorkbenchShell />
-    </WorkbenchProvider>
-  );
+const WorkbenchContext = React.createContext<Workbench | null>(null);
+
+export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
+  const value = useWorkbenchController();
+  return <WorkbenchContext.Provider value={value}>{children}</WorkbenchContext.Provider>;
+}
+
+export function useWorkbench(): Workbench {
+  const context = React.useContext(WorkbenchContext);
+  if (!context) {
+    throw new Error("useWorkbench must be used within a WorkbenchProvider");
+  }
+  return context;
 }

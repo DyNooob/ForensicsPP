@@ -66,7 +66,6 @@ import {
   loadSqliteTableRowsForExport,
   sqliteInternalRowidIdentifier,
   quoteSqlIdentifier,
-  quoteSqlLiteral,
   runSqliteQuery,
   sqliteDefaultCellSelection,
   sqliteEmptyDataSet,

@@ -35,7 +35,7 @@ type ToolErrorBoundaryState = {
 };
 
 export class ToolErrorBoundary extends React.Component<ToolErrorBoundaryProps, ToolErrorBoundaryState> {
-  state: ToolErrorBoundaryState = { error: null };
+  override state: ToolErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ToolErrorBoundaryState {
     return { error };
@@ -51,7 +51,7 @@ export class ToolErrorBoundary extends React.Component<ToolErrorBoundaryProps, T
     this.setState({ error: null });
   };
 
-  render() {
+  override render() {
     if (!this.state.error) return this.props.children;
 
     return (

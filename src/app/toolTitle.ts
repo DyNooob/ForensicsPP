@@ -19,13 +19,11 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { WorkbenchProvider } from "./app/WorkbenchProvider";
-import { WorkbenchShell } from "./app/WorkbenchShell";
+import { getToolTitle as resolveToolTitle } from "../config/app";
+import { copy } from "../i18n";
+import type { ToolDefinition } from "../config/app";
+import type { Lang } from "../models";
 
-export function App() {
-  return (
-    <WorkbenchProvider>
-      <WorkbenchShell />
-    </WorkbenchProvider>
-  );
+export function getToolTitle(tool: ToolDefinition, lang: Lang): string {
+  return resolveToolTitle(tool, lang, copy[lang]);
 }
