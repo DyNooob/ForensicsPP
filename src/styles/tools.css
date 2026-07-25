@@ -4417,6 +4417,35 @@ textarea {
   line-height: 1.6;
 }
 
+.tool-error-detail {
+  max-width: 560px;
+  width: 100%;
+  text-align: left;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.tool-error-detail summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--app-text);
+}
+
+.tool-error-detail pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: var(--app-radius-sm);
+  background: color-mix(in srgb, var(--app-danger) 8%, var(--app-surface-2));
+  border: 1px solid color-mix(in srgb, var(--app-danger) 20%, var(--app-line));
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  color: var(--app-text);
+}
+
 /* File intake uses the same spacing on every tool page. */
 .desktop-drop-zone,
 .pcap-drop-zone,
