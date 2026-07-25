@@ -32,7 +32,7 @@
   --app-line-strong: #c3ccd5;
   --app-text: #17212b;
   --app-muted: #637180;
-  --app-faint: #8b98a5;
+  --app-faint: #6f7c89;
   --app-primary: #4457a6;
   --app-primary-contrast: #ffffff;
   --app-primary-soft: rgba(68, 87, 166, 0.09);
@@ -96,6 +96,13 @@
   --app-text: #e7eef6;
   --app-muted: #afc0d2;
   --app-faint: #96a9bd;
+  /* Dark-mode contrast fixes for static semantic TEXT/ICON colors. These are
+     not user-themeable, so they must be lightened here. (The user-themeable
+     --app-primary is auto-lightened at runtime by themeDisplayColor in
+     useThemeController, so it is intentionally NOT overridden here.) */
+  --app-danger: #ed6a5e;
+  --app-green: #46c79e;
+  --app-warn: #e3a63c;
   --app-primary-soft: rgba(68, 87, 166, 0.22);
   --app-primary-strong: color-mix(in srgb, var(--app-primary) 18%, var(--app-surface));
   --app-surface-2: color-mix(in srgb, var(--app-surface) 94%, #1d2d3c);
