@@ -493,6 +493,12 @@ export type PcapHttpItem = {
   bodyPreview: string;
   bodySha256: string;
   risk: string[];
+  /** TCP stream key this message belongs to, when known. */
+  streamKey: string;
+  /** Raw HTTP header block (request or status line + headers). */
+  headers: string;
+  /** Whether this is a request or a response message. */
+  role: "request" | "response";
 };
 
 export type PcapExtractedFile = {

@@ -9,7 +9,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 1.0.0 beta 3" src="https://img.shields.io/badge/Version-1.0.0--beta.3-4457A6?style=flat-square" />
+    <img alt="Version 1.0.0 beta 4" src="https://img.shields.io/badge/Version-1.0.0--beta.4-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-GitHub-52606D?style=flat-square" /></a>
@@ -44,6 +44,8 @@ Forensics++ 是一个面向取证初筛、CTF/MISC、安全研究和日常证据
 | 磁盘与内存 | MBR/GPT、FAT 根目录、NTFS/exFAT/EXT/ISO 元数据、Memory/Minidump Triage、流式 Bulk Artifact Scanner |
 | 文档与时间 | PDF、OOXML、OLE、时间戳转换、时间线整理、多源事件合并、`.fppcase` 版本化案件包 |
 | 编码与安全 | 编码解码、进制转换、UUID、JSON、正则、JWT、常见密码哈希、YARA、CyberChef |
+
+一级入口按工作台收口：PNG/QR 归入图片工作台，文件识别/字符串/熵/YARA 归入二进制工作台；旧链接仍会自动跳转到对应工作台。
 
 工具之间使用统一的输入、结果、复制、下载和清空交互。大型检材分析优先走 `EvidenceReader` 随机/流式读取；Analyzer 通过统一路由和短生命周期内存 Handoff 复用现有解析器。结构化 `AnalysisEnvelope` 会进入有界 Result Store，并可随 `.fppcase` 1.1 案件包保存分析快照。需要保存的工作区可以在切换工具或刷新页面后继续查看，也可以加入案件报告统一整理。
 
@@ -105,7 +107,7 @@ npm run release:package
 输出文件：
 
 ```text
-release/ForensicsPP-v1.0.0-beta.3-static.zip
+release/ForensicsPP-v1.0.0-beta.4-static.zip
 release/SHA256SUMS.txt
 ```
 

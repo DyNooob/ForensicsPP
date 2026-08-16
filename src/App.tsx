@@ -28,7 +28,7 @@ import { Sidebar } from "./components/Sidebar";
 import type { ToolGroup } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
-import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, toolIdFromHash, tools, writeToolHash } from "./config/app";
+import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash } from "./config/app";
 import type { ToolCategory, ToolDefinition, ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
@@ -99,7 +99,7 @@ export function App() {
     () => themeDisplayColor(resolvedThemeColor, appliedTheme),
     [appliedTheme, resolvedThemeColor]
   );
-  const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? storedActiveTool : "home");
+  const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? canonicalToolId(storedActiveTool) : "home");
   const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
   const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
   const [pendingToolClose, setPendingToolClose] = React.useState<ToolId[] | null>(null);
@@ -139,13 +139,15 @@ export function App() {
   }, [activeTool, dirtyTools]);
   const rememberToolUse = (tool: ToolId) => {
     if (tool === "home") return;
-    setRecentTools((items) => [tool, ...items.filter((item) => item !== tool && tools.some((known) => known.id === item))].slice(0, maxRecentTools));
+    const canonical = canonicalToolId(tool);
+    setRecentTools((items) => [canonical, ...items.map(canonicalToolId).filter((item) => item !== canonical && visibleTools.some((known) => known.id === item))].slice(0, maxRecentTools));
   };
   const setActiveTool = (tool: ToolId, options?: { replaceHash?: boolean }) => {
-    setRouteTool(tool);
-    setStoredActiveTool(tool);
-    rememberToolUse(tool);
-    writeToolHash(tool, options?.replaceHash);
+    const canonical = canonicalToolId(tool);
+    setRouteTool(canonical);
+    setStoredActiveTool(canonical);
+    rememberToolUse(canonical);
+    writeToolHash(canonical, options?.replaceHash);
     if (isNarrowShell) setSidebarCollapsed(true);
   };
   const addCurrentToolToReport = async () => {
@@ -275,17 +277,17 @@ export function App() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [dirtyTools.length]);
   const active = tools.find((tool) => tool.id === activeTool) ?? tools[0];
-  const favoriteIds = new Set(favoriteTools.filter((id) => id !== "home" && tools.some((tool) => tool.id === id)));
+  const favoriteIds = new Set(favoriteTools.map(canonicalToolId).filter((id) => id !== "home" && visibleTools.some((tool) => tool.id === id)));
   const activeIsFavorite = favoriteIds.has(activeTool);
   const toggleFavoriteTool = (tool: ToolId) => {
     if (tool === "home") return;
     setFavoriteTools((items) => {
-      const normalized = items.filter((item) => item !== "home" && tools.some((known) => known.id === item));
+      const normalized = Array.from(new Set(items.map(canonicalToolId).filter((item) => item !== "home" && visibleTools.some((known) => known.id === item))));
       return normalized.includes(tool) ? normalized.filter((item) => item !== tool) : [tool, ...normalized].slice(0, maxRecentTools);
     });
   };
   const detailsToggleLabel = detailsExpanded ? (lang === "zh" ? "精简" : "Compact") : (lang === "zh" ? "详情" : "Details");
-  const filteredTools = tools.filter((tool) => {
+  const filteredTools = visibleTools.filter((tool) => {
     const text = [
       copy.zh[tool.name],
       copy.zh[tool.desc],
@@ -442,7 +444,7 @@ export function App() {
   ), []);
 
   const commands = React.useMemo<AppCommand[]>(() => {
-    const toolCommands = tools.map((tool) => ({
+    const toolCommands = visibleTools.map((tool) => ({
       id: `tool:${tool.id}`,
       group: t.commandGroupTools,
       label: getToolTitle(tool, lang),

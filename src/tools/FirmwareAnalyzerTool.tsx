@@ -135,9 +135,9 @@ export function FirmwareAnalyzerTool({
       timeline: [],
       limitations: [
         ...(analysis.objects.some((object) => object.extent === "heuristic" || object.extent === "unknown") ? [{ code: "FIRMWARE_BOUNDARY_CONFIDENCE", detail: english ? "Heuristic/unresolved carve boundaries require independent verification." : "启发式或未解析的 carving 边界需要独立复核。" }] : []),
-        ...(!analysis.recursive ? [{ code: "FIRMWARE_LARGE_SOURCE_RECURSION", detail: english ? "Large sources are scanned streaming; recursive expansion is performed selectively by handing carved containers to their analyzers." : "大文件采用流式扫描；递归展开通过将 carved container 交给对应分析器选择性完成。" }] : [])
+        ...(analysis.warnings.some((warning) => warning.includes("recursive expansion")) ? [{ code: "FIRMWARE_RECURSION_BUDGET", detail: english ? "Recursive container expansion is budgeted; remaining carved containers can be sent to their analyzers individually." : "递归容器展开受预算限制；剩余 carved container 仍可单独交给对应分析器。" }] : [])
       ],
-      data: { counts: analysis.counts, categories: analysis.categories, architectures: analysis.architectures, interestingPaths: analysis.interestingPaths, manifestSchema: "forensicspp.firmware-manifest/v1" }
+      data: { counts: analysis.counts, categories: analysis.categories, architectures: analysis.architectures, interestingPaths: analysis.interestingPaths, timings: analysis.timings, manifestSchema: "forensicspp.firmware-manifest/v1" }
     });
   }, [english]);
 
@@ -226,7 +226,7 @@ export function FirmwareAnalyzerTool({
     const bytes = await materialize(object);
     if (!bytes) return;
     const sourceName = fileRef.current?.name || "firmware";
-    downloadBlob(`${sourceName}-0x${object.offset.toString(16).toUpperCase()}.${object.extension || "bin"}`, new Blob([bytes.buffer], { type: object.mime || "application/octet-stream" }));
+    downloadBlob(`${sourceName}-0x${object.offset.toString(16).toUpperCase()}.${object.extension || "bin"}`, new Blob([bytes.slice()], { type: object.mime || "application/octet-stream" }));
   }, [materialize]);
 
   const analyzeObject = React.useCallback(async (object: FirmwareObject) => {
@@ -238,7 +238,7 @@ export function FirmwareAnalyzerTool({
       sourceTool: "firmware",
       targetTool: object.analyzer,
       label: `${object.label} · ${object.virtualPath}`,
-      file: new File([bytes.buffer], `${sourceName}-0x${object.offset.toString(16).toUpperCase()}.${object.extension || "bin"}`, { type: object.mime || "application/octet-stream" })
+      file: new File([bytes.slice()], `${sourceName}-0x${object.offset.toString(16).toUpperCase()}.${object.extension || "bin"}`, { type: object.mime || "application/octet-stream" })
     });
     setActiveTool(object.analyzer);
   }, [materialize, setActiveTool]);
@@ -289,6 +289,10 @@ export function FirmwareAnalyzerTool({
             [english ? "Architectures" : "架构", Object.entries(session.analysis.architectures).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
             [english ? "Categories" : "分类", Object.entries(session.analysis.categories).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
             [english ? "Chunk size" : "扫描块", formatBytes(session.analysis.chunkSize)],
+            [english ? "Scan time" : "扫描耗时", `${(session.analysis.timings.scanMs / 1000).toFixed(2)} s`],
+            [english ? "Resolve time" : "边界解析耗时", `${(session.analysis.timings.resolveMs / 1000).toFixed(2)} s`],
+            [english ? "Recursive time" : "递归耗时", `${(session.analysis.timings.recursiveMs / 1000).toFixed(2)} s`],
+            [english ? "Total time" : "总耗时", `${(session.analysis.timings.totalMs / 1000).toFixed(2)} s`],
             [english ? "Interesting paths" : "关注路径", String(session.analysis.interestingPaths.length)]
           ]} />
           {session.analysis.warnings.map((warning, index) => <div className="empty-state warning-state" key={`${warning}-${index}`}>{warning}</div>)}

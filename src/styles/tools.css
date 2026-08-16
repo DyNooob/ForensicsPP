@@ -5082,3 +5082,282 @@ textarea {
   .firmware-entropy-chart { height: 150px; }
   .firmware-entropy-legend { flex-direction: column; gap: 2px; }
 }
+
+/* Embedded-object preview: collapse long content so rows stay short. */
+.embedded-preview-shell {
+  max-width: 380px;
+}
+.embedded-preview-summary {
+  cursor: pointer;
+  color: var(--accent-color, #4457a6);
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--text-xs, 12px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  list-style: none;
+}
+.embedded-preview-summary::-webkit-details-marker { display: none; }
+.embedded-preview-summary::before {
+  content: "▸ ";
+  color: var(--text-secondary, #6b7280);
+}
+.embedded-preview-shell[open] > .embedded-preview-summary::before {
+  content: "▾ ";
+}
+.embedded-preview-full {
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--app-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--accent-color, #4457a6) 7%, transparent);
+  border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+/* Image channel lightbox */
+.image-channel-grid figure,
+.image-repair-preview-grid figure {
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.image-channel-grid figure:hover,
+.image-repair-preview-grid figure:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.image-channel-grid figure:focus-visible,
+.image-repair-preview-grid figure:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 12, 18, 0.66);
+}
+
+.image-lightbox-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(92vw, 1100px);
+  max-height: 90vh;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.image-lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.image-lightbox-head strong {
+  color: var(--app-text);
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.image-lightbox-img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  max-height: 74vh;
+  object-fit: contain;
+  background:
+    repeating-conic-gradient(var(--app-line) 0% 25%, transparent 0% 50%) 50% / 18px 18px;
+}
+
+/* PCAP HTTP conversation groups */
+.pcap-http-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pcap-http-group {
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pcap-http-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--app-surface-soft);
+  border-bottom: 1px solid var(--app-line);
+}
+
+.pcap-http-group-title {
+  color: var(--app-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcap-http-messages {
+  display: flex;
+  flex-direction: column;
+}
+
+.pcap-http-message {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--app-line);
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pcap-http-message:last-child {
+  border-bottom: 0;
+}
+
+.pcap-http-message:hover {
+  background: var(--app-surface-soft);
+}
+
+.pcap-http-role {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pcap-http-role.role-request {
+  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary) 15%, transparent);
+}
+
+.pcap-http-role.role-response {
+  color: #1f9d6b;
+  background: color-mix(in srgb, #1f9d6b 15%, transparent);
+}
+
+.pcap-http-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--app-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+}
+
+.pcap-http-meta {
+  color: var(--app-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* PCAP HTTP message modal */
+.pcap-http-modal-inner {
+  width: min(92vw, 860px);
+}
+
+.pcap-http-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 0 14px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.pcap-http-section-label {
+  padding: 10px 14px 4px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pcap-http-headers {
+  margin: 0 14px;
+  max-height: 30vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
+  background: var(--app-surface-soft);
+  color: var(--app-text);
+  font-family: var(--app-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pcap-http-body {
+  margin: 0 14px 14px;
+  min-height: 200px;
+  max-height: 36vh;
+  resize: vertical;
+  font-family: var(--app-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* PCAP stream search */
+.pcap-stream-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pcap-stream-search .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pcap-stream-search-count {
+  color: var(--app-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  min-width: 42px;
+  text-align: center;
+}

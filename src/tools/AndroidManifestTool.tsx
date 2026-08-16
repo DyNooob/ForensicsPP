@@ -346,7 +346,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
       const identity = await importRepairIdentity(new Uint8Array(keyBuffer), new Uint8Array(certBuffer), repairCertFile.name);
       const result = await resignApkV2(new Uint8Array(apkBuffer), identity, { stripJarSignatures: stripV1OnRepair });
       const base = sourceFile.name.replace(/\.apk$/i, "");
-      downloadBlob(`${base}-resigned.apk`, new Blob([result.bytes], { type: "application/vnd.android.package-archive" }));
+      downloadBlob(`${base}-resigned.apk`, new Blob([result.bytes.slice()], { type: "application/vnd.android.package-archive" }));
       setRepairStatus(english
         ? `Re-sign complete and self-verified with the imported identity. ${result.strippedJarSignatures.length} JAR/v1 signature entries removed.`
         : `已使用导入身份完成重签并通过自校验。移除了 ${result.strippedJarSignatures.length} 个 JAR/v1 签名条目。`);

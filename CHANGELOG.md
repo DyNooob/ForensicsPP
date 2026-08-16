@@ -6,6 +6,26 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - 暂无未发布变更。
 
+## [1.0.0-beta.4] - 2026-08-16
+
+### Changed
+
+- **图片工作台收口**：PNG Analyzer 与 QR Decoder 合并进 Image Workbench；PNG chunk/CRC/IEND/尾部风险和二维码识别直接复用当前已打开图片，不再要求重复上传。
+- **二进制工作台收口**：File Signature、Strings、Entropy、YARA 合并进 Binary Workbench，保留 Hex/结构/Embedded 页面；旧 hash/收藏/最近工具入口会自动迁移到新的 canonical workbench。
+- Tool Registry 增加 `hidden` / `mergedInto` 和 canonical routing，首页、侧栏、命令面板只展示真实工作台，同时保持旧 URL hash 兼容。
+- Firmware Analyzer 扫描器改用分组 native byte search，熵统计合并为单次遍历；候选对象不再默认读取 8 MiB 并二次执行完整 Carver。
+- Firmware 边界解析改为按格式读取 256 KiB–2 MiB 的受控 probe，并直接调用对应 format extent resolver；父子关系改用 active interval 集合。
+- Firmware 递归分析不再在小于 128 MiB 时重新读取并扫描完整源文件，只 materialize 已识别的 ZIP/gzip/zlib/TAR/CPIO 容器，并受总读取预算约束。
+- Firmware 默认扫描块提升到 8 MiB，对象预计算 SHA-256 的默认预算从 256 MiB 收紧到 64 MiB/24 个对象；源文件 SHA-256 仍完整计算。
+- Firmware 结果增加 scan / resolve / recursive / total timings，便于直接定位真实慢点。
+- Firmware 达到对象上限后停止后续 signature 搜索（仍继续源文件 SHA-256/熵统计），避免高噪声固件在截断后继续做无意义匹配；Binary Workbench 的按需熵 Worker 使用 transferable buffer，减少一次结构化克隆。
+
+### Verification
+
+- 新增 workbench consolidation 回归，验证 `png/qr → image`、`fileid/strings/entropy/yara → binary` 及旧 hash 路由兼容。
+- 新增 Firmware I/O 回归：16 MiB / 12 个 U-Boot signature 的样本在关闭对象预哈希时，总读取量必须低于源文件的 1.5 倍，防止重新出现“每候选 8 MiB probe + 整文件二次递归扫描”。
+- 发布前仍应在完整 npm 依赖环境执行 `npm ci && npm run verify`。
+
 ## [1.0.0-beta.3] - 2026-08-16
 
 ### Added
@@ -353,7 +373,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.4...HEAD
+[1.0.0-beta.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.4...v1.0.0-beta.1

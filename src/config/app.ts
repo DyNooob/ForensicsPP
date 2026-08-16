@@ -22,7 +22,7 @@
 const toolDefinitions = [
   { id: "home", category: "featured", name: "home", desc: "homeDesc" },
   { id: "cyberchef", category: "featured", name: "cyberchef", desc: "cyberchefDesc" },
-  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "exif", "metadata", "steganography", "repair"] },
+  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "png", "crc", "qr", "exif", "metadata", "steganography", "repair"] },
   { id: "codec", category: "transform", name: "codec", desc: "codecDesc" },
   { id: "crypto", category: "transform", name: "crypto", desc: "cryptoDesc" },
   { id: "jwt", category: "analysis", name: "jwt", desc: "jwtDesc" },
@@ -39,18 +39,18 @@ const toolDefinitions = [
   { id: "email", category: "analysis", name: "email", desc: "emailDesc" },
   { id: "urltool", category: "analysis", name: "urltool", desc: "urltoolDesc" },
   { id: "http", category: "network", name: "http", desc: "httpDesc" },
-  { id: "qr", category: "analysis", name: "qr", desc: "qrDesc" },
-  { id: "fileid", category: "analysis", name: "fileid", desc: "fileidDesc" },
-  { id: "png", category: "analysis", name: "png", desc: "pngDesc" },
+  { id: "qr", category: "analysis", name: "qr", desc: "qrDesc", hidden: true, mergedInto: "image" },
+  { id: "fileid", category: "analysis", name: "fileid", desc: "fileidDesc", hidden: true, mergedInto: "binary" },
+  { id: "png", category: "analysis", name: "png", desc: "pngDesc", hidden: true, mergedInto: "image" },
   { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc", accepts: [".zip", ".jar", ".apk", ".gz", ".tar", ".cpio"], capabilities: ["archive", "zip", "extraction", "zip-bomb-guard"] },
-  { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc", accepts: ["*/*"], capabilities: ["binary", "pe", "elf", "mach-o", "hex", "embedded-signature"] },
+  { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc", accepts: ["*/*"], capabilities: ["binary", "file-identification", "pe", "elf", "mach-o", "hex", "strings", "ioc", "entropy", "yara", "embedded-signature"] },
   { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"] },
   { id: "disk", category: "analysis", name: "disk", desc: "diskDesc", accepts: [".dd", ".raw", ".img", ".iso"], capabilities: ["random-access", "mbr", "gpt", "fat", "ntfs", "ext", "iso9660"] },
   { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc", accepts: [".lnk", ".pf", ".reg", ".mft", ".j"], capabilities: ["windows", "mft", "usn-journal", "prefetch", "lnk", "timeline"] },
   { id: "memory", category: "analysis", name: "memory", desc: "memoryDesc", accepts: [".dmp", ".mdmp", ".raw", ".mem"], capabilities: ["minidump", "memory-triage", "pe-carving"] },
-  { id: "strings", category: "analysis", name: "strings", desc: "stringsDesc" },
+  { id: "strings", category: "analysis", name: "strings", desc: "stringsDesc", hidden: true, mergedInto: "binary" },
   { id: "bulk", category: "analysis", name: "bulk", desc: "bulkDesc", accepts: ["*/*"], capabilities: ["streaming", "ioc", "strings", "offsets"] },
-  { id: "entropy", category: "analysis", name: "entropy", desc: "entropyDesc" },
+  { id: "entropy", category: "analysis", name: "entropy", desc: "entropyDesc", hidden: true, mergedInto: "binary" },
   { id: "hash", category: "transform", name: "hash", desc: "hashDesc" },
   { id: "timestamp", category: "transform", name: "timestamp", desc: "timestampDesc" },
   { id: "timeline", category: "transform", name: "timeline", desc: "timelineDesc" },
@@ -59,7 +59,7 @@ const toolDefinitions = [
   { id: "json", category: "transform", name: "json", desc: "jsonDesc" },
   { id: "regex", category: "transform", name: "regex", desc: "regexDesc" },
   { id: "pcap", category: "network", name: "pcap", desc: "pcapDesc", accepts: [".pcap", ".pcapng"], capabilities: ["network", "tcp-reassembly", "http", "dns", "tls", "ioc", "timeline"] },
-  { id: "yara", category: "analysis", name: "yara", desc: "yaraDesc" }
+  { id: "yara", category: "analysis", name: "yara", desc: "yaraDesc", hidden: true, mergedInto: "binary" }
 ] as const;
 
 export type ToolId = (typeof toolDefinitions)[number]["id"];
@@ -73,9 +73,12 @@ export type ToolDefinition = {
   desc: ToolDescription;
   accepts?: readonly string[];
   capabilities?: readonly string[];
+  hidden?: boolean;
+  mergedInto?: ToolId;
 };
 
 export const tools: readonly ToolDefinition[] = toolDefinitions;
+export const visibleTools: readonly ToolDefinition[] = tools.filter((tool) => !tool.hidden);
 const toolDefinitionMap = new Map<ToolId, ToolDefinition>(tools.map((tool) => [tool.id, tool]));
 export function getToolDefinitionById(toolId: ToolId) { return toolDefinitionMap.get(toolId) ?? null; }
 export const maxRecentTools = 6;
@@ -92,7 +95,7 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.0-beta.3";
+export const appVersion = "1.0.0-beta.4";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
 export const lastUpdated = "2026-08-16";
@@ -123,13 +126,22 @@ export function isToolId(value: string): value is ToolId {
   return tools.some((tool) => tool.id === value);
 }
 
-export function toolIdFromHash() {
-  if (typeof window === "undefined") return null;
-  const value = normalizeToolHash(window.location.hash);
-  return isToolId(value) ? value : null;
+export function canonicalToolId(tool: ToolId): ToolId {
+  const definition = toolDefinitionMap.get(tool);
+  return definition?.mergedInto ?? tool;
+}
+
+export function visibleToolById(tool: ToolId) {
+  return toolDefinitionMap.get(canonicalToolId(tool)) ?? null;
+}
+
+export function toolIdFromHash(hash = typeof window === "undefined" ? "" : window.location.hash) {
+  const value = normalizeToolHash(hash);
+  return isToolId(value) ? canonicalToolId(value) : null;
 }
 
 export function writeToolHash(tool: ToolId, replace = false) {
+  tool = canonicalToolId(tool);
   if (typeof window === "undefined") return;
   const nextHash = `#${tool}`;
   if (window.location.hash === nextHash) return;

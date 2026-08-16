@@ -205,3 +205,14 @@ When migrating or adding an analyzer:
 5. Route carved artifacts through `analyzerRouting` + Tool Handoff; do not duplicate target parsers.
 6. Add valid, malformed, boundary and differential/reference tests where practical.
 7. Do not remove the reporter DOM fallback until all relevant legacy tools publish structured results.
+
+## Workbench consolidation
+
+Top-level navigation is no longer treated as a one-parser-per-entry inventory. Capabilities that share the same evidence object and duplicate parsing/state should live inside a workbench and execute expensive secondary analysis on demand. The canonicalization layer keeps legacy tool IDs compatible without maintaining separate runtime implementations.
+
+The first consolidated workbenches are:
+
+- Image Workbench: image metadata/hidden-data analysis + PNG structure + QR decoding.
+- Binary Workbench: file identification + Hex/executable structure + strings/IOC + entropy + YARA + embedded objects.
+
+Large-file and format-specific analyzers such as Firmware, Disk, SQLite, PCAP and Memory remain separate because their readers, safety limits and result models are materially different. See `docs/WORKBENCH_CONSOLIDATION.md` for the merge criteria and compatibility aliases.

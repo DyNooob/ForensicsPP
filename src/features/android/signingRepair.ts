@@ -327,7 +327,7 @@ function insertSigningBlock(unsignedApk: Uint8Array, signingBlock: Uint8Array) {
 
 export async function resignApkV2(input: Uint8Array, identity: ApkRepairIdentity, options: { stripJarSignatures?: boolean } = {}): Promise<ApkRepairResult> {
   const warnings: string[] = [];
-  let working = Uint8Array.from(input);
+  let working: Uint8Array = Uint8Array.from(input);
   const strippedBlock = stripExistingSigningBlock(working);
   working = strippedBlock.bytes;
   let strippedJarSignatures: string[] = [];

@@ -24,7 +24,7 @@ import type { EvidenceReader } from "../../core/evidence/reader";
 import { analyzerForArtifact } from "../../core/analyzerRouting";
 import type { ToolId } from "../../config/app";
 import { bytesToWordArray, sha256BytesAsync } from "../../utils/hash";
-import { carverFormats, scanCarvableObjects, type CarverConfidence, type CarverExtent } from "../file/carver";
+import { carverFormats, type CarverConfidence, type CarverExtent, type CarverFormatDefinition } from "../file/carver";
 import { scanRecursiveCarvableObjects } from "../file/recursiveCarver";
 
 export type FirmwareEntropyBlock = {
@@ -71,6 +71,7 @@ export type FirmwareAnalysis = {
   warnings: string[];
   recursive: boolean;
   truncated: boolean;
+  timings: { scanMs: number; resolveMs: number; recursiveMs: number; totalMs: number };
 };
 
 export type FirmwareAnalysisSession = { analysis: FirmwareAnalysis; retained: Map<string, Uint8Array> };
@@ -93,15 +94,21 @@ type Candidate = {
   formatIndex: number;
 };
 
-const DEFAULT_CHUNK = 4 * 1024 * 1024;
+const DEFAULT_CHUNK = 8 * 1024 * 1024;
 const DEFAULT_MAX_OBJECTS = 2048;
 const DEFAULT_RECURSIVE_BYTES = 128 * 1024 * 1024;
-const MAX_PROBE = 8 * 1024 * 1024;
+const DEFAULT_PROBE = 256 * 1024;
+const LARGE_HEADER_PROBE = 2 * 1024 * 1024;
+const MAX_RECURSIVE_OBJECT = 48 * 1024 * 1024;
 const MAX_HASH_OBJECT = 32 * 1024 * 1024;
-const DEFAULT_MAX_OBJECT_HASH_BYTES = 256 * 1024 * 1024;
+const DEFAULT_MAX_OBJECT_HASH_BYTES = 64 * 1024 * 1024;
 
 function abortError() {
   return new DOMException("Firmware analysis cancelled", "AbortError");
+}
+
+function nowMs() {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
 }
 
 function concatBytes(left: Uint8Array, right: Uint8Array) {
@@ -117,33 +124,51 @@ function matchAt(bytes: Uint8Array, offset: number, magic: number[]) {
   return true;
 }
 
-function entropyOf(bytes: Uint8Array) {
-  if (!bytes.length) return 0;
+function entropyStats(bytes: Uint8Array): Pick<FirmwareEntropyBlock, "entropy" | "classification"> {
+  if (!bytes.length) return { entropy: 0, classification: "sparse" };
   const counts = new Uint32Array(256);
-  for (const value of bytes) counts[value] += 1;
+  let zero = 0;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const value = bytes[index];
+    counts[value] += 1;
+    if (value === 0) zero += 1;
+  }
   let entropy = 0;
   for (const count of counts) {
     if (!count) continue;
     const probability = count / bytes.length;
     entropy -= probability * Math.log2(probability);
   }
-  return entropy;
+  const classification: FirmwareEntropyBlock["classification"] = entropy <= 1 || zero / bytes.length >= 0.72
+    ? "sparse"
+    : entropy >= 7.65
+      ? "very-high"
+      : entropy >= 7.25
+        ? "high"
+        : "structured";
+  return { entropy, classification };
 }
 
-function entropyClass(value: number, bytes: Uint8Array): FirmwareEntropyBlock["classification"] {
-  let zero = 0;
-  for (const byte of bytes) if (byte === 0) zero += 1;
-  if (value <= 1 || zero / Math.max(1, bytes.length) >= 0.72) return "sparse";
-  if (value >= 7.65) return "very-high";
-  if (value >= 7.25) return "high";
-  return "structured";
+function probeLengthFor(format: CarverFormatDefinition, remaining: number) {
+  const minimum = Math.max(64 * 1024, (format.magicOffset ?? 0) + format.magic.length + 4096);
+  const label = format.label;
+  const preferred = /PE|ELF/.test(label)
+    ? LARGE_HEADER_PROBE
+    : /ISO9660|EXT filesystem/.test(label)
+      ? Math.max(DEFAULT_PROBE, 128 * 1024)
+      : DEFAULT_PROBE;
+  return Math.min(remaining, Math.max(minimum, preferred));
+}
+
+function containerCandidate(label: string) {
+  return /^(?:ZIP|Gzip|Zlib|TAR|CPIO)/.test(label);
 }
 
 function view(bytes: Uint8Array) {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
-function structuralExtent(label: string, bytes: Uint8Array, sourceRemaining: number) {
+function structuralExtent(label: string, bytes: Uint8Array, sourceRemaining: number): { size: number; detail: string; extent: CarverExtent; confidence: CarverConfidence } | null {
   try {
     const data = view(bytes);
     let size = 0;
@@ -202,7 +227,7 @@ function structuralExtent(label: string, bytes: Uint8Array, sourceRemaining: num
       size = blocks * blockSize;
       detail = "ISO9660 volume space × logical block size";
     }
-    if (Number.isSafeInteger(size) && size > 0 && size <= sourceRemaining) return { size, detail };
+    if (Number.isSafeInteger(size) && size > 0 && size <= sourceRemaining) return { size, detail, extent: "structural", confidence: "high" };
   } catch {
     // Malformed headers remain low-confidence signature evidence.
   }
@@ -312,7 +337,7 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
   const chunkSize = Math.max(256 * 1024, Math.min(32 * 1024 * 1024, options.chunkSize ?? DEFAULT_CHUNK));
   const maxObjects = Math.max(1, Math.min(10_000, options.maxObjects ?? DEFAULT_MAX_OBJECTS));
   const maxRecursiveBytes = Math.max(1024 * 1024, options.maxRecursiveBytes ?? DEFAULT_RECURSIVE_BYTES);
-  const maxHashedObjects = Math.max(0, Math.min(512, options.maxHashedObjects ?? 96));
+  const maxHashedObjects = Math.max(0, Math.min(512, options.maxHashedObjects ?? 24));
   const maxObjectHashBytes = Math.max(0, Math.min(2 * 1024 * 1024 * 1024, options.maxObjectHashBytes ?? DEFAULT_MAX_OBJECT_HASH_BYTES));
   const overlap = Math.min(128 * 1024, Math.max(...carverFormats.map((format) => (format.magicOffset ?? 0) + format.magic.length), 4096));
   const byFirst = new Map<number, Array<{ formatIndex: number; format: (typeof carverFormats)[number] }>>();
@@ -322,6 +347,7 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     byFirst.set(format.magic[0], rows);
   });
 
+  const startedMs = nowMs();
   const candidates: Candidate[] = [];
   const retained = new Map<string, Uint8Array>();
   let retainedBytes = 0;
@@ -342,20 +368,24 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     sha.update(bytesToWordArray(fresh));
     const scanBytes = previousTail.length ? concatBytes(previousTail, fresh) : fresh;
     const baseOffset = loaded - previousTail.length;
-    for (let position = 0; position < scanBytes.length && candidates.length < maxObjects; position += 1) {
-      const rows = byFirst.get(scanBytes[position]);
-      if (!rows) continue;
-      for (const { format, formatIndex } of rows) {
-        if (!matchAt(scanBytes, position, format.magic)) continue;
-        const localObjectOffset = position - (format.magicOffset ?? 0);
-        const globalOffset = baseOffset + localObjectOffset;
-        if (localObjectOffset < 0 || globalOffset < 0 || globalOffset >= reader.size) continue;
-        const key = `${formatIndex}:${globalOffset}`;
-        if (seen.has(key)) continue;
-        if (format.label !== "ZIP" && format.validate && !format.validate(scanBytes, localObjectOffset)) continue;
-        seen.add(key);
-        candidates.push({ label: format.label, offset: globalOffset, extension: format.extension, mime: format.mime, formatIndex });
-        if (candidates.length >= maxObjects) { truncated = true; break; }
+    if (!truncated) {
+      scanGroups: for (const [firstByte, rows] of byFirst) {
+        let position = scanBytes.indexOf(firstByte);
+        while (position >= 0) {
+          for (const { format, formatIndex } of rows) {
+            if (!matchAt(scanBytes, position, format.magic)) continue;
+            const localObjectOffset = position - (format.magicOffset ?? 0);
+            const globalOffset = baseOffset + localObjectOffset;
+            if (localObjectOffset < 0 || globalOffset < 0 || globalOffset >= reader.size) continue;
+            const key = `${formatIndex}:${globalOffset}`;
+            if (seen.has(key)) continue;
+            if (format.label !== "ZIP" && format.validate && !format.validate(scanBytes, localObjectOffset)) continue;
+            seen.add(key);
+            candidates.push({ label: format.label, offset: globalOffset, extension: format.extension, mime: format.mime, formatIndex });
+            if (candidates.length >= maxObjects) { truncated = true; break scanGroups; }
+          }
+          position = scanBytes.indexOf(firstByte, position + 1);
+        }
       }
     }
 
@@ -368,22 +398,23 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     let entropyCursor = 0;
     while (entropyCursor + entropyBlockSize <= entropyBytes.length) {
       const block = entropyBytes.subarray(entropyCursor, entropyCursor + entropyBlockSize);
-      const value = entropyOf(block);
-      entropy.push({ offset: entropyBase + entropyCursor, endOffset: entropyBase + entropyCursor + block.length, size: block.length, entropy: value, classification: entropyClass(value, block) });
+      const stats = entropyStats(block);
+      entropy.push({ offset: entropyBase + entropyCursor, endOffset: entropyBase + entropyCursor + block.length, size: block.length, ...stats });
       entropyCursor += entropyBlockSize;
     }
     entropyCarry = entropyBytes.slice(entropyCursor);
     entropyCarryOffset = entropyBase + entropyCursor;
     loaded += fresh.length;
-    previousTail = scanBytes.slice(Math.max(0, scanBytes.length - overlap));
+    previousTail = truncated ? new Uint8Array() : scanBytes.slice(Math.max(0, scanBytes.length - overlap));
     options.onProgress?.(loaded, reader.size, "scan");
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   if (entropyCarry.length) {
-    const value = entropyOf(entropyCarry);
-    entropy.push({ offset: entropyCarryOffset, endOffset: entropyCarryOffset + entropyCarry.length, size: entropyCarry.length, entropy: value, classification: entropyClass(value, entropyCarry) });
+    const stats = entropyStats(entropyCarry);
+    entropy.push({ offset: entropyCarryOffset, endOffset: entropyCarryOffset + entropyCarry.length, size: entropyCarry.length, ...stats });
   }
 
+  const scanCompletedMs = nowMs();
   candidates.sort((left, right) => left.offset - right.offset || left.formatIndex - right.formatIndex);
   const resolved: FirmwareObject[] = [];
   let hashed = 0;
@@ -402,15 +433,16 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     if (options.signal?.aborted) throw abortError();
     const candidate = candidates[index];
     const remaining = reader.size - candidate.offset;
-    const probeLength = Math.min(remaining, Math.max(128 * 1024, Math.min(MAX_PROBE, remaining)));
+    const format = carverFormats[candidate.formatIndex];
+    const probeLength = probeLengthFor(format, remaining);
     const probe = await reader.read(candidate.offset, probeLength, { signal: options.signal });
     const structural = structuralExtent(candidate.label, probe, remaining);
-    const localHit = scanCarvableObjects(probe, { maxHits: 64 }).find((hit) => hit.offset === 0 && hit.label === candidate.label);
+    const directExtent = structural ?? format.extent?.(probe, 0) ?? null;
     const nextOffset = nextDistinctOffset[index];
-    let size = structural?.size ?? localHit?.size ?? Math.max(0, (nextOffset ?? reader.size) - candidate.offset);
-    let extent: CarverExtent = structural ? "structural" : localHit?.extent ?? (nextOffset ? "heuristic" : "unknown");
-    let confidence: CarverConfidence = structural ? "high" : localHit?.confidence ?? "low";
-    let detail = structural?.detail ?? localHit?.detail ?? (nextOffset ? "Boundary stops at the next recognized object." : "Boundary reaches the end of the source; verify before evidentiary use.");
+    let size = directExtent?.size ?? Math.max(0, (nextOffset ?? reader.size) - candidate.offset);
+    let extent: CarverExtent = structural ? "structural" : directExtent?.extent ?? (nextOffset ? "heuristic" : "unknown");
+    let confidence: CarverConfidence = structural ? "high" : directExtent?.confidence ?? (directExtent ? "high" : "low");
+    let detail = structural?.detail ?? directExtent?.detail ?? (directExtent ? "Format-specific boundary resolver." : nextOffset ? "Boundary stops at the next recognized object." : "Boundary reaches the end of the source; verify before evidentiary use.");
     if (!Number.isSafeInteger(size) || size <= 0 || size > remaining) {
       size = Math.max(0, (nextOffset ?? reader.size) - candidate.offset);
       extent = nextOffset ? "heuristic" : "unknown";
@@ -449,25 +481,48 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     options.onProgress?.(index + 1, candidates.length, "resolve");
   }
 
-  // Establish parent relationships only when a parent's boundary is at least structural/known.
+  const resolveCompletedMs = nowMs();
+
+  // Establish parent relationships with a small active interval set instead of
+  // filtering/sorting the entire object list for every candidate.
+  const activeParents: FirmwareObject[] = [];
   for (const object of resolved) {
-    const parent = resolved
-      .filter((candidate) => candidate !== object && candidate.offset < object.offset && candidate.extent !== "unknown" && candidate.endOffset >= object.endOffset)
-      .sort((left, right) => left.size - right.size)[0];
+    for (let cursor = activeParents.length - 1; cursor >= 0; cursor -= 1) {
+      if (activeParents[cursor].endOffset < object.offset) activeParents.splice(cursor, 1);
+    }
+    let parent: FirmwareObject | undefined;
+    for (const candidate of activeParents) {
+      if (candidate.extent === "unknown" || candidate.offset >= object.offset || candidate.endOffset < object.endOffset) continue;
+      if (!parent || candidate.size < parent.size) parent = candidate;
+    }
     if (parent) {
       object.parentId = parent.id;
       object.depth = Math.min(16, parent.depth + 1);
     }
+    if (object.extent !== "unknown" && object.size > 0) activeParents.push(object);
   }
 
+  // Recursive expansion now materializes only recognized container objects.
+  // The previous implementation re-read and re-scanned the entire source a
+  // second time, which dominated runtime on 50-128 MiB firmware images.
   const interestingPaths: string[] = [];
-  if (reader.size <= maxRecursiveBytes && reader.size <= Number.MAX_SAFE_INTEGER) {
-    options.onProgress?.(0, reader.size, "recursive");
-    const whole = await reader.read(0, reader.size, { signal: options.signal });
-    const recursive = scanRecursiveCarvableObjects(whole, { maxDepth: 5, maxObjects: Math.min(1024, maxObjects), maxExpandedBytes: 192 * 1024 * 1024, maxObjectBytes: 48 * 1024 * 1024 });
+  let recursiveReadBytes = 0;
+  const recursiveSources = resolved.filter((object) => object.origin === "signature"
+    && containerCandidate(object.label)
+    && object.size > 0
+    && object.size <= MAX_RECURSIVE_OBJECT);
+  for (let sourceIndex = 0; sourceIndex < recursiveSources.length && resolved.length < maxObjects; sourceIndex += 1) {
+    if (options.signal?.aborted) throw abortError();
+    const source = recursiveSources[sourceIndex];
+    if (recursiveReadBytes + source.size > maxRecursiveBytes) break;
+    options.onProgress?.(sourceIndex, recursiveSources.length, "recursive");
+    const containerBytes = await reader.read(source.offset, source.size, { signal: options.signal });
+    recursiveReadBytes += containerBytes.length;
+    const recursive = scanRecursiveCarvableObjects(containerBytes, { maxDepth: 5, maxObjects: Math.min(512, maxObjects - resolved.length + 1), maxExpandedBytes: 128 * 1024 * 1024, maxObjectBytes: MAX_RECURSIVE_OBJECT });
     for (const item of recursive) {
       if (item.origin === "signature") continue;
-      if (interestingPath(item.virtualPath) && interestingPaths.length < 200) interestingPaths.push(item.virtualPath);
+      const virtualPath = `${source.virtualPath}/${item.virtualPath.replace(/^source(?:::|\/)?/, "")}`.replace(/\/+/g, "/");
+      if (interestingPath(virtualPath) && interestingPaths.length < 200) interestingPaths.push(virtualPath);
       if (resolved.length >= maxObjects) { truncated = true; break; }
       const canHash = item.bytes.length > 0 && item.bytes.length <= MAX_HASH_OBJECT && hashed < maxHashedObjects && hashedBytes + item.bytes.length <= maxObjectHashBytes;
       const sha256 = canHash ? await sha256BytesAsync(item.bytes) : undefined;
@@ -480,23 +535,25 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
       resolved.push({
         id: recursiveId,
         label: item.label,
-        offset: item.offset,
+        offset: source.offset + item.offset,
         size: item.size,
-        endOffset: item.offset + item.size,
+        endOffset: source.offset + item.offset + item.size,
         extension: item.extension,
         mime: item.mime,
         confidence: item.confidence,
         extent: item.extent,
         detail: item.detail ?? "Expanded nested object",
-        depth: item.depth,
-        virtualPath: item.virtualPath,
+        depth: Math.min(16, source.depth + item.depth),
+        parentId: source.id,
+        virtualPath,
         origin: item.origin,
         ...(sha256 ? { sha256 } : {}),
         analyzer: analyzerForArtifact({ label: item.label, extension: item.extension, mime: item.mime, bytes: item.bytes })
       });
     }
-    options.onProgress?.(reader.size, reader.size, "recursive");
   }
+  if (recursiveSources.length) options.onProgress?.(recursiveSources.length, recursiveSources.length, "recursive");
+  const recursiveCompletedMs = nowMs();
 
   const counts: Record<string, number> = {};
   const categories: Record<string, number> = {};
@@ -509,7 +566,7 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
   }
   const warnings: string[] = [];
   if (resolved.some((object) => object.extent === "heuristic" || object.extent === "unknown")) warnings.push("Some object boundaries are heuristic or unresolved; verify them before relying on carved bytes as evidence.");
-  if (reader.size > maxRecursiveBytes) warnings.push(`Automatic recursive expansion is limited to sources up to ${maxRecursiveBytes} bytes; large-source objects can still be carved and sent to analyzers individually.`);
+  if (recursiveSources.length && recursiveReadBytes >= maxRecursiveBytes) warnings.push(`Automatic recursive expansion reached its ${maxRecursiveBytes}-byte container-read budget; remaining objects can still be carved and sent to analyzers individually.`);
   if (truncated) warnings.push(`Object list reached the configured limit (${maxObjects}).`);
   if (hashed >= maxHashedObjects || hashedBytes >= maxObjectHashBytes) warnings.push(`Per-object SHA-256 hashing stopped at the configured budget (${hashed} object(s), ${hashedBytes} bytes); source SHA-256 remains complete.`);
 
@@ -526,8 +583,14 @@ export async function analyzeFirmware(reader: EvidenceReader, name: string, opti
     architectures,
     interestingPaths: Array.from(new Set(interestingPaths)),
     warnings,
-    recursive: reader.size <= maxRecursiveBytes,
-    truncated
+    recursive: recursiveReadBytes > 0,
+    truncated,
+    timings: {
+      scanMs: Math.max(0, scanCompletedMs - startedMs),
+      resolveMs: Math.max(0, resolveCompletedMs - scanCompletedMs),
+      recursiveMs: Math.max(0, recursiveCompletedMs - resolveCompletedMs),
+      totalMs: Math.max(0, recursiveCompletedMs - startedMs)
+    }
   };
   return { analysis, retained };
 }
@@ -544,7 +607,7 @@ export function buildFirmwareManifest(analysis: FirmwareAnalysis) {
     schema: "forensicspp.firmware-manifest/v1",
     generatedAt: new Date().toISOString(),
     source: { name: analysis.name, size: analysis.size, sha256: analysis.sha256 },
-    scan: { chunkSize: analysis.chunkSize, recursive: analysis.recursive, truncated: analysis.truncated },
+    scan: { chunkSize: analysis.chunkSize, recursive: analysis.recursive, truncated: analysis.truncated, timings: analysis.timings },
     objects: analysis.objects.map(({ id, label, offset, size, endOffset, extension, mime, confidence, extent, detail, depth, parentId, virtualPath, origin, sha256, architecture, analyzer, metadata }) => ({
       id, label, offset, hexOffset: `0x${offset.toString(16).toUpperCase()}`, size, endOffset, extension, mime, confidence, extent, detail, depth, parentId, virtualPath, origin, sha256, architecture, analyzer, metadata
     })),

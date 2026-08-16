@@ -30,7 +30,7 @@ import {
   projectLicense,
   projectLinks,
   projectRepoName,
-  tools,
+  visibleTools,
   type ToolId
 } from "../config/app";
 import type { Translation } from "../i18n";
@@ -49,26 +49,26 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
   const [category, setCategory] = React.useState<"all" | "featured" | "analysis" | "transform" | "network">("all");
   const directoryRef = React.useRef<HTMLElement | null>(null);
   const categories = ["all", "featured", "analysis", "transform", "network"] as const;
-  const searchableTools = tools.filter((tool) => tool.id !== "home");
-  const titleFor = (tool: (typeof tools)[number]) => getToolTitle(tool, lang, t);
+  const searchableTools = visibleTools.filter((tool) => tool.id !== "home");
+  const titleFor = (tool: (typeof visibleTools)[number]) => getToolTitle(tool, lang, t);
 
   const recentValidTools = recentTools
     .map((id) => searchableTools.find((tool) => tool.id === id))
-    .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
+    .filter((tool): tool is (typeof visibleTools)[number] => Boolean(tool))
     .slice(0, maxRecentTools);
   const quickTools = (recentValidTools.length ? recentValidTools.map((tool) => tool.id) : defaultQuickToolIds)
     .map((id) => searchableTools.find((tool) => tool.id === id))
-    .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
+    .filter((tool): tool is (typeof visibleTools)[number] => Boolean(tool))
     .slice(0, 4);
 
-  const visibleTools = searchableTools.filter((tool) => {
+  const filteredDirectoryTools = searchableTools.filter((tool) => {
     const normalizedQuery = query.trim().toLowerCase();
     if (category !== "all" && tool.category !== category) return false;
     if (!normalizedQuery) return true;
     return [titleFor(tool), t[tool.desc], t[tool.category], ...(tool.capabilities ?? []), ...(tool.accepts ?? [])].join(" ").toLowerCase().includes(normalizedQuery);
   });
 
-  const directoryTools = visibleTools;
+  const directoryTools = filteredDirectoryTools;
   const directoryCount = `${directoryTools.length}/${searchableTools.length}`;
   const categoryLabel = (item: (typeof categories)[number]) => item === "all" ? (lang === "zh" ? "全部" : "All") : t[item];
   const quickLabel = recentValidTools.length ? t.recentTools : t.recommendedTools;

@@ -46,8 +46,8 @@ const TimestampTool = React.lazy(() => import("../tools/TimestampTool").then((mo
 const TimelineTool = React.lazy(() => import("../tools/TimelineTool").then((module) => ({ default: module.TimelineTool })));
 const PcapTool = React.lazy(() => import("../tools/PcapSimpleTool").then((module) => ({ default: module.PcapTool })));
 const ImageTool = React.lazy(async () => {
-  const [{ ImageTool }, services] = await Promise.all([import("../tools/ImageTool"), import("../features/image/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof ImageTool>, "services">) => <ImageTool {...props} services={services} /> };
+  const [{ ImageTool }, image, qr] = await Promise.all([import("../tools/ImageTool"), import("../features/image/analyzer"), import("../features/qr/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof ImageTool>, "services">) => <ImageTool {...props} services={{ ...image, ...qr }} /> };
 });
 const CryptoTool = React.lazy(async () => {
   const [{ CryptoTool }, services] = await Promise.all([import("../tools/CryptoTool"), import("../features/crypto/algorithms")]);
@@ -73,26 +73,13 @@ const AndroidManifestTool = React.lazy(async () => {
   const [{ AndroidManifestTool }, services] = await Promise.all([import("../tools/AndroidManifestTool"), import("../features/android/analyzer")]);
   return { default: (props: Omit<React.ComponentProps<typeof AndroidManifestTool>, "services">) => <AndroidManifestTool {...props} services={services} /> };
 });
-const QrTool = React.lazy(async () => {
-  const [{ QrTool }, qr, image] = await Promise.all([import("../tools/QrTool"), import("../features/qr/analyzer"), import("../features/image/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof QrTool>, "services">) => <QrTool {...props} services={{ ...qr, detectImageFormat: image.detectImageFormat }} /> };
-});
-const YaraTool = React.lazy(async () => {
-  const [{ YaraTool }, services] = await Promise.all([import("../tools/YaraTool"), import("../features/yara/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof YaraTool>, "services">) => <YaraTool {...props} services={services} /> };
-});
-const StringsTool = React.lazy(async () => {
-  const [{ StringsTool }, services] = await Promise.all([import("../tools/StringsTool"), import("../features/strings/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof StringsTool>, "services">) => <StringsTool {...props} services={services} /> };
-});
-const EntropyTool = React.lazy(async () => {
-  const [{ EntropyTool }, services] = await Promise.all([import("../tools/EntropyTool"), import("../features/entropy/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof EntropyTool>, "services">) => <EntropyTool {...props} services={services} /> };
-});
-const FileIdTool = React.lazy(() => import("../tools/FileIdTool").then((module) => ({ default: module.FileIdTool })));
+
+
+
+
 const BinaryTool = React.lazy(async () => {
-  const [{ BinaryTool }, services] = await Promise.all([import("../tools/BinaryTool"), import("../features/file/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof BinaryTool>, "services">) => <BinaryTool {...props} services={services} /> };
+  const [{ BinaryTool }, file, yara] = await Promise.all([import("../tools/BinaryTool"), import("../features/file/analyzer"), import("../features/yara/analyzer")]);
+  return { default: (props: Omit<React.ComponentProps<typeof BinaryTool>, "services">) => <BinaryTool {...props} services={{ ...file, yaraRuleTemplates: yara.yaraRuleTemplates }} /> };
 });
 const HttpTool = React.lazy(() => import("../tools/HttpTool").then((module) => ({ default: module.HttpTool })));
 const WindowsArtifactTool = React.lazy(() => import("../tools/WindowsArtifactTool").then((module) => ({ default: module.WindowsArtifactTool })));
@@ -100,7 +87,6 @@ const FirmwareAnalyzerTool = React.lazy(() => import("../tools/FirmwareAnalyzerT
 const DiskImageTool = React.lazy(() => import("../tools/DiskImageTool").then((module) => ({ default: module.DiskImageTool })));
 const MemoryTriageTool = React.lazy(() => import("../tools/MemoryTriageTool").then((module) => ({ default: module.MemoryTriageTool })));
 const BulkArtifactTool = React.lazy(() => import("../tools/BulkArtifactTool").then((module) => ({ default: module.BulkArtifactTool })));
-const PngTool = React.lazy(() => import("../tools/PngTool").then((module) => ({ default: module.PngTool })));
 const UrlTool = React.lazy(() => import("../tools/UrlTool").then((module) => ({ default: module.UrlTool })));
 const ArchiveTool = React.lazy(() => import("../tools/ArchiveTool").then((module) => ({ default: module.ArchiveTool })));
 
@@ -135,18 +121,18 @@ export const toolRuntimeRegistry: Record<ToolId, RuntimeRenderer> = {
   email: ({ t, active }) => <EmailTool t={t} active={active} />,
   urltool: ({ t, active }) => <UrlTool t={t} active={active} />,
   http: ({ t, active }) => <HttpTool t={t} active={active} />,
-  qr: ({ t, active }) => <QrTool t={t} active={active} />,
-  fileid: ({ t, active }) => <FileIdTool t={t} active={active} />,
-  png: ({ t, active }) => <PngTool t={t} active={active} />,
+  qr: ({ t, active }) => <ImageTool t={t} active={active} />,
+  fileid: ({ t, active, setActiveTool }) => <BinaryTool t={t} active={active} setActiveTool={setActiveTool} />,
+  png: ({ t, active }) => <ImageTool t={t} active={active} />,
   archive: ({ t, active }) => <ArchiveTool t={t} active={active} />,
   binary: ({ t, active, setActiveTool }) => <BinaryTool t={t} active={active} setActiveTool={setActiveTool} />,
   firmware: ({ t, active, setActiveTool }) => <FirmwareAnalyzerTool t={t} active={active} setActiveTool={setActiveTool} />,
   disk: ({ t, active }) => <DiskImageTool t={t} active={active} />,
   windows: ({ t, active }) => <WindowsArtifactTool t={t} active={active} />,
   memory: ({ t, active }) => <MemoryTriageTool t={t} active={active} />,
-  strings: ({ t, active }) => <StringsTool t={t} active={active} />,
+  strings: ({ t, active, setActiveTool }) => <BinaryTool t={t} active={active} setActiveTool={setActiveTool} />,
   bulk: ({ t, active }) => <BulkArtifactTool t={t} active={active} />,
-  entropy: ({ t, active }) => <EntropyTool t={t} active={active} />,
+  entropy: ({ t, active, setActiveTool }) => <BinaryTool t={t} active={active} setActiveTool={setActiveTool} />,
   hash: ({ t, active }) => <HashTool t={t} active={active} />,
   timestamp: ({ t, active }) => <TimestampTool t={t} active={active} />,
   timeline: ({ t, active }) => <TimelineTool t={t} active={active} />,
@@ -155,5 +141,5 @@ export const toolRuntimeRegistry: Record<ToolId, RuntimeRenderer> = {
   json: ({ t, active }) => <JsonTool t={t} active={active} />,
   regex: ({ t, active }) => <RegexTool t={t} active={active} />,
   pcap: ({ t, active }) => <PcapTool t={t} active={active} />,
-  yara: ({ t, active }) => <YaraTool t={t} active={active} />
+  yara: ({ t, active, setActiveTool }) => <BinaryTool t={t} active={active} setActiveTool={setActiveTool} />
 };

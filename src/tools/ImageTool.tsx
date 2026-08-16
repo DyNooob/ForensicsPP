@@ -33,8 +33,28 @@ import type { ImageAnalysisResult, ImageBasicsWorkerResult, ImageRepairWorkerRes
 type ImageService = (...args: any[]) => any;
 type ImageRepairCandidate = { label: string; note: string; bytes: Uint8Array; mime: string };
 type ImageWorkspace = { name: string; type: string; lastModified: number; bytes: Uint8Array };
+type QrPoint = [string, string];
+type ImageQrResult = {
+  payload: string;
+  payloadType: string;
+  decodedBytes: number;
+  scanWidth: number;
+  scanHeight: number;
+  payloadRows: QrPoint[];
+  cornerRows: QrPoint[];
+  geometryRows: QrPoint[];
+};
 const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_PERSISTED_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function scaledQrLocation(location: Record<string, unknown>, scaleX: number, scaleY: number) {
+  return Object.fromEntries(Object.entries(location).map(([key, value]) => {
+    if (!value || typeof value !== "object") return [key, value];
+    const point = value as { x?: number; y?: number };
+    if (typeof point.x !== "number" || typeof point.y !== "number") return [key, value];
+    return [key, { ...point, x: point.x * scaleX, y: point.y * scaleY }];
+  }));
+}
 
 function formatExifValue(value: unknown) {
   if (value == null) return "--";
@@ -62,6 +82,37 @@ function formatExifValue(value: unknown) {
   }
 }
 
+function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; mime: string } | null {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return null;
+  const meta = dataUrl.slice(0, comma);
+  const isBase64 = /;base64/i.test(meta);
+  const mimeMatch = /data:([^;,]*)/.exec(meta);
+  const mime = mimeMatch?.[1] || "image/png";
+  const raw = dataUrl.slice(comma + 1);
+  let bytes: Uint8Array;
+  if (isBase64) {
+    const binary = atob(raw);
+    bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(raw));
+  }
+  return { bytes, mime };
+}
+
+function sanitizeChannelLabel(label: string) {
+  const slug = label.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "channel";
+  return slug;
+}
+
+function downloadChannelImage(name: string, label: string, dataUrl: string) {
+  const parsed = dataUrlToBytes(dataUrl);
+  if (!parsed) return;
+  const base = (name || "image").replace(/\.[^.]+$/, "");
+  downloadBlob(`${base}-${sanitizeChannelLabel(label)}.png`, new Blob([parsed.bytes], { type: parsed.mime }));
+}
+
 export type ImageToolServices = {
   buildAutoRevealPreviews: ImageService;
   bytesToDataUrl: ImageService;
@@ -77,6 +128,10 @@ export type ImageToolServices = {
   revokeImageObjectUrls: ImageService;
   revokeImagePreviewUrl: ImageService;
   revokeImagePreviewUrls: ImageService;
+  classifyQrPayload: (payload: string) => string;
+  parseQrPayloadDetails: (payload: string, payloadType: string) => QrPoint[];
+  qrPointRow: (label: string, point: unknown) => QrPoint | null;
+  qrGeometryRows: (location: Record<string, unknown>, imageWidth: number, imageHeight: number) => QrPoint[];
 };
 
 export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: ImageToolServices; active?: boolean }) {
@@ -93,8 +148,22 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   const [error, setError] = React.useState("");
   const [storageNotice, setStorageNotice] = React.useState("");
   const [isImageDropActive, setIsImageDropActive] = React.useState(false);
-  const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "repair">("overview");
+  const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "qr" | "repair">(() => {
+    if (typeof window === "undefined") return "overview";
+    const legacy = window.location.hash.replace(/^#/, "").toLowerCase();
+    return legacy === "png" ? "structure" : legacy === "qr" ? "qr" : "overview";
+  });
+  const [qrResult, setQrResult] = React.useState<ImageQrResult | null>(null);
+  const [qrScanning, setQrScanning] = React.useState(false);
+  const [lightbox, setLightbox] = React.useState<{ src: string; label: string } | null>(null);
   const [restoredSource, setRestoredSource] = React.useState<ImageWorkspace | null>(null);
+  React.useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const legacy = window.location.hash.replace(/^#/, "").toLowerCase();
+    if (legacy === "png") setImagePage("structure");
+    else if (legacy === "qr") setImagePage("qr");
+  }, [active]);
+
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -156,6 +225,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     sourceRef.current = null;
     setImageInfo(null);
     setAdvancedTask("");
+    setQrResult(null);
+    setQrScanning(false);
     setImagePage("overview");
     setLoading(false);
     if (file.size > MAX_IMAGE_FILE_BYTES) {
@@ -404,6 +475,59 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     setIsImageDropActive(false);
     void handleImage(event.dataTransfer.files?.[0]);
   };
+  const runQrAnalysis = async () => {
+    const source = sourceRef.current;
+    if (!active || !source?.image || qrScanning) return;
+    const analysisId = analysisIdRef.current;
+    setQrScanning(true);
+    setError("");
+    try {
+      const image = source.image;
+      const sourcePixels = image.naturalWidth * image.naturalHeight;
+      const maxScanPixels = 4_000_000;
+      const maxScanEdge = 2048;
+      const scale = Math.min(1, maxScanEdge / Math.max(image.naturalWidth, image.naturalHeight), Math.sqrt(maxScanPixels / Math.max(1, sourcePixels)));
+      const scanWidth = Math.max(1, Math.round(image.naturalWidth * scale));
+      const scanHeight = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = scanWidth;
+      canvas.height = scanHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Canvas is not available");
+      context.drawImage(image, 0, 0, scanWidth, scanHeight);
+      const imageData = context.getImageData(0, 0, scanWidth, scanHeight);
+      const { default: jsQR } = await import("jsqr");
+      if (!active || analysisId !== analysisIdRef.current) return;
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      const payload = code?.data ?? "";
+      const payloadType = services.classifyQrPayload(payload);
+      const rawLocation = (code as unknown as { location?: Record<string, unknown> } | null)?.location ?? {};
+      const location = scaledQrLocation(rawLocation, image.naturalWidth / scanWidth, image.naturalHeight / scanHeight);
+      const cornerRows = [
+        services.qrPointRow("Top-left", location.topLeftCorner),
+        services.qrPointRow("Top-right", location.topRightCorner),
+        services.qrPointRow("Bottom-left", location.bottomLeftCorner),
+        services.qrPointRow("Bottom-right", location.bottomRightCorner)
+      ].filter(Boolean) as QrPoint[];
+      const decodedBytes = Array.isArray((code as unknown as { binaryData?: number[] } | null)?.binaryData)
+        ? (code as unknown as { binaryData: number[] }).binaryData.length
+        : new Blob([payload]).size;
+      setQrResult({
+        payload,
+        payloadType,
+        decodedBytes,
+        scanWidth,
+        scanHeight,
+        payloadRows: services.parseQrPayloadDetails(payload, payloadType),
+        cornerRows,
+        geometryRows: services.qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
+      });
+    } catch (caught) {
+      if (analysisId === analysisIdRef.current) setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (analysisId === analysisIdRef.current) setQrScanning(false);
+    }
+  };
   const clearImage = () => {
     restoreStartedRef.current = true;
     setRestoredSource(null);
@@ -422,6 +546,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     setError("");
     setLoading(false);
     setAdvancedTask("");
+    setQrResult(null);
+    setQrScanning(false);
     setIsImageDropActive(false);
     setImagePage("overview");
     if (inputRef.current) inputRef.current.value = "";
@@ -459,6 +585,10 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     ].filter(Boolean).join("\n\n");
     void copyText(content || "");
   };
+  const pngBadCrc = imageInfo?.pngChunks.filter((chunk) => !chunk.ok) ?? [];
+  const pngRiskChunks = imageInfo?.pngChunks.filter((chunk) => chunk.risk.length) ?? [];
+  const pngIdatBytes = imageInfo?.pngChunks.filter((chunk) => chunk.type === "IDAT").reduce((sum, chunk) => sum + chunk.length, 0) ?? 0;
+  const pngHasIend = imageInfo?.pngChunks.some((chunk) => chunk.type === "IEND") ?? false;
   const channelItems: Array<[string, string]> = imageInfo ? [
     [t.red, imageInfo.channelDataUrls.red],
     [t.green, imageInfo.channelDataUrls.green],
@@ -501,6 +631,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           <ASegmentedButton value="structure" onClick={() => setImagePage("structure")}>{isEnglish ? "Structure" : "结构"}</ASegmentedButton>
           <ASegmentedButton value="hidden" onClick={() => setImagePage("hidden")}>{isEnglish ? "Hidden data" : "隐藏数据"}</ASegmentedButton>
           <ASegmentedButton value="channels" onClick={() => setImagePage("channels")}>{isEnglish ? "Channels" : "通道"}</ASegmentedButton>
+          <ASegmentedButton value="qr" onClick={() => setImagePage("qr")}>{isEnglish ? "QR" : "二维码"}</ASegmentedButton>
           <ASegmentedButton value="repair" onClick={() => setImagePage("repair")}>{isEnglish ? "Repair" : "修复"}</ASegmentedButton>
         </ASegmentedGroup>
 
@@ -531,7 +662,20 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         {imagePage === "structure" && <div className="tool-panel wide-panel image-simple-structure-panel">
           <PanelTitle title={t.imageStructure} />
           <InfoTable rows={imageInfo.structureRows} />
-          {imageInfo.pngChunks.length > 0 && <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td></tr>)}</tbody></table></div>}
+          {imageInfo.pngChunks.length > 0 && <>
+            <PanelTitle title={isEnglish ? "PNG forensic structure" : "PNG 取证结构"} />
+            <InfoTable rows={[
+              ["Chunks", String(imageInfo.pngChunks.length)],
+              ["IDAT", formatBytes(pngIdatBytes)],
+              ["CRC", pngBadCrc.length ? `${pngBadCrc.length} mismatch` : "OK"],
+              ["IEND", pngHasIend ? (isEnglish ? "Present" : "存在") : (isEnglish ? "Missing" : "缺失")],
+              [isEnglish ? "Text chunks" : "文本块", String(imageInfo.pngTextEntries.length)],
+              [isEnglish ? "Risk / private chunks" : "风险 / 私有块", String(pngRiskChunks.length)],
+              [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
+            ]} />
+            {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <div className="finding-item warn" key={`png-risk-${chunk.offset}-${chunk.type}`}><strong>{chunk.type} @ 0x{chunk.offset.toString(16).toUpperCase()}</strong><span>{chunk.risk.join("; ")}</span></div>)}</div>}
+            <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td><td>{[chunk.ancillary ? "ancillary" : "critical", chunk.privateUse ? "private" : "public", chunk.safeToCopy ? "safe-copy" : "unsafe-copy"].join(" · ")}</td></tr>)}</tbody></table></div>
+          </>}
           <div className="panel-heading-row image-exif-heading">
             <PanelTitle title={t.exif} />
             {Object.keys(imageInfo.exif).length > 0 && <span className="status-pill">{Math.min(100, Object.keys(imageInfo.exif).length)}/{Object.keys(imageInfo.exif).length}</span>}
@@ -557,8 +701,27 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
         {imagePage === "channels" && <div className="tool-panel wide-panel image-simple-channels-panel">
           <div className="panel-heading-row"><PanelTitle title={t.channels} /><AButton variant="filled" disabled={!imageInfo.decoded || Boolean(advancedTask)} onClick={runChannelAnalysis}>{advancedTask === "channels" ? (isEnglish ? "Generating..." : "正在生成...") : (isEnglish ? "Generate channels" : "生成通道图")}</AButton></div>
-          <div className="image-channel-grid">{channelItems.map(([label, src]) => <figure key={label}><img src={src} alt={label} /><figcaption>{label}</figcaption></figure>)}</div>
-          {imageInfo.autoRevealPreviews.length > 0 && <><PanelTitle title={t.autoReveal} /><div className="image-channel-grid">{imageInfo.autoRevealPreviews.map((item) => <figure key={item.label}><img src={item.src} alt={item.label} /><figcaption>{item.label}</figcaption></figure>)}</div></>}
+          <div className="image-channel-grid">{channelItems.map(([label, src]) => <figure key={label} role="button" tabIndex={0} onClick={() => setLightbox({ src, label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src, label }); } }}><img src={src} alt={label} /><figcaption>{label}</figcaption></figure>)}</div>
+          {imageInfo.autoRevealPreviews.length > 0 && <><PanelTitle title={t.autoReveal} /><div className="image-channel-grid">{imageInfo.autoRevealPreviews.map((item) => <figure key={item.label} role="button" tabIndex={0} onClick={() => setLightbox({ src: item.src, label: item.label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src: item.src, label: item.label }); } }}><img src={item.src} alt={item.label} /><figcaption>{item.label}</figcaption></figure>)}</div></>}
+        </div>}
+
+
+        {imagePage === "qr" && <div className="tool-panel wide-panel image-simple-qr-panel">
+          <div className="panel-heading-row"><PanelTitle title={isEnglish ? "QR code" : "二维码分析"} /><AButton variant="filled" disabled={!imageInfo.decoded || qrScanning} onClick={() => void runQrAnalysis()}>{qrScanning ? (isEnglish ? "Scanning..." : "正在识别...") : (isEnglish ? "Scan QR" : "识别二维码")}</AButton></div>
+          {!imageInfo.decoded && <div className="empty-state">{isEnglish ? "Pixel decode is required before QR recognition." : "二维码识别需要先成功解码图片像素。"}</div>}
+          {imageInfo.decoded && !qrResult && !qrScanning && <div className="empty-state">{isEnglish ? "Run QR recognition on the currently opened image; no second upload is required." : "直接识别当前图片，无需再次上传。"}</div>}
+          {qrResult && <>
+            <InfoTable rows={[
+              [isEnglish ? "Result" : "识别结果", qrResult.payload ? (isEnglish ? "Decoded" : "已识别") : (isEnglish ? "No QR code found" : "未发现二维码")],
+              [isEnglish ? "Payload type" : "内容类型", qrResult.payloadType || "--"],
+              [isEnglish ? "Decoded bytes" : "解码字节", String(qrResult.decodedBytes)],
+              [isEnglish ? "Scan resolution" : "扫描分辨率", `${qrResult.scanWidth} × ${qrResult.scanHeight}`]
+            ]} />
+            {qrResult.payload && <><PanelTitle title={isEnglish ? "Payload" : "二维码内容"} /><textarea className="single-textarea compact-textarea" value={qrResult.payload} readOnly /><div className="action-row"><AButton variant="outlined" onClick={() => void copyText(qrResult.payload)}>{t.copy}</AButton></div></>}
+            {qrResult.payloadRows.length > 0 && <><PanelTitle title={isEnglish ? "Parsed payload" : "内容解析"} /><InfoTable rows={qrResult.payloadRows} /></>}
+            {qrResult.cornerRows.length > 0 && <><PanelTitle title={isEnglish ? "Corners" : "定位点"} /><InfoTable rows={qrResult.cornerRows} /></>}
+            {qrResult.geometryRows.length > 0 && <><PanelTitle title={isEnglish ? "Geometry" : "几何信息"} /><InfoTable rows={qrResult.geometryRows} /></>}
+          </>}
         </div>}
 
         {imagePage === "repair" && <div className="tool-panel wide-panel image-simple-repair-panel">
@@ -568,6 +731,29 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
+      {lightbox && <ImageLightbox src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
+
+function ImageLightbox({ src, label, name, english, onClose }: { src: string; label: string; name: string; english: boolean; onClose: () => void }) {
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={onClose}>
+      <div className="image-lightbox-inner" onClick={(event) => event.stopPropagation()}>
+        <div className="image-lightbox-head">
+          <strong>{label}</strong>
+          <div className="image-lightbox-actions">
+            <AButton variant="outlined" onClick={() => downloadChannelImage(name, label, src)}>{english ? "Download" : "下载"}</AButton>
+            <AButton variant="text" onClick={onClose}>{english ? "Close" : "关闭"}</AButton>
+          </div>
+        </div>
+        <img className="image-lightbox-img" src={src} alt={label} />
+      </div>
     </div>
   );
 }

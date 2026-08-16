@@ -292,7 +292,7 @@ export async function verifyAndroidV4Idsig(apk: Uint8Array, idsig: Uint8Array): 
     }
 
     if (hashing.hashAlgorithm === V4_HASH_SHA256 && hashing.log2BlockSize === V4_LOG2_BLOCK_SIZE && hashing.rawRootHash.length === 32) {
-      const calculated = await buildAndroidV4VerityTree(apk, hashing.salt);
+      const calculated = await buildAndroidV4VerityTree(apk, hashing.salt.slice());
       base.expectedRootHash = hex(hashing.rawRootHash);
       base.actualRootHash = hex(calculated.rootHash);
       base.rootHashVerified = equal(hashing.rawRootHash, calculated.rootHash);

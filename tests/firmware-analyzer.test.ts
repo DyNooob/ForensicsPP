@@ -20,8 +20,31 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { MemoryEvidenceReader } from "../src/core/evidence/reader";
+import { MemoryEvidenceReader, type EvidenceReadOptions, type EvidenceReader } from "../src/core/evidence/reader";
 import { analyzeFirmware, buildFirmwareManifest } from "../src/features/firmware/analyzer";
+
+
+class CountingReader implements EvidenceReader {
+  readonly size: number;
+  readBytes = 0;
+  readCalls = 0;
+  private readonly source: MemoryEvidenceReader;
+
+  constructor(bytes: Uint8Array) {
+    this.source = new MemoryEvidenceReader(bytes);
+    this.size = bytes.length;
+  }
+
+  async read(offset: number, length: number, options?: EvidenceReadOptions) {
+    this.readCalls += 1;
+    const bytes = await this.source.read(offset, length, options);
+    this.readBytes += bytes.length;
+    return bytes;
+  }
+
+  slice(offset: number, length?: number) { return this.source.slice(offset, length); }
+  stream(offset?: number, length?: number) { return this.source.stream(offset, length); }
+}
 
 function setU32Be(bytes: Uint8Array, offset: number, value: number) {
   new DataView(bytes.buffer).setUint32(offset, value, false);
@@ -50,5 +73,23 @@ describe("firmware analyzer", () => {
     expect(analysis.entropy.length).toBeGreaterThan(0);
     expect(analysis.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(buildFirmwareManifest(analysis).schema).toBe("forensicspp.firmware-manifest/v1");
+    expect(analysis.timings.totalMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("does not re-read multi-megabyte probes for every signature candidate", async () => {
+    const bytes = new Uint8Array(16 * 1024 * 1024);
+    for (let index = 0; index < 12; index += 1) {
+      const offset = 128 * 1024 + index * 1024 * 1024;
+      bytes.set([0x27, 0x05, 0x19, 0x56], offset);
+      setU32Be(bytes, offset + 12, 4096);
+    }
+    const reader = new CountingReader(bytes);
+    const { analysis } = await analyzeFirmware(reader, "many-signatures.bin", {
+      chunkSize: 2 * 1024 * 1024,
+      maxHashedObjects: 0,
+      maxRecursiveBytes: 1024 * 1024
+    });
+    expect(analysis.objects.filter((item) => item.label === "U-Boot uImage")).toHaveLength(12);
+    expect(reader.readBytes).toBeLessThan(bytes.length * 1.5);
   });
 });

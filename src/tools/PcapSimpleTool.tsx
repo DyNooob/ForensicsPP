@@ -23,7 +23,7 @@ import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
-import type { PcapInfo, PcapTcpStream } from "../models";
+import type { PcapInfo, PcapHttpItem, PcapTcpStream } from "../models";
 import { persistablePcapInfo } from "../features/pcap/analyzer";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { hashBytesInWorker } from "../features/hash/task";
@@ -157,8 +157,12 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   const [packetPage, setPacketPage] = React.useState(0);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [httpDetail, setHttpDetail] = React.useState<PcapHttpItem | null>(null);
+  const [streamSearch, setStreamSearch] = React.useState("");
+  const [streamSearchIndex, setStreamSearchIndex] = React.useState(0);
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const streamTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const extractedHashAbortRef = React.useRef<AbortController | null>(null);
   const extractedHashRequestRef = React.useRef(0);
@@ -238,6 +242,55 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     [selectedStream, streamDirection, streamFormat]
   );
 
+  const httpGroups = React.useMemo(() => {
+    const groups = new Map<string, PcapHttpItem[]>();
+    for (const item of visibleHttp) {
+      const key = item.streamKey || `__single-${item.packetNo}`;
+      const list = groups.get(key);
+      if (list) list.push(item);
+      else groups.set(key, [item]);
+    }
+    return Array.from(groups.entries()).map(([key, items]) => ({
+      key,
+      stream: key.startsWith("__single-") ? null : (streamByKey.get(key) ?? null),
+      items
+    }));
+  }, [visibleHttp, streamByKey]);
+
+  const streamMatches = React.useMemo(() => {
+    const text = selectedStreamTranscript;
+    const query = streamSearch.trim().toLowerCase();
+    if (!query || !text) return [] as number[];
+    const lower = text.toLowerCase();
+    const out: number[] = [];
+    let from = 0;
+    for (;;) {
+      const index = lower.indexOf(query, from);
+      if (index < 0) break;
+      out.push(index);
+      from = index + query.length;
+    }
+    return out;
+  }, [selectedStreamTranscript, streamSearch]);
+
+  React.useEffect(() => { setStreamSearchIndex(0); }, [streamSearch, selectedStream?.key]);
+
+  const jumpToStreamMatch = (direction: 1 | -1) => {
+    if (!streamMatches.length) return;
+    setStreamSearchIndex((current) => (current + direction + streamMatches.length) % streamMatches.length);
+  };
+
+  React.useEffect(() => {
+    if (!streamMatches.length || !streamTextareaRef.current) return;
+    const query = streamSearch.trim();
+    const start = streamMatches[streamSearchIndex] ?? 0;
+    const textarea = streamTextareaRef.current;
+    textarea.focus();
+    textarea.setSelectionRange(start, start + query.length);
+    const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 18;
+    textarea.scrollTop = Math.max(0, Math.floor(start / 80) * lineHeight - textarea.clientHeight / 2);
+  }, [streamSearchIndex, streamMatches, streamSearch]);
+
   const loadFile = async (file?: File) => {
     if (!file || !active) return;
     workspace.clear();
@@ -261,6 +314,9 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setPacketPage(0);
     setView("overview");
     setLoading(false);
+    setStreamSearch("");
+    setStreamSearchIndex(0);
+    setHttpDetail(null);
     if (file.size > MAX_PCAP_BYTES) {
       setError(english ? "The capture exceeds the 128 MiB limit." : "流量包超过 128 MiB 限制。");
       return;
@@ -389,6 +445,9 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setPacketPage(0);
     setView("overview");
     setLoading(false);
+    setStreamSearch("");
+    setStreamSearchIndex(0);
+    setHttpDetail(null);
     setError("");
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -534,10 +593,16 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 <ASegmentedGroup value={streamDirection} selects="single"><ASegmentedButton value="both" onClick={() => setStreamDirection("both")}>{english ? "Both" : "双向"}</ASegmentedButton><ASegmentedButton value="a-to-b" onClick={() => setStreamDirection("a-to-b")}>{"A -> B"}</ASegmentedButton><ASegmentedButton value="b-to-a" onClick={() => setStreamDirection("b-to-a")}>{"B -> A"}</ASegmentedButton></ASegmentedGroup>
                 <ASegmentedGroup value={streamFormat} selects="single"><ASegmentedButton value="text" onClick={() => setStreamFormat("text")}>{english ? "Text" : "文本"}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setStreamFormat("hex")}>Hex</ASegmentedButton></ASegmentedGroup>
               </div>
+              <div className="pcap-stream-search">
+                <input className="text-input" value={streamSearch} onChange={(event) => setStreamSearch(event.currentTarget.value)} placeholder={t.streamSearch} aria-label={t.streamSearch} />
+                <span className="pcap-stream-search-count">{streamMatches.length ? `${streamSearchIndex + 1}/${streamMatches.length}` : "0"}</span>
+                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(-1)} aria-label={english ? "Previous match" : "上一个匹配"}>↑</AButton>
+                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(1)} aria-label={english ? "Next match" : "下一个匹配"}>↓</AButton>
+              </div>
               <div className="pcap-stream-meta"><span>{english ? "Payload" : "载荷"}: {formatBytes(selectedStream.bytesAtoB + selectedStream.bytesBtoA)}</span><span>{english ? "Retransmitted overlap" : "重传重叠"}: {formatBytes(selectedStream.retransmittedBytes)}</span><span>{english ? "Capture gaps" : "捕获缺口"}: {formatBytes(selectedStream.gapBytesAtoB + selectedStream.gapBytesBtoA)}</span></div>
               {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <div className="pcap-stream-notice">{english ? "The capture has sequence gaps. Gap markers are shown in the preview; raw export is available only for a complete direction." : "该流存在序列缺口，预览中已标出；只有无缺口的单向数据可以导出原始字节。"}</div> : null}
               {pcap.streamBytesLimited ? <div className="pcap-stream-notice">{english ? "The restored workspace does not contain all stream bytes. Re-analyze the capture before exporting." : "恢复的工作区未保留全部流字节，导出前请重新分析流量包。"}</div> : null}
-              <textarea className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={english ? "TCP stream content" : "TCP 流内容"} />
+              <textarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={english ? "TCP stream content" : "TCP 流内容"} />
             </div>}
           </div>}
 
@@ -609,7 +674,30 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
           {view === "network" && <div className="pcap-simple-network">
             <div className="pcap-list-filter"><input className="text-input" value={networkFilter} onChange={(event) => setNetworkFilter(event.currentTarget.value)} placeholder={english ? "Filter HTTP, DNS, or TLS" : "筛选 HTTP、DNS 或 TLS"} aria-label={english ? "Filter HTTP, DNS, and TLS" : "筛选 HTTP、DNS 和 TLS"} /><span>{visibleHttp.length + visibleDns.length + visibleTls.length}/{pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length}</span></div>
-            <section><strong>HTTP</strong>{pcap.httpItems.length ? <div className="table-scroll pcap-http-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Method" : "方法"}</th><th>Host</th><th>{english ? "Path" : "路径"}</th><th>{english ? "Type" : "类型"}</th></tr></thead><tbody>{visibleHttp.map((item) => <tr key={`${item.packetNo}-${item.line}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.method}</td><td>{item.host}</td><td>{item.path}</td><td>{item.contentType}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
+            <section><strong>HTTP</strong>{pcap.httpItems.length ? (
+              <div className="pcap-http-groups">
+                {httpGroups.map((group) => (
+                  <div className="pcap-http-group" key={group.key}>
+                    <div className="pcap-http-group-head">
+                      <span className="pcap-http-group-title">{group.stream ? `${group.stream.endpointA} <-> ${group.stream.endpointB}` : (english ? "Ungrouped HTTP" : "未分组的 HTTP")}</span>
+                      {group.stream && <AButton variant="text" onClick={() => { setSelectedStreamKey(group.stream!.key); setView("streams"); }}>{t.followTcpStream}</AButton>}
+                    </div>
+                    <div className="pcap-http-messages">
+                      {group.items.map((item, index) => {
+                        const title = item.role === "request" ? `${item.method} ${item.path}` : item.line;
+                        return (
+                          <button type="button" className="pcap-http-message" key={`${item.packetNo}-${index}`} onClick={() => setHttpDetail(item)}>
+                            <span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (english ? "REQ" : "请求") : (english ? "RES" : "响应")}</span>
+                            <span className="pcap-http-title">{title}</span>
+                            <span className="pcap-http-meta">{item.host} · {item.contentType || "--"} · {formatBytes(item.bodySize)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <div className="empty-state">--</div>}</section>
             <section><strong>DNS</strong>{pcap.dnsItems.length ? <div className="table-scroll pcap-dns-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th></tr></thead><tbody>{visibleDns.map((item) => <tr key={`${item.packetNo}-${item.name}-${item.type}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.name}</td><td>{item.type}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
             <section><strong>TLS</strong>{pcap.tlsItems.length ? <div className="table-scroll pcap-tls-scroll"><table className="data-table"><thead><tr><th>{english ? "Handshake" : "握手"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>SNI</th><th>{english ? "Version" : "版本"}</th><th>ALPN</th><th>JA3 / JA3S</th><th>{english ? "Certificates" : "证书"}</th></tr></thead><tbody>{visibleTls.map((item, index) => <tr key={`${item.streamKey}-${item.direction}-${item.type}-${index}`}><td>{item.type}</td><td>{item.source}</td><td>{item.destination}</td><td>{item.sni || "--"}</td><td>{item.negotiatedVersion || item.recordVersion}</td><td>{item.alpn.join(", ") || "--"}</td><td><code>{item.ja3Hash || item.ja3sHash || "--"}</code></td><td title={item.certificates.map((cert) => cert.sha256).join("\n")}>{item.certificates.length || "--"}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
           </div>}
@@ -624,6 +712,52 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={selectedPacket.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={selectedPacket.hexPreview || "--"} readOnly /></label></div>
         </section>}
       </>}
+      {httpDetail && <HttpMessageModal item={httpDetail} t={t} english={english} onClose={() => setHttpDetail(null)} onFollow={() => { const key = httpDetail.streamKey; if (key) { setSelectedStreamKey(key); setView("streams"); } setHttpDetail(null); }} />}
+    </div>
+  );
+}
+
+function HttpMessageModal({ item, t, english, onClose, onFollow }: { item: PcapHttpItem; t: (typeof copy)["zh"]; english: boolean; onClose: () => void; onFollow: () => void }) {
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const fullText = item.headers ? `${item.headers}\r\n\r\n${item.bodyPreview}` : item.bodyPreview;
+  const downloadMessage = () => {
+    downloadBlob(`http-${item.packetNo}-${item.role}.txt`, new Blob([fullText], { type: "text/plain;charset=utf-8" }));
+  };
+  const title = item.role === "request" ? `${item.method} ${item.path}` : item.line;
+  return (
+    <div className="image-lightbox pcap-http-modal" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+      <div className="image-lightbox-inner pcap-http-modal-inner" onClick={(event) => event.stopPropagation()}>
+        <div className="image-lightbox-head">
+          <strong><span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (english ? "Request" : "请求") : (english ? "Response" : "响应")}</span> {title}</strong>
+          <div className="image-lightbox-actions">
+            <AButton variant="outlined" onClick={() => void copyText(fullText)}>{t.copyMessage}</AButton>
+            <AButton variant="outlined" onClick={downloadMessage}>{t.downloadMessage}</AButton>
+            {item.streamKey && <AButton variant="text" onClick={onFollow}>{t.followTcpStream}</AButton>}
+            <AButton variant="text" onClick={onClose}>{t.closePreview}</AButton>
+          </div>
+        </div>
+        <div className="pcap-http-modal-meta">
+          <span>{english ? "Host" : "主机"}: {item.host}</span>
+          <span>{english ? "Type" : "类型"}: {item.contentType || "--"}</span>
+          <span>{english ? "Body" : "正文"}: {formatBytes(item.bodySize)}</span>
+          <span>#{item.packetNo}</span>
+          {item.streamKey && <span>{english ? "Stream" : "流"}: {item.streamKey}</span>}
+        </div>
+        {item.headers ? (
+          <>
+            <div className="pcap-http-section-label">{t.httpHeaders}</div>
+            <pre className="pcap-http-headers">{item.headers}</pre>
+            <div className="pcap-http-section-label">{t.httpMessageBody}</div>
+            <textarea className="single-textarea pcap-http-body" value={item.bodyPreview || "--"} readOnly aria-label={english ? "HTTP body" : "HTTP 正文"} />
+          </>
+        ) : (
+          <div className="pcap-stream-notice">{t.noHeadersCaptured}</div>
+        )}
+      </div>
     </div>
   );
 }

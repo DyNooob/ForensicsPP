@@ -378,9 +378,12 @@ export function inspectFrame(frame: Uint8Array, packetNo: number, timestamp: str
           userAgent: parsedHttp.userAgent,
           contentType: parsedHttp.contentType,
           bodySize: bodyBytes.length,
-          bodyPreview: parsedHttp.bodyText.slice(0, 1000),
+          bodyPreview: parsedHttp.bodyText.slice(0, 4096),
           bodySha256: "--",
-          risk: parsedHttp.risk
+          risk: parsedHttp.risk,
+          streamKey: "",
+          headers: "",
+          role: parsedHttp.method === "RESPONSE" ? "response" : "request"
         };
         info = parsedHttp.host === "--" ? parsedHttp.firstLine || flags : `${parsedHttp.firstLine || "HTTP"} Host=${parsedHttp.host}`;
       } else {
@@ -450,9 +453,12 @@ export function inspectFrame(frame: Uint8Array, packetNo: number, timestamp: str
           userAgent: parsedHttp.userAgent,
           contentType: parsedHttp.contentType,
           bodySize: bodyBytes.length,
-          bodyPreview: parsedHttp.bodyText.slice(0, 1000),
+          bodyPreview: parsedHttp.bodyText.slice(0, 4096),
           bodySha256: "--",
-          risk: parsedHttp.risk
+          risk: parsedHttp.risk,
+          streamKey: "",
+          headers: "",
+          role: parsedHttp.method === "RESPONSE" ? "response" : "request"
         };
         info = parsedHttp.host === "--" ? parsedHttp.firstLine || flags : `${parsedHttp.firstLine || "HTTP"} Host=${parsedHttp.host}`;
       } else {
@@ -917,9 +923,12 @@ function parseHttpDirection(stream: PcapTcpStream, direction: "a-to-b" | "b-to-a
       userAgent: parsed.userAgent,
       contentType: parsed.contentType,
       bodySize: body.length,
-      bodyPreview: readableHttpBody(body).slice(0, 1000),
+      bodyPreview: readableHttpBody(body).slice(0, 4096),
       bodySha256: "--",
-      risk: parsed.risk
+      risk: parsed.risk,
+      streamKey: stream.key,
+      headers: headerText.trim().slice(0, 4096),
+      role: /^HTTP\//i.test(firstLine) ? "response" : "request"
     };
     items.push(item);
     if (completeBody) {
