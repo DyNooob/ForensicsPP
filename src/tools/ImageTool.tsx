@@ -110,7 +110,7 @@ function downloadChannelImage(name: string, label: string, dataUrl: string) {
   const parsed = dataUrlToBytes(dataUrl);
   if (!parsed) return;
   const base = (name || "image").replace(/\.[^.]+$/, "");
-  downloadBlob(`${base}-${sanitizeChannelLabel(label)}.png`, new Blob([parsed.bytes], { type: parsed.mime }));
+  downloadBlob(`${base}-${sanitizeChannelLabel(label)}.png`, new Blob([parsed.bytes.slice()], { type: parsed.mime }));
 }
 
 export type ImageToolServices = {
