@@ -6,6 +6,60 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - 暂无未发布变更。
 
+## [1.0.0-beta.3] - 2026-08-16
+
+### Added
+
+- 新增独立 **Firmware Analyzer**：基于 `EvidenceReader`/Worker 的分块扫描、跨块 signature 命中、结构边界解析、流式 SHA-256、熵图、架构识别、Firmware triage 与 JSON scan manifest。
+- Firmware 递归分析统一接入共享 container extractor，支持 ZIP/APK/JAR、gzip、zlib、TAR、CPIO，并受深度、对象数量、单对象和总膨胀量限制。
+- 新增中央 Analyzer Routing，Firmware/Binary carved artifact 统一路由到 SQLite、Android、Archive、Image、Document、Disk 或 Binary 工作区。
+- `.fppcase` 升级到 schema 1.1，新增 `analysis.json` 保存安全裁剪后的结构化 Analyzer 快照；继续兼容 1.0 导入。
+
+### Changed
+
+- Carver format 定义升级为共享 Registry，并补充 zlib、LZMA、vendor_boot、UBIFS、PEM certificate/private-key 等识别。
+- Result Store 增加有界历史、订阅、案件安全快照与恢复，不再只是“每个工具一个当前结果”的临时 Map。
+- Tool Handoff 从单个 pending object 升级为每目标工具的有界 FIFO 队列，并保持 5 分钟内存过期策略。
+- Disk Image 工作区加入 handoff 消费，使 Firmware 中识别出的 FAT/exFAT/NTFS/EXT/ISO 对象可以真正直接送入 Disk Analyzer。
+- 首页和全局工具搜索会同时检索工具的 accepts/capabilities 元数据，Firmware Analyzer 加入默认快速入口。
+- Firmware 对 carved object 的 SHA-256 增加总读取预算，并预计算下一对象边界，避免大固件在解析阶段产生不受控的重复 I/O。
+
+### Architecture
+
+- 格式检测、container expansion、Analyzer 选择、结构化结果存储和案件序列化已从具体 React 工具中继续下沉；Binary 与 Firmware 不再维护各自的 Analyzer 路由分支。
+- 大型固件默认保持分块分析；只有受限大小来源才自动进入递归容器展开，避免重新退化成全文件 `arrayBuffer()` 工作流。
+
+### Verification
+
+- 新增 Firmware streaming/cross-chunk、shared container extractor、Analyzer routing、Result Store/Handoff queue 与 `.fppcase` 1.1 回归。
+- 独立运行样本已验证跨 chunk signature、U-Boot structural extent/architecture metadata、TAR→SQLite recursive extraction 与 Firmware Manifest 输出。
+- 发布前仍应在完整 npm 依赖环境执行 `npm ci && npm run verify`。
+
+## [1.0.0-beta.2] - 2026-08-16
+
+### Added
+
+- 新增 `EvidenceReader` 随机访问底层、结构化 `AnalysisEnvelope`/Result Store、Tool Runtime Registry，并让案件报告优先消费结构化分析结果。
+- Firmware/File Carver 支持同类型多命中、结构边界、ZIP/gzip 安全递归展开与 carved artifact 内存直送目标 Analyzer。
+- APK 增加 v1/JAR、v2、v3、v3.1 签名验证与可选 v4 `.idsig` 校验；增加本地 v2 重新签名/修复流程，可使用导入身份或临时本地身份。
+- SQLite 增加 Deleted Record 结构恢复、Overflow Page 重组、历史 WAL 行版本与候选 Schema 匹配。
+- PCAP 增加 TLS ClientHello/ServerHello/Certificate、SNI、ALPN、TLS 版本、JA3/JA3S 与证书 SHA-256。
+- Binary Analyzer 深化 PE/ELF；新增 Disk Image Explorer、Bulk Artifact Scanner 与 Memory/Minidump Triage。
+- Windows Artifact 增加 NTFS `$MFT` 与 `$UsnJrnl:$J` 解析。
+- Case Reporter 增加版本化 `.fppcase` 参考型案件包与内部文件完整性验证。
+
+### Changed
+
+- Android/APK 与 Archive 共用 ZIP Central Directory 膨胀预检，限制异常条目数、单条/总解压体积与异常压缩比。
+- `ToolHost` 收缩为薄宿主，工具懒加载与运行时依赖集中到 Registry。
+- APK “签名修复”明确为重新签名；没有原开发者私钥时不会声称恢复原签名身份。
+
+### Verification
+
+- 新增 Disk、Bulk、Memory、MFT/USN、递归 Carver、APK v4、`.fppcase` 和 SQLite overflow 回归测试。
+- 开发环境已执行源码版权头、全仓 TS/TSX 语法转译、核心解析器严格类型检查，以及 APK v1/v2/v4、SQLite overflow、Disk/MFT/USN/Memory/Bulk/Carver 的独立运行样本验证。
+- 发布前仍应在完整 npm 依赖环境执行 `npm ci && npm run verify`。
+
 ## [1.0.0-beta.1] - 2026-07-23
 
 ### Changed
@@ -299,7 +353,9 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.3...HEAD
+[1.0.0-beta.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.2...v1.0.0-beta.3
+[1.0.0-beta.2]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.4...v1.0.0-beta.1
 [1.0.0-alpha.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
 [1.0.0-alpha.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-alpha.2...v1.0.0-alpha.3

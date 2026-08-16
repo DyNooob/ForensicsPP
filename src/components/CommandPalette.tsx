@@ -44,8 +44,6 @@ export function CommandPalette({
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const resultRef = React.useRef<HTMLDivElement | null>(null);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
-  const previouslyFocused = React.useRef<HTMLElement | null>(null);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedCommand = commands[Math.min(selectedIndex, Math.max(commands.length - 1, 0))];
   const grouped = commands.reduce<Array<{ group: string; items: AppCommand[] }>>((groups, command) => {
@@ -56,31 +54,8 @@ export function CommandPalette({
   }, []);
 
   React.useEffect(() => {
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
-    return () => {
-      previouslyFocused.current?.focus();
-    };
   }, []);
-
-  const trapFocus = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Tab") return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const focusables = panel.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    if (!focusables.length) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
   React.useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
@@ -104,15 +79,7 @@ export function CommandPalette({
         onClose();
       }}
     >
-      <div
-        className="modal-panel command-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="command-title"
-        ref={panelRef}
-        onKeyDown={trapFocus}
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="modal-panel command-panel" role="dialog" aria-modal="true" aria-labelledby="command-title" onClick={(event) => event.stopPropagation()}>
         <div className="command-title-row">
           <h2 id="command-title">{t.commandPalette}</h2>
           <AButton className="modal-close-button" variant="text" icon={<CloseOutlined aria-hidden="true" />} aria-label={t.close} title={t.close} onClick={onClose} />

@@ -19,12 +19,12 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import React from "react";
 import { createRoot } from "react-dom/client";
 import "@ant-design/v5-patch-for-react-19";
 import "antd/dist/reset.css";
 import "./styles.css";
 import { App } from "./App";
-import { installGlobalErrorHandler } from "./utils/globalErrorHandler";
 
 function printConsoleBrand() {
   const key = "__forensicspp_console_brand__";
@@ -47,7 +47,6 @@ function printConsoleBrand() {
 }
 
 printConsoleBrand();
-installGlobalErrorHandler();
 const rootElement = document.getElementById("root");
 if (rootElement) {
   const rootHost = rootElement as HTMLElement & { __forensicspp_root__?: ReturnType<typeof createRoot> };

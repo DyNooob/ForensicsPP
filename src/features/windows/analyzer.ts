@@ -19,7 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import type { TimelineEvent, WindowsArtifactAnalysis } from "../../models";
+import type { TimelineEvent, WindowsArtifactAnalysis, WindowsArtifactRecord } from "../../models";
 import { hexPreview, previewText, readAscii } from "../../utils/binary";
 import { formatBytes } from "../../utils/files";
 import { isPrivateHost } from "../../utils/forensics";
@@ -337,6 +337,64 @@ function parseRegistryExportArtifact(text: string) {
   return { rows, findings };
 }
 
+
+function readU64Le(bytes: Uint8Array, offset: number) {
+  if (offset + 8 > bytes.length) return 0n;
+  return new DataView(bytes.buffer, bytes.byteOffset + offset, 8).getBigUint64(0, true);
+}
+
+function ntfsFileReference(value: bigint) {
+  return Number(value & 0x0000ffffffffffffn);
+}
+
+function applyMftFixup(record: Uint8Array) {
+  if (record.length < 48 || readAscii(record, 0, 4) !== "FILE") return null;
+  const usaOffset = readUint16Le(record, 4) ?? 0, usaCount = readUint16Le(record, 6) ?? 0;
+  if (!usaOffset || usaCount < 2 || usaOffset + usaCount * 2 > record.length) return null;
+  const sectors = usaCount - 1, sectorSize = Math.floor(record.length / sectors);
+  if (!sectorSize || sectorSize * sectors !== record.length) return null;
+  const fixed = record.slice(); const usn = readUint16Le(record, usaOffset);
+  for (let index = 0; index < sectors; index += 1) {
+    const tail = (index + 1) * sectorSize - 2;
+    if (readUint16Le(record, tail) !== usn) return null;
+    fixed[tail] = record[usaOffset + 2 + index * 2]; fixed[tail + 1] = record[usaOffset + 3 + index * 2];
+  }
+  return fixed;
+}
+
+function parseMftArtifact(bytes: Uint8Array, source: string) {
+  let recordSize = 1024;
+  if (readAscii(bytes, 1024, 4) !== "FILE" && readAscii(bytes, 4096, 4) === "FILE") recordSize = 4096;
+  const records: WindowsArtifactRecord[] = [], timeline: TimelineEvent[] = []; let valid = 0, deleted = 0, directories = 0, ads = 0;
+  const maxRecords = Math.min(Math.floor(bytes.length / recordSize), 20000);
+  for (let index = 0; index < maxRecords; index += 1) {
+    const raw = bytes.subarray(index * recordSize, (index + 1) * recordSize); if (readAscii(raw, 0, 4) !== "FILE") continue;
+    const record = applyMftFixup(raw); if (!record) continue; valid += 1;
+    const flags = readUint16Le(record, 0x16) ?? 0, inUse = Boolean(flags & 1), directory = Boolean(flags & 2); if (!inUse) deleted += 1; if (directory) directories += 1;
+    const recordNumber = readUint32Le(record, 0x2c) ?? index, sequence = readUint16Le(record, 0x10) ?? 0, firstAttribute = readUint16Le(record, 0x14) ?? 0;
+    let cursor = firstAttribute; const names: Array<{name:string,parent:number,created:string,modified:string,mftModified:string,accessed:string,namespace:number}> = []; const dataNames:string[]=[]; let residentData="";
+    for (let count = 0; count < 256 && cursor + 16 <= record.length; count += 1) {
+      const type = readUint32Le(record, cursor) ?? 0; if (type === 0xffffffff || !type) break; const length = readUint32Le(record, cursor + 4) ?? 0; if (length < 24 || cursor + length > record.length) break;
+      const nonResident = record[cursor + 8] === 1, nameLength = record[cursor + 9], nameOffset = readUint16Le(record, cursor + 10) ?? 0; const attrName = nameLength && nameOffset + nameLength * 2 <= length ? decodeUtf16Le(record.subarray(cursor + nameOffset, cursor + nameOffset + nameLength * 2)) : "";
+      if (!nonResident) { const valueLength = readUint32Le(record, cursor + 16) ?? 0, valueOffset = readUint16Le(record, cursor + 20) ?? 0, valueStart = cursor + valueOffset, valueEnd = valueStart + valueLength;
+        if (valueStart >= cursor && valueEnd <= cursor + length) {
+          if (type === 0x30 && valueLength >= 66) { const parent = ntfsFileReference(readU64Le(record, valueStart)); const nameChars = record[valueStart + 64], namespace = record[valueStart + 65], fileName = decodeUtf16Le(record.subarray(valueStart + 66, Math.min(valueEnd, valueStart + 66 + nameChars * 2))); if (fileName) names.push({name:fileName,parent,created:windowsFiletimeToIso(record,valueStart+8),modified:windowsFiletimeToIso(record,valueStart+16),mftModified:windowsFiletimeToIso(record,valueStart+24),accessed:windowsFiletimeToIso(record,valueStart+32),namespace}); }
+          if (type === 0x80) { dataNames.push(attrName || "$DATA"); if (attrName) ads += 1; if (!attrName && valueLength <= 4096) residentData = hexPreview(record.subarray(valueStart,valueEnd), 64); }
+        }
+      } else if (type === 0x80) { dataNames.push(attrName || "$DATA (non-resident)"); if (attrName) ads += 1; }
+      cursor += length;
+    }
+    const preferred = names.find(n=>n.namespace===1||n.namespace===3) ?? names[0]; const fields:Record<string,string>={"Record":String(recordNumber),"Sequence":String(sequence),"State":inUse?"in-use":"deleted","Directory":directory?"yes":"no","Filename":preferred?.name??"--","Parent record":preferred?String(preferred.parent):"--","Data streams":dataNames.join(", ")||"--"}; if (residentData) fields["Resident data preview"] = residentData;
+    records.push({id:`mft-${recordNumber}-${sequence}`,kind:"MFT",fields});
+    if (preferred && timeline.length < 3000) for (const [suffix,iso,label] of [["created",preferred.created,"Created"],["modified",preferred.modified,"Modified"],["mft",preferred.mftModified,"MFT modified"],["accessed",preferred.accessed,"Accessed"]] as const) { const event=makeArtifactEvent(`mft-${recordNumber}-${suffix}`,iso,"NTFS FILETIME","Windows FILETIME",source,`${preferred.name} · ${label} · MFT #${recordNumber}`); if(event)timeline.push(event); }
+  }
+  return { records, timeline, rows:[["MFT record size",formatBytes(recordSize)],["Valid FILE records",String(valid)],["Deleted records",String(deleted)],["Directories",String(directories)],["Named data streams (ADS)",String(ads)],["Displayed records",String(records.length)]] as Array<[string,string]> };
+}
+
+const usnReasonNames: Array<[number,string]> = [[0x1,"DATA_OVERWRITE"],[0x2,"DATA_EXTEND"],[0x4,"DATA_TRUNCATION"],[0x100,"FILE_CREATE"],[0x200,"FILE_DELETE"],[0x1000,"RENAME_OLD_NAME"],[0x2000,"RENAME_NEW_NAME"],[0x8000,"BASIC_INFO_CHANGE"],[0x10000,"HARD_LINK_CHANGE"],[0x20000,"COMPRESSION_CHANGE"],[0x80000,"OBJECT_ID_CHANGE"],[0x100000,"REPARSE_POINT_CHANGE"],[0x80000000,"CLOSE"]];
+function usnReasons(value:number){return usnReasonNames.filter(([flag])=>value&flag).map(([,name])=>name).join(", ")||`0x${value.toString(16).toUpperCase()}`;}
+function parseUsnArtifact(bytes:Uint8Array,source:string){const records:WindowsArtifactRecord[]=[],timeline:TimelineEvent[]=[];let cursor=0,invalid=0;while(cursor+60<=bytes.length&&records.length<50000){const length=readUint32Le(bytes,cursor)??0,major=readUint16Le(bytes,cursor+4)??0;if(!length||length<60||cursor+length>bytes.length||![2,3].includes(major)){cursor+=8;invalid+=1;continue;}let fileRef=0,parentRef=0,usn="",timeOffset=0,reasonOffset=0,attrsOffset=0,nameLengthOffset=0,nameOffsetOffset=0;if(major===2){fileRef=ntfsFileReference(readU64Le(bytes,cursor+8));parentRef=ntfsFileReference(readU64Le(bytes,cursor+16));usn=readU64Le(bytes,cursor+24).toString();timeOffset=32;reasonOffset=40;attrsOffset=52;nameLengthOffset=56;nameOffsetOffset=58;}else{fileRef=Number(readU64Le(bytes,cursor+8)&0xffffffffffffffffn);parentRef=Number(readU64Le(bytes,cursor+24)&0xffffffffffffffffn);usn=readU64Le(bytes,cursor+40).toString();timeOffset=48;reasonOffset=56;attrsOffset=68;nameLengthOffset=72;nameOffsetOffset=74;}const reason=readUint32Le(bytes,cursor+reasonOffset)??0,attrs=readUint32Le(bytes,cursor+attrsOffset)??0,nameLength=readUint16Le(bytes,cursor+nameLengthOffset)??0,nameOffset=readUint16Le(bytes,cursor+nameOffsetOffset)??0;const name=nameOffset+nameLength<=length?decodeUtf16Le(bytes.subarray(cursor+nameOffset,cursor+nameOffset+nameLength)):"";const iso=windowsFiletimeToIso(bytes,cursor+timeOffset);records.push({id:`usn-${cursor}`,kind:`USN v${major}`,fields:{Offset:`0x${cursor.toString(16).toUpperCase()}`,Name:name||"--","File reference":String(fileRef),"Parent reference":String(parentRef),USN:usn,Timestamp:iso,Reason:usnReasons(reason),Attributes:`0x${attrs.toString(16).toUpperCase()}`}});const event=makeArtifactEvent(`usn-${cursor}`,iso,"NTFS USN FILETIME","Windows FILETIME",source,`${name||"USN record"} · ${usnReasons(reason)}`);if(event&&timeline.length<10000)timeline.push(event);cursor+=length;}return{records,timeline,rows:[["USN records",String(records.length)],["Skipped/invalid regions",String(invalid)],["Displayed records",String(records.length)]] as Array<[string,string]>};}
+
 function analyzeWindowsArtifact(bytes: Uint8Array, name: string): WindowsArtifactAnalysis {
   const stringsAnalysis = extractPrintableStrings(bytes.subarray(0, Math.min(bytes.length, 8 * 1024 * 1024)), 5);
   const textPreviewValue = previewText(bytes, 10000);
@@ -348,11 +406,21 @@ function analyzeWindowsArtifact(bytes: Uint8Array, name: string): WindowsArtifac
   const findings: WindowsFinding[] = [];
   let artifactType = "Generic Windows-related File";
   let timeline: TimelineEvent[] = [];
+  let records: WindowsArtifactRecord[] = [];
   const lnkClsid = "01 14 02 00 00 00 00 00 C0 00 00 00 00 00 00 46";
   const isLnk = bytes.length >= 76 && readUint32Le(bytes, 0) === 0x4c && hexPreview(bytes.slice(4, 20), 16) === lnkClsid;
   const isPrefetch = bytes.length >= 84 && readAscii(bytes, 4, 4) === "SCCA";
   const isZone = /\[ZoneTransfer\]/i.test(textPreviewValue) || /Zone\.Identifier$/i.test(name);
-  if (isLnk) {
+  const isMft = readAscii(bytes, 0, 4) === "FILE" && (/\$MFT$/i.test(name) || readAscii(bytes, 1024, 4) === "FILE" || readAscii(bytes, 4096, 4) === "FILE");
+  const usnMajor = readUint16Le(bytes, 4) ?? 0;
+  const isUsn = /UsnJrnl|\$J$/i.test(name) || ((usnMajor === 2 || usnMajor === 3) && (readUint32Le(bytes, 0) ?? 0) >= 60);
+  if (isMft) {
+    artifactType = "NTFS $MFT";
+    const parsed = parseMftArtifact(bytes, name); rows.push(...parsed.rows); timeline = parsed.timeline; records = parsed.records;
+  } else if (isUsn) {
+    artifactType = "NTFS $UsnJrnl:$J";
+    const parsed = parseUsnArtifact(bytes, name); rows.push(...parsed.rows); timeline = parsed.timeline; records = parsed.records;
+  } else if (isLnk) {
     artifactType = "Windows Shell Link (.lnk)";
     const parsed = parseLnkArtifact(bytes, name);
     rows.push(...parsed.rows);
@@ -388,7 +456,8 @@ function analyzeWindowsArtifact(bytes: Uint8Array, name: string): WindowsArtifac
     rows,
     timeline,
     strings: windowsPaths.slice(0, 100),
-    textPreview: textPreviewValue
+    textPreview: textPreviewValue,
+    records
   };
 }
 

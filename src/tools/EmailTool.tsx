@@ -34,13 +34,16 @@ import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "..
 import { hashBytesInWorker } from "../features/hash/task";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
-import { sanitizeEmailHtml, limitEmailHtmlPreview, MAX_EMAIL_HTML_PREVIEW_CHARS } from "../utils/sanitize";
-export { sanitizeEmailHtml, limitEmailHtmlPreview, MAX_EMAIL_HTML_PREVIEW_CHARS };
 
 const EMAIL_FILE_LIMIT = 64 * 1024 * 1024;
 const MAX_EMAIL_TEXT_INPUT_BYTES = 16 * 1024 * 1024;
 const MAX_PERSISTED_EMAIL_BYTES = 8 * 1024 * 1024;
 const MAX_PERSISTED_EMAIL_BODY_CHARS = 512 * 1024;
+export const MAX_EMAIL_HTML_PREVIEW_CHARS = 2 * 1024 * 1024;
+
+export function limitEmailHtmlPreview(value: string) {
+  return value.slice(0, MAX_EMAIL_HTML_PREVIEW_CHARS);
+}
 type EmailWorkerResult = { analysis: EmailAnalysis; source: string };
 type EmailWorkerRequest = { format: "eml"; source: string } | { format: "msg"; bytes: ArrayBuffer };
 type EmailWorkspace = {
@@ -80,6 +83,28 @@ function safeEmailFilename(value: string, fallback: string) {
   return cleaned || fallback;
 }
 
+function sanitizeEmailHtml(value: string) {
+  if (!value.trim()) return "";
+  const truncated = value.length > MAX_EMAIL_HTML_PREVIEW_CHARS;
+  const document = new DOMParser().parseFromString(limitEmailHtmlPreview(value), "text/html");
+  document.querySelectorAll("script, iframe, object, embed, form, input, button, link, meta, style").forEach((node) => node.remove());
+  document.querySelectorAll<HTMLElement>("*").forEach((node) => {
+    for (const attribute of Array.from(node.attributes)) {
+      if (/^on/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if (/^(src|srcset|background|poster|action|formaction)$/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if (attribute.name === "style" && /url\s*\(|expression\s*\(|behavior\s*:/i.test(attribute.value)) node.removeAttribute(attribute.name);
+      if (attribute.name === "href" && !/^(?:#|mailto:|tel:)/i.test(attribute.value.trim())) node.setAttribute("href", "#");
+    }
+  });
+  if (truncated) {
+    const notice = document.createElement("p");
+    notice.textContent = "[HTML preview truncated]";
+    notice.setAttribute("data-preview-limit", "true");
+    document.body.append(notice);
+  }
+  const baseStyle = "body{margin:0;padding:18px;color:#182230;background:#fff;font:14px/1.65 system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}td,th{padding:6px;border:1px solid #d9e0e8}";
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${baseStyle}</style></head><body>${document.body.innerHTML}</body></html>`;
+}
 
 export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const [input, setInput] = React.useState("");

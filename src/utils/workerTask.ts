@@ -24,7 +24,7 @@ export type WorkerTaskMessage<TResult, TProgress = never> =
   | { type: "progress"; progress: TProgress }
   | { type: "error"; error: string };
 
-type WorkerTaskOptions<TRequest, TProgress> = {
+type WorkerTaskOptions<TRequest, TResult, TProgress> = {
   createWorker: () => Worker;
   request: TRequest;
   transfer?: Transferable[];
@@ -44,7 +44,7 @@ export function runWorkerTask<TRequest, TResult, TProgress = never>({
   signal,
   timeoutMs,
   onProgress
-}: WorkerTaskOptions<TRequest, TProgress>) {
+}: WorkerTaskOptions<TRequest, TResult, TProgress>) {
   return new Promise<TResult>((resolve, reject) => {
     if (signal?.aborted) {
       reject(abortError());

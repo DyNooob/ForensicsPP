@@ -24,10 +24,15 @@ import React from "react";
 import { AButton, AInputNumber, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { FileAnalysis, FileEmbeddedSignature } from "../models";
+import { analyzerForArtifact, analyzerTargetLabel } from "../core/analyzerRouting";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { evidenceReaderFromBlob, readEvidenceFully } from "../core/evidence/reader";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { appVersion, type ToolId } from "../config/app";
 import { runWorkerTask } from "../utils/workerTask";
 import type { BinaryWorkerRequest } from "../features/file/file.worker";
+import { dispatchToolHandoff, subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 
 type HexRow = { offset: number; hex: string; ascii: string };
 const MAX_PERSISTED_BINARY_BYTES = 8 * 1024 * 1024;
@@ -46,7 +51,7 @@ export type BinaryToolServices = {
   parseByteOffset: (value: string, max: number, fallback?: number) => number;
 };
 
-export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: BinaryToolServices; active?: boolean }) {
+export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (typeof copy)["zh"]; services: BinaryToolServices; active?: boolean; setActiveTool?: (tool: ToolId, options?: { replaceHash?: boolean }) => void }) {
   const { binaryHexDumpRows, parseByteOffset } = services;
   const english = t.waiting === "Waiting";
   const [analysis, setAnalysis] = React.useState<FileAnalysis | null>(null);
@@ -99,6 +104,7 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
     setError("");
     setStorageNotice("");
     workspace.clear();
+    clearAnalysisResult("binary");
     setAnalysis(null);
     setBytes(new Uint8Array());
     setFileName("");
@@ -113,7 +119,9 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
     abortRef.current = controller;
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const nextBytes = new Uint8Array(await file.arrayBuffer());
+      const reader = evidenceReaderFromBlob(file);
+      const startedAt = new Date().toISOString();
+      const nextBytes = await readEvidenceFully(reader, { signal: controller.signal });
       if (requestId !== requestRef.current) return;
       const workerBytes = nextBytes.slice();
       const nextAnalysis = await runWorkerTask<BinaryWorkerRequest, FileAnalysis>({
@@ -133,6 +141,65 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
       setFileName(file.name);
       setOffsetInput("0");
       setAnalysis(nextAnalysis);
+      const completedAt = new Date().toISOString();
+      const detectedType = nextAnalysis.binaryRows.find(([key]) => key === "Format")?.[1]
+        ?? nextAnalysis.rows.find(([key]) => key === "Detected Type")?.[1]
+        ?? "Unknown";
+      publishAnalysisResult("binary", {
+        schemaVersion: "1",
+        id: `binary-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        analyzer: { id: "binary", version: appVersion },
+        source: [{
+          name: file.name,
+          size: file.size,
+          type: file.type || "application/octet-stream",
+          lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
+        }],
+        run: { startedAt, completedAt, parameters: { fullBufferAnalysis: true, maxBytes: 128 * 1024 * 1024 } },
+        summary: {
+          title: english ? "Binary / firmware analysis" : "二进制 / 固件分析",
+          text: english
+            ? `${detectedType}; ${nextAnalysis.embeddedSignatures.length} embedded object(s) detected.`
+            : `${detectedType}；检测到 ${nextAnalysis.embeddedSignatures.length} 个嵌入对象。`,
+          metrics: [
+            { label: english ? "File" : "文件", value: file.name },
+            { label: english ? "Size" : "大小", value: formatBytes(file.size) },
+            { label: english ? "Detected type" : "识别类型", value: detectedType },
+            { label: english ? "Embedded objects" : "嵌入对象", value: String(nextAnalysis.embeddedSignatures.length) }
+          ]
+        },
+        findings: nextAnalysis.findings.map((finding) => ({ level: finding.level, title: finding.title, detail: finding.detail })),
+        indicators: nextAnalysis.stringAnalysis.iocs.slice(0, 500).map((ioc) => ({
+          type: ioc.type,
+          value: ioc.value,
+          normalized: ioc.normalized,
+          source: file.name,
+          context: ioc.context
+        })),
+        artifacts: nextAnalysis.embeddedSignatures.map((payload, index) => ({
+          id: `embedded-${index}-${payload.offset}`,
+          label: payload.label,
+          kind: "embedded-file",
+          offset: payload.offset,
+          size: payload.size,
+          sha256: payload.sha256 || undefined,
+          mime: payload.mime,
+          extension: payload.extension,
+          parentId: payload.parentOffset == null ? undefined : `embedded-parent-${payload.parentOffset}`,
+          depth: payload.depth,
+          confidence: payload.confidence
+        })),
+        timeline: nextAnalysis.stringAnalysis.timeline.slice(0, 1000).map(({ iso, local, raw, format, line, source, context, epochMs }) => ({
+          iso, local, raw, format, line, source, context, ...(epochMs == null ? {} : { epochMs })
+        })),
+        limitations: [
+          { code: "BINARY_FULL_BUFFER_LIMIT", detail: english ? "The current structural analyzer reads files up to 128 MiB into memory; the new EvidenceReader layer is ready for future random-access analyzers." : "当前结构分析器仍会将不超过 128 MiB 的文件读入内存；新的 EvidenceReader 已作为后续随机访问分析器底层。" },
+          ...(nextAnalysis.embeddedSignatures.some((payload) => payload.extent === "heuristic" || payload.extent === "unknown")
+            ? [{ code: "CARVER_HEURISTIC_EXTENT", detail: english ? "Some embedded-object boundaries are heuristic or unresolved and must be verified before evidentiary use." : "部分嵌入对象边界属于启发式估计或尚未解析，作为证据使用前需要复核。" }]
+            : [])
+        ],
+        data: { detectedType, rows: nextAnalysis.rows, binaryRows: nextAnalysis.binaryRows, sectionCount: nextAnalysis.sections.length }
+      });
       setStorageNotice(file.size > MAX_PERSISTED_BINARY_BYTES
         ? (english ? "This file is available for the current session only; it is not restored automatically." : "当前文件仅在本次打开期间保留，不会自动恢复。")
         : "");
@@ -149,11 +216,24 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
     }
   };
 
+  const handleFileRef = React.useRef(handleFile);
+  handleFileRef.current = handleFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("binary");
+      if (handoff) void handleFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("binary", consume);
+  }, [active]);
+
   const clear = () => {
     requestRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
     workspace.clear();
+    clearAnalysisResult("binary");
     setAnalysis(null);
     setBytes(new Uint8Array());
     setFileName("");
@@ -181,6 +261,20 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
   const downloadEmbedded = (payload: FileEmbeddedSignature, index: number) => {
     const copy = payload.bytes.slice();
     downloadBlob(`${fileName || "binary"}-embedded-${index + 1}-0x${payload.offset.toString(16).toUpperCase()}.${payload.extension}`, new Blob([copy.buffer], { type: payload.mime }));
+  };
+
+  const analyzeEmbedded = (payload: FileEmbeddedSignature, index: number) => {
+    if (!payload.bytes.length || !setActiveTool) return;
+    const targetTool = analyzerForArtifact(payload);
+    const copy = payload.bytes.slice();
+    const name = `${fileName || "binary"}-embedded-${index + 1}-0x${payload.offset.toString(16).toUpperCase()}.${payload.extension}`;
+    dispatchToolHandoff({
+      sourceTool: "binary",
+      targetTool,
+      label: `${payload.label} @ 0x${payload.offset.toString(16).toUpperCase()}`,
+      file: new File([copy.buffer], name, { type: payload.mime || "application/octet-stream" })
+    });
+    setActiveTool(targetTool);
   };
 
   const rowValue = (key: string) => analysis?.rows.find(([label]) => label === key)?.[1] ?? "--";
@@ -289,8 +383,8 @@ export function BinaryTool({ t, services, active = true }: { t: (typeof copy)["z
               <PanelTitle title={t.embeddedSignatures} />
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>{english ? "Type" : "类型"}</th><th>{english ? "Offset" : "偏移"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th>{t.download}</th></tr></thead>
-                  <tbody>{analysis.embeddedSignatures.map((payload, index) => <tr key={`${payload.label}-${payload.offset}`}><td>{payload.label}</td><td>0x{payload.offset.toString(16).toUpperCase()}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview || "--"}</td><td><AButton variant="text" disabled={!payload.bytes.length} onClick={() => downloadEmbedded(payload, index)}>{t.download}</AButton></td></tr>)}</tbody>
+                  <thead><tr><th>{english ? "Type" : "类型"}</th><th>{english ? "Location / path" : "位置 / 路径"}</th><th>{t.fileSize}</th><th>{english ? "Origin" : "来源"}</th><th>{english ? "Boundary" : "边界"}</th><th>{english ? "Confidence" : "置信度"}</th><th>{t.preview}</th><th>{english ? "Actions" : "操作"}</th></tr></thead>
+                  <tbody>{analysis.embeddedSignatures.map((payload, index) => <tr key={`${payload.virtualPath ?? payload.label}-${payload.offset}-${index}`}><td>{payload.label}</td><td>{payload.virtualPath && payload.origin !== "signature" ? payload.virtualPath : `0x${payload.offset.toString(16).toUpperCase()}${payload.virtualPath ? ` · ${payload.virtualPath}` : ""}`}</td><td>{formatBytes(payload.size)}</td><td>{payload.origin ?? "signature"}</td><td>{payload.extent ?? "--"}</td><td>{payload.confidence ?? "--"}</td><td title={payload.detail}>{payload.preview || "--"}</td><td><div className="button-row compact-buttons"><AButton variant="text" disabled={!payload.bytes.length} onClick={() => downloadEmbedded(payload, index)}>{payload.bytes.length ? t.download : (english ? "Guarded" : "受限")}</AButton><AButton variant="text" disabled={!payload.bytes.length || !setActiveTool} onClick={() => analyzeEmbedded(payload, index)}>{english ? `Analyze → ${analyzerTargetLabel(analyzerForArtifact(payload), true)}` : `分析 → ${analyzerTargetLabel(analyzerForArtifact(payload), false)}`}</AButton></div></td></tr>)}</tbody>
                 </table>
               </div>
             </div>

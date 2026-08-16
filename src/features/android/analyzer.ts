@@ -20,10 +20,12 @@
  */
 
 import { unzipSync } from "fflate";
-import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo } from "../../models";
+import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo, AndroidSigningInfo } from "../../models";
 import { fileSignatureForBytes, fileSignatures, previewText, shannonEntropy } from "../../utils/binary";
 import { archiveExtension, formatBytes } from "../../utils/files";
 import { PERM_CATEGORY_META, resolveAndroidPermission } from "./permissionCatalog";
+import { validateZipExpansion } from "../archive/zipDirectory";
+import { inspectApkSigningBlock } from "./signing";
 
 const androidNamespace = "http://schemas.android.com/apk/res/android";
 
@@ -220,6 +222,7 @@ function decodeAndroidBinaryXml(bytes: Uint8Array) {
       const uri = androidString(strings, view.getInt32(offset + 20, true));
       if (prefix && uri) namespaces[prefix] = uri;
     } else if (type === 0x0102) {
+      const nsIndex = view.getInt32(offset + 16, true);
       const nameIndex = view.getInt32(offset + 20, true);
       const tagName = androidString(strings, nameIndex);
       const attrStart = view.getUint16(offset + 24, true);
@@ -376,7 +379,16 @@ function classifyAndroidApkEntry(name: string, bytes: Uint8Array): AndroidApkEnt
   };
 }
 
+const androidZipPolicy = {
+  maxEntries: 12_000,
+  maxEntryUncompressed: 128 * 1024 * 1024,
+  maxTotalUncompressed: 512 * 1024 * 1024,
+  maxCompressionRatio: 500,
+  ratioGuardMinimum: 16 * 1024 * 1024
+} as const;
+
 function inspectAndroidArchive(bytes: Uint8Array) {
+  validateZipExpansion(bytes, androidZipPolicy);
   const outerFiles = unzipSync(bytes);
   let files = outerFiles;
   let manifest = files["AndroidManifest.xml"];
@@ -401,6 +413,7 @@ function inspectAndroidArchive(bytes: Uint8Array) {
       });
     for (const name of apkCandidates) {
       try {
+        validateZipExpansion(outerFiles[name], androidZipPolicy);
         const nestedFiles = unzipSync(outerFiles[name]);
         const nestedManifest = nestedFiles["AndroidManifest.xml"];
         if (!nestedManifest) continue;
@@ -433,6 +446,7 @@ function inspectAndroidArchive(bytes: Uint8Array) {
     }
   }
   if (!manifest) throw new Error("APK archive does not contain AndroidManifest.xml");
+  const signing = inspectApkSigningBlock(selectedNestedApkBytes ?? bytes);
   const entries = Object.keys(files);
   const apkEntries = entries.map((name) => classifyAndroidApkEntry(name, files[name])).sort((a, b) => Number(Boolean(b.risk.length)) - Number(Boolean(a.risk.length)) || b.size - a.size);
   const dexEntries = entries.filter((name) => /^classes\d*\.dex$/i.test(name));
@@ -454,19 +468,23 @@ function inspectAndroidArchive(bytes: Uint8Array) {
     ["DEX files", dexEntries.join(", ") || "--"],
     ["Native libraries", nativeLibs.length ? `${nativeLibs.length} (${nativeLibs.slice(0, 8).join(", ")})` : "--"],
     ["Certificate / signature files", certEntries.join(", ") || "--"],
+    ["APK Signing Block", signing.present ? `${signing.schemes.join(" + ") || "present"} · ${signing.signers.length} signer(s)` : "--"],
+    ["APK Signing Block offset", signing.blockOffset == null ? "--" : `0x${signing.blockOffset.toString(16).toUpperCase()}`],
     ["Assets", String(assetEntries.length)],
     ["res/raw", String(rawEntries.length)],
     ["Review entries", String(riskyApkEntries.length)]
   ];
   const findings = [
     ...wrapperFindings,
-    !certEntries.length ? { level: "warn", title: "No META-INF signature files", detail: "APK may rely on newer signature schemes or be unsigned/repacked; verify with an external signer when needed." } : null,
+    !certEntries.length && !signing.schemes.length ? { level: "warn", title: "No APK signature metadata detected", detail: "Neither JAR-style META-INF signature files nor a parsed v2/v3 signer block was detected; verify with apksigner when evidentiary certainty is required." } : null,
+    signing.schemes.length ? { level: "info", title: "APK Signing Block parsed", detail: `${signing.schemes.join(" + ")} · ${signing.signers.length} signer(s). Cryptographic verification is performed separately by the Android worker when the selected APK bytes are available.` } : null,
+    ...signing.warnings.map((detail) => ({ level: "warn", title: "APK signing parse note", detail })),
     nativeLibs.length ? { level: "info", title: "Native code present", detail: nativeLibs.slice(0, 12).join(", ") } : null,
     dexEntries.length > 1 ? { level: "info", title: "Multidex APK", detail: dexEntries.join(", ") } : null,
     riskyEntries.length ? { level: "warn", title: "Executable-like archive entries", detail: riskyEntries.slice(0, 12).join(", ") } : null,
     riskyApkEntries.length ? { level: "warn", title: "APK entry notes", detail: riskyApkEntries.slice(0, 12).map((entry) => `${entry.name}: ${entry.risk.join(", ")}`).join(" | ") } : null
   ].filter(Boolean) as Array<{ level: string; title: string; detail: string }>;
-  return { manifest, rows, findings, entries: apkEntries };
+  return { manifest, rows, findings, entries: apkEntries, signing, verificationBytes: selectedNestedApkBytes ?? bytes };
 }
 
 function androidAttr(element: Element | null | undefined, name: string) {
@@ -589,7 +607,7 @@ function parseAndroidComponent(element: Element, type: string, packageName: stri
   return { ...component, risk: buildAndroidComponentRisk(component, "") };
 }
 
-function parseAndroidManifest(xml: string, name: string, size: number, archiveInfo?: { rows: Array<[string, string]>; findings: Array<{ level: string; title: string; detail: string }>; entries?: AndroidApkEntry[]; axmlRows?: Array<[string, string]>; axmlFindings?: Array<{ level: string; title: string; detail: string }> }): AndroidManifestInfo {
+function parseAndroidManifest(xml: string, name: string, size: number, archiveInfo?: { rows: Array<[string, string]>; findings: Array<{ level: string; title: string; detail: string }>; entries?: AndroidApkEntry[]; signing?: AndroidSigningInfo; axmlRows?: Array<[string, string]>; axmlFindings?: Array<{ level: string; title: string; detail: string }> }): AndroidManifestInfo {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   const parseError = doc.querySelector("parsererror");
   if (parseError) throw new Error(parseError.textContent?.trim() || "Invalid XML");
@@ -738,6 +756,7 @@ function parseAndroidManifest(xml: string, name: string, size: number, archiveIn
     components,
     apkRows: archiveInfo?.rows ?? [],
     apkEntries: archiveInfo?.entries ?? [],
+    signing: archiveInfo?.signing,
     findings
   };
 }

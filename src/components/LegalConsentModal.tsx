@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import React from "react";
 import { Modal } from "antd";
 import { CheckCircleFilled } from "@ant-design/icons";
 import { AButton } from "./ui";

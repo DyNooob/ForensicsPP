@@ -92,30 +92,12 @@ export function ASegmentedButton({
 
 export function ATextField({
   clearable,
-  label,
+  label: _label,
   variant: _variant,
-  id,
   onInput,
   ...props
 }: InputProps & { clearable?: boolean; label?: string; variant?: string }) {
-  const autoId = React.useId();
-  const inputId = id ?? (label ? autoId : undefined);
-  return (
-    <>
-      {label ? (
-        <label className="sr-only" htmlFor={inputId}>
-          {label}
-        </label>
-      ) : null}
-      <Input
-        {...props}
-        id={inputId}
-        {...(label ? { "aria-label": label } : {})}
-        allowClear={clearable}
-        onInput={onInput}
-      />
-    </>
-  );
+  return <Input {...props} allowClear={clearable} onInput={onInput} />;
 }
 
 export function APasswordField(props: InputProps) {
@@ -174,6 +156,13 @@ export function AListItem({
       {description && <small>{description}</small>}
     </button>
   );
+}
+
+export function ACard({
+  className,
+  children
+}: React.HTMLAttributes<HTMLDivElement> & { variant?: string }) {
+  return <div className={["app-card", className].filter(Boolean).join(" ")}>{children}</div>;
 }
 
 export function AChip({

@@ -153,10 +153,9 @@ function transformText(operation: string, input: string) {
       .replace(/'/g, "&#39;");
   }
   if (operation === "unhtml") {
-    // Decode HTML entities without assigning user input to innerHTML: wrap in a <textarea>
-    // parsed by the HTML parser (RCDATA mode keeps tags literal while decoding entities).
-    const doc = new DOMParser().parseFromString(`<textarea>${input}</textarea>`, "text/html");
-    return doc.querySelector("textarea")?.textContent ?? input;
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = input;
+    return textarea.value;
   }
   if (operation === "rot13") {
     return input.replace(/[a-zA-Z]/g, (char) => {

@@ -30,7 +30,8 @@ import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
-type ResultView = "overview" | "fields" | "timestamps" | "paths" | "text";
+const MAX_MFT_FILE_BYTES = 256 * 1024 * 1024;
+type ResultView = "overview" | "fields" | "timestamps" | "records" | "paths" | "text";
 type WindowsWorkspace = { analysis: WindowsArtifactAnalysis };
 
 function isWindowsWorkspace(value: unknown): value is WindowsWorkspace {
@@ -81,8 +82,12 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     setAnalysis(null);
     setView("overview");
     setPathFilter("");
-    if (file.size > MAX_FILE_BYTES) {
-      setError(english ? "The file exceeds the 64 MiB limit." : "文件超过 64 MiB 限制。");
+    const mftLike = /(?:^|[\/])\$?mft(?:\.|$)|\.mft$/i.test(file.name);
+    const fileLimit = mftLike ? MAX_MFT_FILE_BYTES : MAX_FILE_BYTES;
+    if (file.size > fileLimit) {
+      setError(english
+        ? `The file exceeds the ${mftLike ? "256" : "64"} MiB limit.`
+        : `文件超过 ${mftLike ? "256" : "64"} MiB 限制。`);
       return;
     }
     setLoading(true);
@@ -137,6 +142,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     { id: "overview" as const, label: english ? "Overview" : "概览", count: 0 },
     { id: "fields" as const, label: english ? "Fields" : "字段", count: detailRows.length },
     ...(analysis.timeline.length ? [{ id: "timestamps" as const, label: english ? "Timestamps" : "时间", count: analysis.timeline.length }] : []),
+    ...(analysis.records?.length ? [{ id: "records" as const, label: english ? "Records" : "记录", count: analysis.records.length }] : []),
     ...(analysis.strings.length ? [{ id: "paths" as const, label: english ? "Paths" : "路径", count: analysis.strings.length }] : []),
     ...(textAvailable ? [{ id: "text" as const, label: english ? "Text" : "文本", count: 0 }] : [])
   ] : [], [analysis, detailRows.length, english, textAvailable]);
@@ -145,7 +151,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     <div className={`tool-grid windows-artifact-workbench ${analysis ? "has-windows" : "empty-windows"}`}>
       <div className="tool-panel wide-panel windows-source-panel">
         <PanelTitle title={english ? "Windows file" : "选择 Windows 文件"} />
-        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,*/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
+        <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,.mft,.j,*/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
           role="button"
@@ -162,7 +168,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{analysis?.name || t.dropFileTitle}</strong>
-          <span>{analysis ? `${analysis.artifactType} · ${formatBytes(analysis.size)}` : (english ? "LNK, Prefetch, Zone.Identifier, or REG" : "支持 LNK、Prefetch、Zone.Identifier 和 REG")}</span>
+          <span>{analysis ? `${analysis.artifactType} · ${formatBytes(analysis.size)}` : (english ? "LNK, Prefetch, $MFT, $UsnJrnl, Zone.Identifier, or REG" : "支持 LNK、Prefetch、$MFT、$UsnJrnl、Zone.Identifier 和 REG")}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
@@ -186,6 +192,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
               [t.fileSize, formatBytes(analysis.size)],
               [english ? "Parsed fields" : "解析字段", String(detailRows.length)],
               [english ? "Timestamps" : "时间记录", String(analysis.timeline.length)],
+              [english ? "Records" : "结构化记录", String(analysis.records?.length ?? 0)],
               [english ? "Paths" : "路径", String(analysis.strings.length)]
             ]} />
             }
@@ -204,6 +211,14 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
                 </table>
               </div>
             )}
+
+            {view === "records" && analysis.records?.length ? (
+              <div className="table-scroll compact-scroll">
+                <table className="data-table"><thead><tr><th>#</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Record" : "记录"}</th></tr></thead><tbody>{analysis.records.slice(0, 20000).map((record, index) => (
+                  <tr key={record.id}><td>{index + 1}</td><td>{record.kind}</td><td>{Object.entries(record.fields).map(([key, value]) => <div key={key}><strong>{key}:</strong> {value}</div>)}</td></tr>
+                ))}</tbody></table>
+              </div>
+            ) : null}
 
             {view === "paths" && (
               <>

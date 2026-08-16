@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { ArchiveWorkerRequest } from "../features/archive/archive.worker";
@@ -29,14 +30,9 @@ import { hexPreview, previewText } from "../utils/binary";
 import { hashBytesInWorker } from "../features/hash/task";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { parseZipCentralDirectory, type ZipDirectoryEntry } from "../features/archive/zipDirectory";
 
-type EntryMeta = {
-  name: string;
-  method: number;
-  compressed: number;
-  uncompressed: number;
-  encrypted: boolean;
-};
+type EntryMeta = ZipDirectoryEntry;
 
 type ArchiveEntry = EntryMeta & {
   data?: Uint8Array;
@@ -66,36 +62,9 @@ const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 2000;
 
-function decodeEntryName(nameBytes: Uint8Array, utf8: boolean) {
-  if (utf8) return new TextDecoder().decode(nameBytes);
-  try { return new TextDecoder("windows-1252").decode(nameBytes); } catch { return new TextDecoder().decode(nameBytes); }
-}
-
 export function parseArchiveEntries(bytes: Uint8Array): { entries: EntryMeta[]; skipped: number } {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const entries: EntryMeta[] = [];
-  let eocdOffset = -1;
-  for (let offset = Math.max(0, bytes.length - 65_557); offset + 22 <= bytes.length; offset += 1) {
-    if (view.getUint32(offset, true) === 0x06054b50) eocdOffset = offset;
-  }
-  if (eocdOffset < 0) return { entries, skipped: 0 };
-  const declaredEntries = view.getUint16(eocdOffset + 10, true);
-  let offset = view.getUint32(eocdOffset + 16, true);
-  while (offset + 46 <= bytes.length && entries.length < MAX_ENTRIES && view.getUint32(offset, true) === 0x02014b50) {
-    const flags = view.getUint16(offset + 8, true);
-    const method = view.getUint16(offset + 10, true);
-    const compressed = view.getUint32(offset + 20, true);
-    const uncompressed = view.getUint32(offset + 24, true);
-    const nameLength = view.getUint16(offset + 28, true);
-    const extraLength = view.getUint16(offset + 30, true);
-    const commentLength = view.getUint16(offset + 32, true);
-    const nameOffset = offset + 46;
-    if (nameOffset + nameLength > bytes.length) break;
-    const name = decodeEntryName(bytes.subarray(nameOffset, nameOffset + nameLength), Boolean(flags & 0x800));
-    entries.push({ name, method, compressed, uncompressed, encrypted: Boolean(flags & 1) });
-    offset = nameOffset + nameLength + extraLength + commentLength;
-  }
-  return { entries, skipped: Math.max(0, declaredEntries - entries.length) };
+  const directory = parseZipCentralDirectory(bytes, MAX_ENTRIES);
+  return directory ? { entries: directory.entries, skipped: directory.skipped } : { entries: [], skipped: 0 };
 }
 
 function inferKind(name: string, entries: EntryMeta[]) {
@@ -250,6 +219,18 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       if (active && requestId === requestRef.current) setLoading(false);
     }
   };
+
+  const loadFileRef = React.useRef(loadFile);
+  loadFileRef.current = loadFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("archive");
+      if (handoff) void loadFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("archive", consume);
+  }, [active]);
 
   const clear = () => {
     requestRef.current += 1;

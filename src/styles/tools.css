@@ -4417,35 +4417,6 @@ textarea {
   line-height: 1.6;
 }
 
-.tool-error-detail {
-  max-width: 560px;
-  width: 100%;
-  text-align: left;
-  color: var(--app-muted);
-  font-size: 13px;
-}
-
-.tool-error-detail summary {
-  cursor: pointer;
-  user-select: none;
-  color: var(--app-text);
-}
-
-.tool-error-detail pre {
-  margin: 8px 0 0;
-  padding: 10px 12px;
-  max-height: 180px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  border-radius: var(--app-radius-sm);
-  background: color-mix(in srgb, var(--app-danger) 8%, var(--app-surface-2));
-  border: 1px solid color-mix(in srgb, var(--app-danger) 20%, var(--app-line));
-  font-family: var(--app-font-mono);
-  font-size: 12px;
-  color: var(--app-text);
-}
-
 /* File intake uses the same spacing on every tool page. */
 .desktop-drop-zone,
 .pcap-drop-zone,
@@ -5015,4 +4986,99 @@ textarea {
   color: var(--app-warn);
   font-size: 12.5px;
   line-height: 1.6;
+}
+
+/* Firmware Analyzer */
+.firmware-workbench {
+  align-items: start;
+}
+
+.firmware-source-panel .desktop-drop-zone {
+  min-height: 132px;
+}
+
+.firmware-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.firmware-progress small,
+.firmware-entropy-legend {
+  color: var(--text-secondary, #6b7280);
+  font-size: 12px;
+}
+
+.firmware-entropy-chart {
+  height: 190px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 12px 10px 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 10px;
+  background: linear-gradient(to top, rgba(127, 127, 127, 0.05), transparent);
+}
+
+.firmware-entropy-bar {
+  flex: 1 1 2px;
+  min-width: 1px;
+  max-width: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  background: currentColor;
+  color: var(--accent-color, #4457a6);
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.firmware-entropy-bar:hover,
+.firmware-entropy-bar:focus-visible {
+  opacity: 1;
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+}
+
+.firmware-entropy-bar.sparse { color: #8a949e; }
+.firmware-entropy-bar.structured { color: var(--accent-color, #4457a6); }
+.firmware-entropy-bar.high { color: #9a6a16; }
+.firmware-entropy-bar.very-high { color: #9b3f4a; }
+
+.firmware-entropy-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+}
+
+.firmware-object-scroll {
+  max-height: 640px;
+}
+
+.firmware-object-panel .text-input {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.firmware-object-panel .selected-row td {
+  background: color-mix(in srgb, var(--accent-color, #4457a6) 9%, transparent);
+}
+
+.firmware-interesting {
+  margin-top: 12px;
+}
+
+.firmware-interesting pre,
+.firmware-hex-preview {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre;
+  word-break: normal;
+}
+
+@media (max-width: 900px) {
+  .firmware-entropy-chart { height: 150px; }
+  .firmware-entropy-legend { flex-direction: column; gap: 2px; }
 }

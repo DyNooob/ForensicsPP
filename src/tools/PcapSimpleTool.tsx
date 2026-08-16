@@ -29,6 +29,9 @@ import { downloadBlob, formatBytes } from "../utils/files";
 import { hashBytesInWorker } from "../features/hash/task";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { evidenceReaderFromBlob, readEvidenceFully } from "../core/evidence/reader";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { appVersion } from "../config/app";
 
 const MAX_PCAP_BYTES = 128 * 1024 * 1024;
 const MAX_STREAM_PREVIEW_BYTES = 1024 * 1024;
@@ -172,10 +175,11 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     version: 3,
     isValid: (value): value is PcapInfo => Boolean(value && typeof value === "object" && Array.isArray((value as PcapInfo).packets) && Array.isArray((value as PcapInfo).tcpStreams)),
     onRestore: (value) => {
-      setPcap(value);
+      const restored = { ...value, tlsItems: value.tlsItems ?? [] };
+      setPcap(restored);
       resetExtractedHashes();
-      setSelectedPacketNo(value.packets[0]?.no ?? null);
-      setSelectedStreamKey(value.tcpStreams[0]?.key ?? "");
+      setSelectedPacketNo(restored.packets[0]?.no ?? null);
+      setSelectedStreamKey(restored.tcpStreams[0]?.key ?? "");
       setError("");
     }
   });
@@ -218,6 +222,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     const value = networkFilter.trim().toLowerCase();
     return (pcap?.dnsItems ?? []).filter((item) => !value || `${item.packetNo} ${item.name} ${item.type} ${item.source} ${item.destination}`.toLowerCase().includes(value)).slice(0, 2000);
   }, [networkFilter, pcap]);
+  const visibleTls = React.useMemo(() => {
+    const value = networkFilter.trim().toLowerCase();
+    return (pcap?.tlsItems ?? []).filter((item) => !value || `${item.type} ${item.source} ${item.destination} ${item.sni} ${item.negotiatedVersion} ${item.alpn.join(" ")} ${item.ja3Hash ?? ""} ${item.ja3sHash ?? ""}`.toLowerCase().includes(value)).slice(0, 2000);
+  }, [networkFilter, pcap]);
   const streams = React.useMemo(() => {
     const value = streamFilter.trim().toLowerCase();
     return (pcap?.tcpStreams ?? []).filter((stream) => !value || `${stream.endpointA} ${stream.endpointB}`.toLowerCase().includes(value));
@@ -233,6 +241,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   const loadFile = async (file?: File) => {
     if (!file || !active) return;
     workspace.clear();
+    clearAnalysisResult("pcap");
     resetExtractedHashes();
     setDropActive(false);
     setError("");
@@ -264,7 +273,8 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      const startedAt = new Date().toISOString();
+      const bytes = await readEvidenceFully(evidenceReaderFromBlob(file), { signal: controller.signal });
       if (!active || controller.signal.aborted) return;
       const next = await runWorkerTask<{ bytes: Uint8Array; name: string; size: number }, PcapInfo>({
         createWorker: () => new Worker(new URL("../workers/pcap.worker.ts", import.meta.url), { type: "module" }),
@@ -276,6 +286,55 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       if (!active || controller.signal.aborted) return;
       if (next.format === "Unknown") throw new Error(english ? "Unsupported or unrecognized packet capture." : "无法识别该流量包格式。");
       setPcap(next);
+      const completedAt = new Date().toISOString();
+      const sniValues = Array.from(new Set(next.tlsItems.map((item) => item.sni).filter(Boolean)));
+      const certificateCount = next.tlsItems.reduce((sum, item) => sum + item.certificates.length, 0);
+      publishAnalysisResult("pcap", {
+        schemaVersion: "1",
+        id: `pcap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        analyzer: { id: "pcap", version: appVersion },
+        source: [{ name: file.name, size: file.size, type: file.type || "application/vnd.tcpdump.pcap", lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : "" }],
+        run: { startedAt, completedAt, parameters: { maxBytes: MAX_PCAP_BYTES, tcpReassembly: true, tlsHandshakeParsing: true } },
+        summary: {
+          title: english ? "Packet capture analysis" : "流量取证分析",
+          text: english
+            ? `${next.packets.length} packets, ${next.tcpStreams.length} TCP streams, ${next.httpItems.length} HTTP items, ${next.dnsItems.length} DNS items, ${next.tlsItems.length} TLS handshake items.`
+            : `${next.packets.length} 个数据包，${next.tcpStreams.length} 条 TCP 流，${next.httpItems.length} 条 HTTP，${next.dnsItems.length} 条 DNS，${next.tlsItems.length} 条 TLS 握手记录。`,
+          metrics: [
+            { label: english ? "Packets" : "数据包", value: String(next.packets.length) },
+            { label: "TCP streams", value: String(next.tcpStreams.length) },
+            { label: "HTTP", value: String(next.httpItems.length) },
+            { label: "DNS", value: String(next.dnsItems.length) },
+            { label: "TLS", value: String(next.tlsItems.length) }
+          ]
+        },
+        findings: [
+          ...(sniValues.length ? [{ level: "info", title: "TLS SNI", detail: sniValues.slice(0, 100).join(", ") }] : []),
+          ...(certificateCount ? [{ level: "info", title: "TLS certificates", detail: `${certificateCount} certificate object(s) fingerprinted with SHA-256.` }] : []),
+          ...(next.tcpStreams.some((stream) => stream.gapBytesAtoB || stream.gapBytesBtoA) ? [{ level: "warn", title: "TCP capture gaps", detail: "One or more reassembled TCP directions contain capture gaps; application-layer decoding may be incomplete." }] : [])
+        ],
+        indicators: [
+          ...next.dnsItems.map((item) => ({ type: "domain", value: item.name, normalized: item.name.toLowerCase(), source: `packet:${item.packetNo}` })),
+          ...next.httpItems.filter((item) => item.host !== "--").map((item) => ({ type: "domain", value: item.host, normalized: item.host.toLowerCase(), source: `packet:${item.packetNo}`, context: item.path })),
+          ...sniValues.map((value) => ({ type: "domain", value, normalized: value.toLowerCase(), source: "tls-sni" }))
+        ].slice(0, 2000),
+        artifacts: next.extractedFiles.map((item, index) => ({ id: `http-file-${index}-${item.packetNo}`, label: item.filename, kind: "http-extracted-file", size: item.size, sha256: item.sha256 || undefined, mime: item.contentType !== "--" ? item.contentType : undefined, confidence: "high" as const })),
+        timeline: next.events.slice(0, 2000).map((item) => ({
+          iso: item.timestamp,
+          local: item.timestamp,
+          raw: item.title,
+          format: "PCAP",
+          line: item.packetNo ?? 0,
+          source: item.flow || file.name,
+          context: item.detail,
+          epochMs: Number.isFinite(Date.parse(item.timestamp)) ? Date.parse(item.timestamp) : undefined
+        })),
+        limitations: [
+          { code: "PCAP_FULL_BUFFER_LIMIT", detail: english ? "The current packet parser reads captures up to 128 MiB into memory; EvidenceReader is now used at the tool boundary for later streaming migration." : "当前流量解析器仍将不超过 128 MiB 的捕获文件读入内存；工具入口已切换至 EvidenceReader，便于后续流式迁移。" },
+          ...(next.tlsItems.length ? [{ code: "TLS_METADATA_ONLY", detail: english ? "TLS analysis parses handshake metadata and certificate fingerprints; encrypted application data is not decrypted." : "TLS 分析仅解析握手元数据与证书指纹，不解密加密后的应用数据。" }] : [])
+        ],
+        data: { format: next.format, packetCount: next.packets.length, tcpStreamCount: next.tcpStreams.length, tlsHandshakeCount: next.tlsItems.length }
+      });
       setSelectedPacketNo(next.packets[0]?.no ?? null);
       setExpandedPacketNo(null);
       setPacketFilter("");
@@ -311,6 +370,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
   const clear = () => {
     workspace.clear();
+    clearAnalysisResult("pcap");
     resetExtractedHashes();
     abortRef.current?.abort();
     abortRef.current = null;
@@ -448,13 +508,13 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
             <ASegmentedButton value="conversations" onClick={() => setView("conversations")}>{t.conversations} ({pcap.conversations.length})</ASegmentedButton>
             <ASegmentedButton value="streams" disabled={!pcap.tcpStreams.length} onClick={() => setView("streams")}>{english ? "TCP streams" : "TCP 流"} ({pcap.tcpStreams.length})</ASegmentedButton>
             <ASegmentedButton value="packets" onClick={() => setView("packets")}>{t.packetList} ({pcap.packets.length})</ASegmentedButton>
-            <ASegmentedButton value="network" onClick={() => setView("network")}>HTTP / DNS ({pcap.httpItems.length + pcap.dnsItems.length})</ASegmentedButton>
+            <ASegmentedButton value="network" onClick={() => setView("network")}>HTTP / DNS / TLS ({pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length})</ASegmentedButton>
             <ASegmentedButton value="files" disabled={!pcap.extractedFiles.length} onClick={() => setView("files")}>{english ? "Files" : "文件"} ({pcap.extractedFiles.length})</ASegmentedButton>
           </ASegmentedGroup>
 
           {view === "overview" && <div className="pcap-simple-overview">
             {(pcap.streamBytesLimited || pcap.extractedBytesLimited) && <div className="pcap-stream-notice" role="status">{english ? "This restored workspace keeps metadata and previews, but not all raw stream or extracted-file bytes. Re-analyze the capture before exporting." : "当前工作区只保留了元数据和预览，未保留全部流及提取文件的原始字节。导出前请重新分析流量包。"}</div>}
-            <InfoTable rows={[[english ? "Format" : "格式", `${pcap.format} ${pcap.version}`.trim()], [english ? "File size" : "文件大小", formatBytes(pcap.size)], [english ? "HTTP / DNS" : "HTTP / DNS", `${pcap.httpItems.length} / ${pcap.dnsItems.length}`], [english ? "Extracted files" : "提取文件", String(pcap.extractedFiles.length)], [english ? "Events" : "事件", String(pcap.events.length)]]} />
+            <InfoTable rows={[[english ? "Format" : "格式", `${pcap.format} ${pcap.version}`.trim()], [english ? "File size" : "文件大小", formatBytes(pcap.size)], [english ? "HTTP / DNS / TLS" : "HTTP / DNS / TLS", `${pcap.httpItems.length} / ${pcap.dnsItems.length} / ${pcap.tlsItems.length}`], [english ? "Extracted files" : "提取文件", String(pcap.extractedFiles.length)], [english ? "Events" : "事件", String(pcap.events.length)]]} />
             <PcapTrafficChart timeline={pcap.timeline} english={english} />
             <div className="pcap-simple-stat-grid">
               <section><strong>{english ? "Protocols" : "协议"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Packets" : "数据包"}</th></tr></thead><tbody>{(pcap.summary?.protocols ?? []).map(([name, count]) => <tr key={name}><td>{name}</td><td>{count}</td></tr>)}</tbody></table></div></section>
@@ -548,9 +608,10 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           </div>}
 
           {view === "network" && <div className="pcap-simple-network">
-            <div className="pcap-list-filter"><input className="text-input" value={networkFilter} onChange={(event) => setNetworkFilter(event.currentTarget.value)} placeholder={english ? "Filter HTTP or DNS" : "筛选 HTTP 或 DNS"} aria-label={english ? "Filter HTTP and DNS" : "筛选 HTTP 和 DNS"} /><span>{visibleHttp.length + visibleDns.length}/{pcap.httpItems.length + pcap.dnsItems.length}</span></div>
+            <div className="pcap-list-filter"><input className="text-input" value={networkFilter} onChange={(event) => setNetworkFilter(event.currentTarget.value)} placeholder={english ? "Filter HTTP, DNS, or TLS" : "筛选 HTTP、DNS 或 TLS"} aria-label={english ? "Filter HTTP, DNS, and TLS" : "筛选 HTTP、DNS 和 TLS"} /><span>{visibleHttp.length + visibleDns.length + visibleTls.length}/{pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length}</span></div>
             <section><strong>HTTP</strong>{pcap.httpItems.length ? <div className="table-scroll pcap-http-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Method" : "方法"}</th><th>Host</th><th>{english ? "Path" : "路径"}</th><th>{english ? "Type" : "类型"}</th></tr></thead><tbody>{visibleHttp.map((item) => <tr key={`${item.packetNo}-${item.line}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.method}</td><td>{item.host}</td><td>{item.path}</td><td>{item.contentType}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
             <section><strong>DNS</strong>{pcap.dnsItems.length ? <div className="table-scroll pcap-dns-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th></tr></thead><tbody>{visibleDns.map((item) => <tr key={`${item.packetNo}-${item.name}-${item.type}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.name}</td><td>{item.type}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
+            <section><strong>TLS</strong>{pcap.tlsItems.length ? <div className="table-scroll pcap-tls-scroll"><table className="data-table"><thead><tr><th>{english ? "Handshake" : "握手"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>SNI</th><th>{english ? "Version" : "版本"}</th><th>ALPN</th><th>JA3 / JA3S</th><th>{english ? "Certificates" : "证书"}</th></tr></thead><tbody>{visibleTls.map((item, index) => <tr key={`${item.streamKey}-${item.direction}-${item.type}-${index}`}><td>{item.type}</td><td>{item.source}</td><td>{item.destination}</td><td>{item.sni || "--"}</td><td>{item.negotiatedVersion || item.recordVersion}</td><td>{item.alpn.join(", ") || "--"}</td><td><code>{item.ja3Hash || item.ja3sHash || "--"}</code></td><td title={item.certificates.map((cert) => cert.sha256).join("\n")}>{item.certificates.length || "--"}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
           </div>}
 
           {view === "files" && <div className="table-scroll pcap-files-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Filename" : "文件名"}</th><th>Host</th><th>{english ? "Path" : "路径"}</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Size" : "大小"}</th><th>SHA-256</th><th /></tr></thead><tbody>{pcap.extractedFiles.map((item, index) => { const key = extractedFileKey(index); const hash = extractedHashes[key]; const bytesAvailable = extractedBytesAvailable(item); return <tr key={`${item.packetNo}-${index}`}><td>{item.packetNo}</td><td>{item.filename}</td><td>{item.host}</td><td>{item.path}</td><td>{item.signature} / {item.contentType}</td><td>{formatBytes(item.size)}</td><td>{hash ? <button type="button" className="pcap-extracted-hash" title={t.copy} onClick={() => void copyText(hash)}>{hash}</button> : <AButton variant="text" disabled={!bytesAvailable || Boolean(extractedHashingKey)} onClick={() => void hashExtractedFile(index)}>{extractedHashingKey === key ? (english ? "Calculating..." : "计算中...") : bytesAvailable ? (english ? "Calculate" : "计算") : (english ? "Re-analyze" : "需重新分析")}</AButton>}</td><td><AButton variant="outlined" disabled={!bytesAvailable} title={!bytesAvailable ? (english ? "Re-analyze the capture before saving" : "请重新分析流量包后保存") : undefined} onClick={() => saveExtracted(index)}>{english ? "Save" : "保存"}</AButton></td></tr>; })}</tbody></table></div>}

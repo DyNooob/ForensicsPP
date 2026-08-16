@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
@@ -254,6 +255,18 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       if (analysisId === analysisIdRef.current) setLoading(false);
     }
   };
+  const handleImageRef = React.useRef(handleImage);
+  handleImageRef.current = handleImage;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("image");
+      if (handoff) void handleImageRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("image", consume);
+  }, [active]);
+
   React.useEffect(() => {
     if (!active || !restoredSource || restoreStartedRef.current) return;
     restoreStartedRef.current = true;

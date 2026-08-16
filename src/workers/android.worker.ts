@@ -25,17 +25,23 @@
  */
 
 import { decodeAndroidManifestBytes, inspectAndroidArchive, inspectAndroidBinaryXml } from "../features/android/analyzer";
+import { verifyApkSignatures } from "../features/android/signingVerify";
 
-self.onmessage = (event: MessageEvent<{ bytes: Uint8Array; name: string; size: number }>) => {
-  const { bytes } = event.data;
+self.onmessage = async (event: MessageEvent<{ bytes: Uint8Array; name: string; size: number }>) => {
+  const { bytes, name, size } = event.data;
   try {
     const archive = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? inspectAndroidArchive(bytes) : undefined;
     const manifestBytes = archive?.manifest ?? bytes;
     const axml = inspectAndroidBinaryXml(manifestBytes);
     const xml = decodeAndroidManifestBytes(manifestBytes);
-    const archiveInfo = archive
-      ? { ...archive, axmlRows: axml.rows, axmlFindings: axml.findings }
-      : { rows: [], findings: [], axmlRows: axml.rows, axmlFindings: axml.findings };
+    let archiveInfo;
+    if (archive) {
+      const signing = await verifyApkSignatures(archive.verificationBytes, archive.signing);
+      const { verificationBytes: _verificationBytes, ...publicArchive } = archive;
+      archiveInfo = { ...publicArchive, signing, axmlRows: axml.rows, axmlFindings: axml.findings };
+    } else {
+      archiveInfo = { rows: [], findings: [], axmlRows: axml.rows, axmlFindings: axml.findings };
+    }
     self.postMessage({ type: "result", result: { xml, archiveInfo } });
   } catch (caught) {
     self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });

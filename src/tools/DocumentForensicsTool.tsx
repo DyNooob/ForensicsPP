@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { persistableDocumentAnalysis, type DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
@@ -93,14 +94,15 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     setError("");
   };
 
-  const analyze = async () => {
-    if (!active || !file || loading) return;
+  const analyze = async (targetFile: File | null = file) => {
+    if (!active || !targetFile) return;
+    abortRef.current?.abort();
     setLoading(true);
     setError("");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const result = await analyzeInWorker(file, controller.signal);
+      const result = await analyzeInWorker(targetFile, controller.signal);
       if (!active || controller.signal.aborted) return;
       setAnalysis(result);
       workspace.save(persistableDocumentAnalysis(result));
@@ -145,6 +147,22 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     abortRef.current = null;
     setLoading(false);
   }, [active]);
+  const chooseRef = React.useRef(choose);
+  chooseRef.current = choose;
+  const analyzeRef = React.useRef(analyze);
+  analyzeRef.current = analyze;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("documentforensics");
+      if (!handoff) return;
+      chooseRef.current(handoff.file);
+      void analyzeRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("documentforensics", consume);
+  }, [active]);
+
   const entries = React.useMemo(() => {
     const query = filter.trim().toLowerCase();
     return (analysis?.entries ?? []).filter((entry) => (structureKind === "all" || entry.kind === structureKind) && (!query || `${entry.name} ${entry.kind}`.toLowerCase().includes(query)));

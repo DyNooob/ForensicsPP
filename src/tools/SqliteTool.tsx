@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import initSqlJs from "sql.js";
 import type { Database, SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
@@ -66,6 +67,7 @@ import {
   loadSqliteTableRowsForExport,
   sqliteInternalRowidIdentifier,
   quoteSqlIdentifier,
+  quoteSqlLiteral,
   runSqliteQuery,
   sqliteDefaultCellSelection,
   sqliteEmptyDataSet,
@@ -83,6 +85,7 @@ import {
 import { previewText } from "../utils/binary";
 import { applySqliteWal, type SqliteWalInfo } from "../features/sqlite/wal";
 import type { SqliteForensicAnalysis } from "../features/sqlite/forensic";
+import { annotateSqliteRecoveredRecords } from "../features/sqlite/recovery";
 import { SqliteForensicPanel } from "../features/sqlite/ForensicPanel";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
@@ -575,6 +578,20 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const nextTables = getSqliteTables(db);
       const nextObjects = getSqliteObjects(db);
       const nextPragmas = getSqlitePragmaRows(db);
+      const recoverySchemas = nextTables
+        .filter((table) => table.type === "table")
+        .map((table) => {
+          try {
+            return { table: table.name, columns: getSqliteColumns(db, table.name).map((column) => ({ name: column.name, type: column.type })) };
+          } catch {
+            return { table: table.name, columns: [] };
+          }
+        })
+        .filter((schema) => schema.columns.length > 0);
+      const annotatedForensicAnalysis: SqliteForensicAnalysis = {
+        ...analysis,
+        recoveredRecords: annotateSqliteRecoveredRecords(analysis.recoveredRecords ?? [], recoverySchemas)
+      };
 
       const sourceCopy = new Uint8Array(input.database.byteLength);
       sourceCopy.set(input.database);
@@ -590,7 +607,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       setFileSize(input.size);
       setWalInfo(analysis.wal?.info ?? null);
       setHasShm(input.shm);
-      setForensicAnalysis(analysis);
+      setForensicAnalysis(annotatedForensicAnalysis);
       setOriginalBytes(baselineCopy);
       setTables(nextTables);
       setObjects(nextObjects);
@@ -681,6 +698,21 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     if (inputRef.current) inputRef.current.value = "";
     confirmDiscardBefore(() => void handleFiles(files));
   };
+
+  const requestFilesRef = React.useRef(requestFiles);
+  requestFilesRef.current = requestFiles;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("sqlite");
+      if (handoff) {
+        restoreStartedRef.current = true;
+        requestFilesRef.current([handoff.file]);
+      }
+    };
+    consume();
+    return subscribeToolHandoff("sqlite", consume);
+  }, [active]);
 
   React.useEffect(() => {
     if (restoreStartedRef.current) return;

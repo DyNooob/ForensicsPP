@@ -1,9 +1,0 @@
-dist
-release
-node_modules
-public
-layout-*
-tmp
-*.md
-pnpm-lock.yaml
-package-lock.json

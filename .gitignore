@@ -16,3 +16,5 @@ tmp/
 .env.*
 !.env.example
 .workbuddy/
+# Import source zips (e.g. ForensicsPP-*-Firmware-Architecture-*.zip)
+ForensicsPP-*.zip

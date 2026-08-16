@@ -31,6 +31,7 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 export type ImportedCaseBundle = {
   notes: CaseNote[];
   meta: CaseReportMeta;
+  analysisResults?: unknown[];
 };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -142,7 +143,8 @@ export function normalizeCaseBundle(value: unknown): ImportedCaseBundle {
   const usedIds = new Set<string>();
   return {
     notes: source.notes.map((item, index) => normalizeNote(item, index, usedIds)),
-    meta: normalizeMeta(source.meta)
+    meta: normalizeMeta(source.meta),
+    ...(Array.isArray(source.analysisResults) ? { analysisResults: source.analysisResults.slice(0, 100) } : {})
   };
 }
 

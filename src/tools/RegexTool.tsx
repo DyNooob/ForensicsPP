@@ -21,7 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
-import { AButton, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
+import { AButton, ASelect, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import { analyzeRegex, type RegexAnalysis, type RegexMatch } from "../features/regex/analyzer";
 import type { Translation } from "../i18n";
 import { downloadTextFile } from "../utils/files";

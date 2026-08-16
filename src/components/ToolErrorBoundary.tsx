@@ -35,7 +35,7 @@ type ToolErrorBoundaryState = {
 };
 
 export class ToolErrorBoundary extends React.Component<ToolErrorBoundaryProps, ToolErrorBoundaryState> {
-  override state: ToolErrorBoundaryState = { error: null };
+  state: ToolErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ToolErrorBoundaryState {
     return { error };
@@ -51,7 +51,7 @@ export class ToolErrorBoundary extends React.Component<ToolErrorBoundaryProps, T
     this.setState({ error: null });
   };
 
-  override render() {
+  render() {
     if (!this.state.error) return this.props.children;
 
     return (
@@ -59,12 +59,6 @@ export class ToolErrorBoundary extends React.Component<ToolErrorBoundaryProps, T
         <WarningOutlined aria-hidden="true" />
         <strong>{this.props.title}</strong>
         <p>{this.props.detail}</p>
-        {this.state.error?.message ? (
-          <details className="tool-error-detail">
-            <summary>错误详情</summary>
-            <pre>{this.state.error.message}</pre>
-          </details>
-        ) : null}
         <AButton variant="outlined" icon={<ReloadOutlined aria-hidden="true" />} onClick={this.retry}>
           {this.props.retryLabel}
         </AButton>

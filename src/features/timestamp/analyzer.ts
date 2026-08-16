@@ -222,6 +222,28 @@ export function parseTimestampRows(raw: string): Array<[string, string]> {
   ] as Array<[string, string]>;
 }
 
+const timestampOutputLabels = new Set([
+  "Input",
+  "Current",
+  "Unix seconds",
+  "Unix milliseconds",
+  "Unix microseconds",
+  "Unix / APFS nanoseconds",
+  "ISO",
+  "Local",
+  "UTC",
+  "EXIF local",
+  "LDAP / AD GeneralizedTime",
+  "Windows FILETIME",
+  "Chrome/WebKit",
+  ".NET ticks",
+  "UUID v1 timestamp field",
+  "Cocoa / CoreData seconds",
+  "Mac HFS+ seconds",
+  "OLE Automation days",
+  "GPS seconds",
+  "Invalid"
+]);
 
 export function timestampCandidateRows(rows: Array<[string, string]>) {
   const currentIndex = rows.findIndex(([label]) => label === "Current");

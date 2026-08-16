@@ -26,13 +26,15 @@ import { Dropdown, Modal } from "antd";
 import type { MenuProps } from "antd";
 import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../../components/ui";
 import { projectLinks } from "../../config/app";
+import { buildCasePackage, isCasePackageName, readCasePackageFile } from "./casePackage";
 import { fingerprintEvidenceFiles } from "./evidence";
 import { readCaseBundleFile } from "./importer";
 import { verifyEvidenceRegister, type EvidenceVerificationResult } from "./verification";
 import { copy, type Translation } from "../../i18n";
 import type { CaseNote, CaseReportMeta, CaseRiskLevel } from "../../models";
-import { downloadTextFile, formatBytes, limitReportText, markdownEscapeCell } from "../../utils/files";
+import { downloadBlob, downloadTextFile, formatBytes, limitReportText, markdownEscapeCell } from "../../utils/files";
 import { sha256Bytes } from "../../utils/hash";
+import { analysisResultSnapshots, restoreAnalysisResultSnapshots } from "../analysis/resultStore";
 
 function caseReportMetaRows(meta: CaseReportMeta) {
   return [
@@ -199,6 +201,7 @@ function caseReportBundle(notes: CaseNote[], meta: CaseReportMeta, markdown: str
     },
     timeline: caseReportTimelineRows(notes),
     evidenceFiles: caseReportSourceFiles(notes).map(({ file, note }) => ({ ...file, noteId: note.id, tool: note.tool, noteTitle: note.title })),
+    analysisResults: analysisResultSnapshots(),
     notes: notes.map((note, index) => ({
       ...note,
       index: index + 1,
@@ -531,7 +534,7 @@ export function CaseReporter({
     if (!file) return;
     setImportError("");
     try {
-      const bundle = await readCaseBundleFile(file);
+      const bundle = isCasePackageName(file.name) ? await readCasePackageFile(file) : await readCaseBundleFile(file);
       Modal.confirm({
         title: t.importReportConfirmTitle,
         content: `${t.importReportConfirmText} (${bundle.notes.length} ${t.reportItems})`,
@@ -539,6 +542,7 @@ export function CaseReporter({
         cancelText: t.cancelEdit,
         onOk: () => {
           onImport(bundle);
+          restoreAnalysisResultSnapshots(bundle.analysisResults ?? []);
           setQuery("");
           setSelectedId(bundle.notes[0]?.id ?? "");
         }
@@ -585,6 +589,7 @@ export function CaseReporter({
     { type: "divider" },
     { key: "json", label: t.exportReportJson },
     { key: "bundle", label: t.exportReportBundle },
+    { key: "fppcase", label: t.exportCasePackage },
     { key: "csv", label: t.exportNotesCsv }
   ];
 
@@ -595,6 +600,7 @@ export function CaseReporter({
     else if (key === "copy") void copyText(markdown);
     else if (key === "json") downloadTextFile(`${reportBaseName(meta)}.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8");
     else if (key === "bundle") downloadTextFile(`${reportBaseName(meta)}-bundle.json`, JSON.stringify(reportBundle, null, 2), "application/json;charset=utf-8");
+    else if (key === "fppcase") downloadBlob(`${reportBaseName(meta)}.fppcase`, new Blob([buildCasePackage(reportBundle)], { type: "application/vnd.forensicspp.case+zip" }));
     else if (key === "csv") downloadTextFile(`${reportBaseName(meta)}-notes.csv`, caseNotesToCsv(notes), "text/csv;charset=utf-8");
   };
 
@@ -614,7 +620,7 @@ export function CaseReporter({
 
         <div className="reporter-toolbar">
           <div className="reporter-toolbar-left">
-            <input ref={importInputRef} className="hidden-file-input" type="file" accept="application/json,.json" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void importBundle(file); }} />
+            <input ref={importInputRef} className="hidden-file-input" type="file" accept="application/json,.json,.fppcase,application/vnd.forensicspp.case+zip" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void importBundle(file); }} />
             <AButton variant="outlined" onClick={() => importInputRef.current?.click()}>{t.importReport}</AButton>
             <AButton variant="outlined" disabled={!notes.length} onClick={clearAll}>{t.clearNotes}</AButton>
           </div>

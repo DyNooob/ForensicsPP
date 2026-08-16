@@ -58,12 +58,5 @@ export const openSourceProjects: OpenSourceProject[] = [
   { name: "DefinitelyTyped: React DOM", category: "development", purpose: { zh: "React DOM TypeScript 类型定义", en: "React DOM TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom" },
   { name: "DefinitelyTyped: CryptoJS", category: "development", purpose: { zh: "CryptoJS TypeScript 类型定义", en: "CryptoJS TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/crypto-js" },
   { name: "rc-component QRCode", category: "development", purpose: { zh: "布局审计二维码样本生成", en: "QR fixtures for layout audits" }, license: "MIT", repository: "https://github.com/react-component/qrcode" },
-  { name: "ESLint", category: "development", purpose: { zh: "代码静态检查与质量门禁", en: "Static analysis and quality gate" }, license: "MIT", repository: "https://github.com/eslint/eslint", version: "9" },
-  { name: "ESLint JS", category: "development", purpose: { zh: "ESLint 内置规则配置", en: "ESLint built-in rule config" }, license: "MIT", repository: "https://github.com/eslint/eslint", version: "9" },
-  { name: "ESLint React Plugin", category: "development", purpose: { zh: "React 语法与 JSX 规则", en: "React and JSX lint rules" }, license: "MIT", repository: "https://github.com/jsx-eslint/eslint-plugin-react", version: "7" },
-  { name: "ESLint React Hooks Plugin", category: "development", purpose: { zh: "React Hooks 依赖规则", en: "React Hooks dependency rules" }, license: "MIT", repository: "https://github.com/facebook/react", version: "5" },
-  { name: "Globals", category: "development", purpose: { zh: "运行环境与全局变量清单", en: "Environment and global variables list" }, license: "MIT", repository: "https://github.com/sindresorhus/globals", version: "15" },
-  { name: "Prettier", category: "development", purpose: { zh: "代码统一格式化", en: "Opinionated code formatting" }, license: "MIT", repository: "https://github.com/prettier/prettier", version: "3" },
-  { name: "typescript-eslint", category: "development", purpose: { zh: "TypeScript ESLint 规则与工具链", en: "TypeScript ESLint rules and tooling" }, license: "MIT", repository: "https://github.com/typescript-eslint/typescript-eslint", version: "8" },
   { name: "SQLite", category: "development", purpose: { zh: "布局审计数据库样本生成", en: "SQLite fixtures for layout audits" }, license: "Public Domain", repository: "https://github.com/sqlite/sqlite" }
 ];

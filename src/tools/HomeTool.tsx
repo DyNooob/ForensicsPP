@@ -43,7 +43,7 @@ type HomeToolProps = {
   setActiveTool: (tool: ToolId) => void;
 };
 
-const defaultQuickToolIds: ToolId[] = ["hash", "image", "sqlite", "email"];
+const defaultQuickToolIds: ToolId[] = ["firmware", "sqlite", "pcap", "android"];
 export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps) {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<"all" | "featured" | "analysis" | "transform" | "network">("all");
@@ -65,7 +65,7 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
     const normalizedQuery = query.trim().toLowerCase();
     if (category !== "all" && tool.category !== category) return false;
     if (!normalizedQuery) return true;
-    return [titleFor(tool), t[tool.desc], t[tool.category]].join(" ").toLowerCase().includes(normalizedQuery);
+    return [titleFor(tool), t[tool.desc], t[tool.category], ...(tool.capabilities ?? []), ...(tool.accepts ?? [])].join(" ").toLowerCase().includes(normalizedQuery);
   });
 
   const directoryTools = visibleTools;

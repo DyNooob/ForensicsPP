@@ -20,6 +20,7 @@
  */
 
 import { applySqliteWal, inspectSqliteWal, type SqliteWalFrameInfo, type SqliteWalInfo } from "./wal";
+import { recoverSqliteRecords, recoverSqliteTableLeafCell, type SqliteRecoveredRecord, type SqliteRecoveryRegion } from "./recovery";
 
 export type SqlitePageKind =
   | "database-header"
@@ -70,6 +71,7 @@ export type SqliteForensicAnalysis = {
   };
   pages: SqlitePageInfo[];
   fragments: SqliteRecoveredFragment[];
+  recoveredRecords: SqliteRecoveredRecord[];
   wal: { info: SqliteWalInfo; frames: SqliteWalFrameInfo[]; trailingBytes: number } | null;
   walError: string | null;
 };
@@ -173,6 +175,39 @@ function extractAscii(bytes: Uint8Array, region: FragmentRegion, source: SqliteP
     }
   }
   flush(region.end);
+}
+
+function recoverHistoricalWalCells(walBytes: Uint8Array, wal: NonNullable<SqliteForensicAnalysis["wal"]>, encoding: string) {
+  const records: SqliteRecoveredRecord[] = [];
+  const pageSize = wal.info.pageSize;
+  for (const frame of wal.frames) {
+    if (!frame.valid || frame.latestForPage || records.length >= 500) continue;
+    const pageStart = frame.offset + 24;
+    const pageEnd = Math.min(walBytes.length, pageStart + pageSize);
+    const btreeHeader = pageStart + (frame.pageNumber === 1 ? 100 : 0);
+    if (btreeHeader + 8 > pageEnd || walBytes[btreeHeader] !== 0x0d) continue;
+    const cellCount = readU16(walBytes, btreeHeader + 3);
+    const pointerStart = btreeHeader + 8;
+    if (!cellCount || cellCount > Math.floor((pageEnd - pointerStart) / 2)) continue;
+    for (let index = 0; index < cellCount && records.length < 500; index += 1) {
+      const cellRelativeOffset = readU16(walBytes, pointerStart + index * 2);
+      if (!cellRelativeOffset || cellRelativeOffset >= pageSize) continue;
+      const cellOffset = pageStart + cellRelativeOffset;
+      if (cellOffset < pageStart || cellOffset >= pageEnd) continue;
+      const recovered = recoverSqliteTableLeafCell(walBytes, cellOffset, pageEnd, encoding, {
+        pageNumber: frame.pageNumber,
+        source: "wal",
+        area: "wal-frame",
+        walFrame: frame.index
+      });
+      if (!recovered) continue;
+      recovered.notes.unshift(frame.committed
+        ? `Historical committed WAL page version from frame ${frame.index}; a newer frame superseded this page.`
+        : `Valid but uncommitted WAL page version from frame ${frame.index}; treat this as transaction residue rather than committed database state.`);
+      records.push(recovered);
+    }
+  }
+  return records;
 }
 
 function extractUtf16Le(bytes: Uint8Array, region: FragmentRegion, source: SqlitePageInfo["source"], output: SqliteRecoveredFragment[]) {
@@ -293,6 +328,19 @@ export function inspectSqliteDatabase(database: Uint8Array, walBytes?: Uint8Arra
     extractAscii(merged, region, source, fragments);
     extractUtf16Le(merged, region, source, fragments);
   }
+  const recoveryRegions: SqliteRecoveryRegion[] = fragmentRegions.map((region) => ({
+    ...region,
+    source: pages[region.pageNumber - 1]?.source ?? "main",
+    walFrame: pages[region.pageNumber - 1]?.walFrame ?? null
+  }));
+  const encoding = sqliteEncoding(readU32(merged, 56));
+  const freeSpaceRecords = recoverSqliteRecords(merged, recoveryRegions, encoding);
+  const historicalWalRecords = wal && walBytes?.byteLength ? recoverHistoricalWalCells(walBytes, wal, encoding) : [];
+  const confidenceRank = { high: 0, medium: 1, low: 2 } as const;
+  const recoveredRecords = [...historicalWalRecords, ...freeSpaceRecords]
+    .sort((left, right) => confidenceRank[left.confidence] - confidenceRank[right.confidence] || left.pageNumber - right.pageNumber || (left.walFrame ?? 0) - (right.walFrame ?? 0) || left.offset - right.offset)
+    .slice(0, 750);
+
   const uniqueFragments = Array.from(new Map(fragments.map((fragment) => [
     `${fragment.pageNumber}:${fragment.offset}:${fragment.encoding}:${fragment.text}`,
     fragment
@@ -315,6 +363,7 @@ export function inspectSqliteDatabase(database: Uint8Array, walBytes?: Uint8Arra
     },
     pages,
     fragments: uniqueFragments,
+    recoveredRecords,
     wal,
     walError
   };

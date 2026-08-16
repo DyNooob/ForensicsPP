@@ -216,6 +216,7 @@ export type PcapInfo = {
   portStats: PcapPortStat[];
   httpItems: PcapHttpItem[];
   dnsItems: PcapDnsItem[];
+  tlsItems: PcapTlsHandshake[];
   extractedFiles: PcapExtractedFile[];
   streamBytesLimited?: boolean;
   extractedBytesLimited?: boolean;
@@ -511,6 +512,27 @@ export type PcapExtractedFile = {
   bytes: Uint8Array;
 };
 
+
+export type PcapTlsHandshake = {
+  streamKey: string;
+  direction: "a-to-b" | "b-to-a";
+  timestamp: string;
+  source: string;
+  destination: string;
+  type: "ClientHello" | "ServerHello" | "Certificate";
+  recordVersion: string;
+  negotiatedVersion: string;
+  sni: string;
+  alpn: string[];
+  cipherSuites: string[];
+  extensions: string[];
+  ja3?: string;
+  ja3Hash?: string;
+  ja3s?: string;
+  ja3sHash?: string;
+  certificates: Array<{ size: number; sha256: string }>;
+};
+
 export type PcapDnsItem = {
   packetNo: number;
   timestamp: string;
@@ -601,6 +623,13 @@ export type FileEmbeddedSignature = {
   mime: string;
   preview: string;
   risk: string[];
+  confidence?: "low" | "medium" | "high";
+  extent?: "exact" | "structural" | "heuristic" | "unknown";
+  detail?: string;
+  parentOffset?: number;
+  depth?: number;
+  virtualPath?: string;
+  origin?: "signature" | "archive-entry" | "decompressed";
   bytes: Uint8Array;
 };
 
@@ -800,6 +829,12 @@ export type StringsAnalysis = {
   utf16Text: string;
 };
 
+export type WindowsArtifactRecord = {
+  id: string;
+  kind: string;
+  fields: Record<string, string>;
+};
+
 export type WindowsArtifactAnalysis = {
   name: string;
   size: number;
@@ -808,6 +843,7 @@ export type WindowsArtifactAnalysis = {
   timeline: TimelineEvent[];
   strings: ExtractedStringRow[];
   textPreview: string;
+  records?: WindowsArtifactRecord[];
 };
 
 export type EntropyBlock = {
@@ -1040,6 +1076,89 @@ export type AndroidApkEntry = {
   preview: string;
 };
 
+export type AndroidSigningCertificate = {
+  size: number;
+  sha256: string;
+  subject: string;
+  issuer: string;
+  serial: string;
+  validFrom: string;
+  validTo: string;
+};
+
+export type AndroidSigningAlgorithm = {
+  id: number;
+  name: string;
+  size: number;
+  preview: string;
+};
+
+export type AndroidSigningSigner = {
+  index: number;
+  scheme: "v2" | "v3" | "v3.1";
+  minSdk: number | null;
+  maxSdk: number | null;
+  digests: AndroidSigningAlgorithm[];
+  signatures: AndroidSigningAlgorithm[];
+  certificates: AndroidSigningCertificate[];
+  publicKeySize: number;
+  publicKeySha256: string;
+  attributes: string[];
+  notes: string[];
+};
+
+export type AndroidSigningSignerVerification = {
+  scheme: "v2" | "v3" | "v3.1";
+  signerIndex: number;
+  verified: boolean;
+  signatureVerified: boolean;
+  contentDigestVerified: boolean;
+  publicKeyMatchesCertificate: boolean;
+  selectedAlgorithmId: number | null;
+  selectedAlgorithm: string;
+  expectedDigest: string;
+  actualDigest: string;
+  errors: string[];
+  warnings: string[];
+};
+
+export type AndroidJarV1Verification = {
+  present: boolean;
+  verified: boolean;
+  signerBase: string;
+  manifestEntries: number;
+  verifiedEntries: number;
+  sfManifestDigestVerified: boolean;
+  cmsSignatureVerified: boolean;
+  signerCertificateSha256: string;
+  errors: string[];
+  warnings: string[];
+};
+
+export type AndroidSigningVerification = {
+  status: "verified" | "failed" | "not-signed" | "not-run";
+  verified: boolean;
+  checkedSchemes: Array<"v1" | "v2" | "v3" | "v3.1">;
+  durationMs: number;
+  signerResults: AndroidSigningSignerVerification[];
+  jarV1?: AndroidJarV1Verification;
+  errors: string[];
+  warnings: string[];
+};
+
+export type AndroidSigningInfo = {
+  present: boolean;
+  blockOffset: number | null;
+  blockSize: number;
+  centralDirectoryOffset: number | null;
+  schemes: Array<"v2" | "v3" | "v3.1">;
+  signers: AndroidSigningSigner[];
+  unknownPairIds: string[];
+  warnings: string[];
+  verified: boolean;
+  verification?: AndroidSigningVerification;
+};
+
 export type AndroidManifestInfo = {
   name: string;
   size: number;
@@ -1082,5 +1201,6 @@ export type AndroidManifestInfo = {
   components: AndroidComponent[];
   apkRows: Array<[string, string]>;
   apkEntries: AndroidApkEntry[];
+  signing?: AndroidSigningInfo;
   findings: Array<{ level: string; title: string; detail: string }>;
 };

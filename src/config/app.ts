@@ -22,19 +22,19 @@
 const toolDefinitions = [
   { id: "home", category: "featured", name: "home", desc: "homeDesc" },
   { id: "cyberchef", category: "featured", name: "cyberchef", desc: "cyberchefDesc" },
-  { id: "image", category: "analysis", name: "image", desc: "imageDesc" },
+  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "exif", "metadata", "steganography", "repair"] },
   { id: "codec", category: "transform", name: "codec", desc: "codecDesc" },
   { id: "crypto", category: "transform", name: "crypto", desc: "cryptoDesc" },
   { id: "jwt", category: "analysis", name: "jwt", desc: "jwtDesc" },
   { id: "password", category: "analysis", name: "password", desc: "passwordDesc" },
   { id: "sql", category: "analysis", name: "sql", desc: "sqlDesc" },
-  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc" },
+  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc", accepts: [".sqlite", ".sqlite3", ".db", "-wal"], capabilities: ["database", "deleted-record-recovery", "wal", "timeline"] },
   { id: "registry", category: "analysis", name: "registry", desc: "registryDesc" },
   { id: "plist", category: "analysis", name: "plist", desc: "plistDesc" },
   { id: "browserartifacts", category: "analysis", name: "browserartifacts", desc: "browserartifactsDesc" },
   { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc" },
-  { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc" },
-  { id: "android", category: "analysis", name: "android", desc: "androidDesc" },
+  { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc", accepts: [".pdf", ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt"], capabilities: ["document", "pdf", "ooxml", "ole", "metadata", "embedded-files"] },
+  { id: "android", category: "analysis", name: "android", desc: "androidDesc", accepts: [".apk", ".apks", ".xapk", ".xml", ".idsig"], capabilities: ["android", "manifest", "signing", "certificate", "archive"] },
   { id: "ioc", category: "analysis", name: "ioc", desc: "iocDesc" },
   { id: "email", category: "analysis", name: "email", desc: "emailDesc" },
   { id: "urltool", category: "analysis", name: "urltool", desc: "urltoolDesc" },
@@ -42,10 +42,14 @@ const toolDefinitions = [
   { id: "qr", category: "analysis", name: "qr", desc: "qrDesc" },
   { id: "fileid", category: "analysis", name: "fileid", desc: "fileidDesc" },
   { id: "png", category: "analysis", name: "png", desc: "pngDesc" },
-  { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc" },
-  { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc" },
-  { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc" },
+  { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc", accepts: [".zip", ".jar", ".apk", ".gz", ".tar", ".cpio"], capabilities: ["archive", "zip", "extraction", "zip-bomb-guard"] },
+  { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc", accepts: ["*/*"], capabilities: ["binary", "pe", "elf", "mach-o", "hex", "embedded-signature"] },
+  { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"] },
+  { id: "disk", category: "analysis", name: "disk", desc: "diskDesc", accepts: [".dd", ".raw", ".img", ".iso"], capabilities: ["random-access", "mbr", "gpt", "fat", "ntfs", "ext", "iso9660"] },
+  { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc", accepts: [".lnk", ".pf", ".reg", ".mft", ".j"], capabilities: ["windows", "mft", "usn-journal", "prefetch", "lnk", "timeline"] },
+  { id: "memory", category: "analysis", name: "memory", desc: "memoryDesc", accepts: [".dmp", ".mdmp", ".raw", ".mem"], capabilities: ["minidump", "memory-triage", "pe-carving"] },
   { id: "strings", category: "analysis", name: "strings", desc: "stringsDesc" },
+  { id: "bulk", category: "analysis", name: "bulk", desc: "bulkDesc", accepts: ["*/*"], capabilities: ["streaming", "ioc", "strings", "offsets"] },
   { id: "entropy", category: "analysis", name: "entropy", desc: "entropyDesc" },
   { id: "hash", category: "transform", name: "hash", desc: "hashDesc" },
   { id: "timestamp", category: "transform", name: "timestamp", desc: "timestampDesc" },
@@ -54,7 +58,7 @@ const toolDefinitions = [
   { id: "uuid", category: "transform", name: "uuid", desc: "uuidDesc" },
   { id: "json", category: "transform", name: "json", desc: "jsonDesc" },
   { id: "regex", category: "transform", name: "regex", desc: "regexDesc" },
-  { id: "pcap", category: "network", name: "pcap", desc: "pcapDesc" },
+  { id: "pcap", category: "network", name: "pcap", desc: "pcapDesc", accepts: [".pcap", ".pcapng"], capabilities: ["network", "tcp-reassembly", "http", "dns", "tls", "ioc", "timeline"] },
   { id: "yara", category: "analysis", name: "yara", desc: "yaraDesc" }
 ] as const;
 
@@ -67,9 +71,13 @@ export type ToolDefinition = {
   category: ToolCategory;
   name: ToolName;
   desc: ToolDescription;
+  accepts?: readonly string[];
+  capabilities?: readonly string[];
 };
 
 export const tools: readonly ToolDefinition[] = toolDefinitions;
+const toolDefinitionMap = new Map<ToolId, ToolDefinition>(tools.map((tool) => [tool.id, tool]));
+export function getToolDefinitionById(toolId: ToolId) { return toolDefinitionMap.get(toolId) ?? null; }
 export const maxRecentTools = 6;
 export const maxMountedTools = 8;
 
@@ -84,10 +92,10 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.0-beta.1";
+export const appVersion = "1.0.0-beta.3";
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-07-23";
+export const lastUpdated = "2026-08-16";
 export const legalVersion = "2026-07-13-v2";
 export const feedbackEmail = "toolab@digiforensics.cn";
 
