@@ -57,4 +57,50 @@ async function verifyCms(cmsBytes:Uint8Array,sf:Uint8Array){const parsed=extract
   for(const cert of parsed.certs){const spki=certificateSpki(cert);if(!spki)continue;const certSha=Array.from(await digest(cert,"SHA-256"),b=>b.toString(16).padStart(2,"0")).join("").toUpperCase();try{let key:CryptoKey,ok=false;if(parsed.sigOid.startsWith("1.2.840.113549.1.1.")){key=await crypto.subtle.importKey("spki",spki.buffer as ArrayBuffer,{name:"RSASSA-PKCS1-v1_5",hash},false,["verify"]);ok=await crypto.subtle.verify({name:"RSASSA-PKCS1-v1_5"},key,parsed.signature as unknown as BufferSource,signedBytes as unknown as BufferSource);}else if(parsed.sigOid.startsWith("1.2.840.10045.4.3.")){const curve=spkiCurve(spki);if(!curve){warnings.push("ECDSA signer curve is unsupported.");continue;}key=await crypto.subtle.importKey("spki",spki.buffer as ArrayBuffer,{name:"ECDSA",namedCurve:curve},false,["verify"]);const raw=ecdsaDerToRaw(parsed.signature,curveWidth(curve));if(raw)ok=await crypto.subtle.verify({name:"ECDSA",hash},key,raw as unknown as BufferSource,signedBytes as unknown as BufferSource).catch(()=>false);if(!ok)ok=await crypto.subtle.verify({name:"ECDSA",hash},key,parsed.signature as unknown as BufferSource,signedBytes as unknown as BufferSource).catch(()=>false);}else{warnings.push(`Unsupported CMS signature algorithm ${parsed.sigOid}.`);continue;}if(ok)return{verified:!errors.length,certSha256:certSha,errors,warnings};}catch(e){warnings.push(e instanceof Error?e.message:String(e));}}
   errors.push("CMS signer signature did not verify against any embedded certificate.");return{verified:false,certSha256:"",errors,warnings};}
 
-export async function verifyJarV1Signature(apkBytes:Uint8Array):Promise<JarV1Verification>{const empty:JarV1Verification={present:false,verified:false,signerBase:"",manifestEntries:0,verifiedEntries:0,sfManifestDigestVerified:false,cmsSignatureVerified:false,signerCertificateSha256:"",errors:[],warnings:[]};try{validateZipExpansion(apkBytes,{maxEntries:20000,maxEntryUncompressed:256*1024*1024,maxTotalUncompressed:1024*1024*1024,maxCompressionRatio:500,ratioGuardMinimum:4*1024*1024});const files=unzipSync(apkBytes),manifest=files["META-INF/MANIFEST.MF"]??files["META-INF/manifest.mf"];const sfName=Object.keys(files).find(n=>/^META-INF\/[^/]+\.SF$/i.test(n)),sigName=sfName?Object.keys(files).find(n=>new RegExp(`^META-INF/${sfName.split("/").pop()!.replace(/\.SF$/i,"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\.(?:RSA|EC|DSA)$`,"i").test(n)):undefined;if(!manifest||!sfName||!sigName)return empty;const sf=files[sfName],cms=files[sigName],base=sfName.split("/").pop()!.replace(/\.SF$/i,"");const mf=await verifyManifest(files,manifest);const sfSections=parseManifestSections(sf),main=sfSections[0]??new Map<string,string>(),manifestDigestField=Array.from(main.entries()).find(([key])=>/Digest-Manifest$/i.test(key)&&digestName(key));let sfManifestDigestVerified=false;const errors=[...mf.errors],warnings=[...mf.warnings];if(manifestDigestField){const alg=digestName(manifestDigestField[0])!,actual=await digest(manifest,alg);sfManifestDigestVerified=equal(actual,base64Bytes(manifestDigestField[1]));if(!sfManifestDigestVerified)errors.push(`${alg} digest of MANIFEST.MF does not match ${sfName}.`);}else warnings.push(`${sfName} does not contain a supported whole-manifest digest; per-section .SF digest verification is not implemented.`);const cmsResult=await verifyCms(cms,sf);errors.push(...cmsResult.errors);warnings.push(...cmsResult.warnings);return{present:true,verified:mf.entries===mf.verified&&mf.entries>0&&sfManifestDigestVerified&&cmsResult.verified&&!errors.length,signerBase:base,manifestEntries:mf.entries,verifiedEntries:mf.verified,sfManifestDigestVerified,cmsSignatureVerified:cmsResult.verified,signerCertificateSha256:cmsResult.certSha256,errors,warnings};}catch(e){return{...empty,present:true,errors:[e instanceof Error?e.message:String(e)]};}}
+export type JarV1ManifestSf = {
+  manifestEntries: number;
+  verifiedEntries: number;
+  sfManifestDigestVerified: boolean;
+  perSectionTotal: number;
+  perSectionVerified: number;
+  errors: string[];
+  warnings: string[];
+};
+
+export async function verifyJarV1ManifestAndSf(files: Record<string,Uint8Array>, manifest: Uint8Array, sf: Uint8Array): Promise<JarV1ManifestSf> {
+  const mf = await verifyManifest(files, manifest);
+  const sfSections = parseManifestSections(sf);
+  const main = sfSections[0] ?? new Map<string,string>();
+  const manifestDigestField = Array.from(main.entries()).find(([key]) => /Digest-Manifest$/i.test(key) && digestName(key));
+  let sfManifestDigestVerified = false;
+  const errors: string[] = [...mf.errors];
+  const warnings: string[] = [...mf.warnings];
+  if (manifestDigestField) {
+    const alg = digestName(manifestDigestField[0])!;
+    const actual = await digest(manifest, alg);
+    sfManifestDigestVerified = equal(actual, base64Bytes(manifestDigestField[1]));
+    if (!sfManifestDigestVerified) errors.push(`${alg} digest of MANIFEST.MF does not match the .SF main section.`);
+  }
+  const mfSectionsByName = new Map<string, Map<string,string>>(
+    parseManifestSections(manifest).slice(1).filter((s) => s.get("Name")).map((s) => [s.get("Name")!, s])
+  );
+  let perSectionTotal = 0;
+  let perSectionVerified = 0;
+  for (const section of sfSections.slice(1)) {
+    const name = section.get("Name");
+    if (!name) continue;
+    const field = Array.from(section.entries()).find(([key]) => /-Digest$/i.test(key) && digestName(key));
+    if (!field) continue;
+    perSectionTotal++;
+    const mfSection = mfSectionsByName.get(name);
+    if (!mfSection) { errors.push(`${name}: listed in .SF but absent from MANIFEST.MF`); continue; }
+    const mfField = Array.from(mfSection.entries()).find(([key]) => /-Digest$/i.test(key) && digestName(key));
+    if (!mfField) { warnings.push(`${name}: no digest in MANIFEST.MF`); continue; }
+    if (field[1].trim() === mfField[1].trim()) perSectionVerified++;
+    else errors.push(`${name}: .SF per-section digest does not match the MANIFEST.MF digest.`);
+  }
+  if (!sfManifestDigestVerified && perSectionTotal === 0) warnings.push("The .SF file has no whole-manifest digest and no per-section digests; v1 signature cannot fully attest MANIFEST.MF.");
+  return { manifestEntries: mf.entries, verifiedEntries: mf.verified, sfManifestDigestVerified, perSectionTotal, perSectionVerified, errors, warnings };
+}
+
+export async function verifyJarV1Signature(apkBytes:Uint8Array):Promise<JarV1Verification>{const empty:JarV1Verification={present:false,verified:false,signerBase:"",manifestEntries:0,verifiedEntries:0,sfManifestDigestVerified:false,cmsSignatureVerified:false,signerCertificateSha256:"",errors:[],warnings:[]};try{validateZipExpansion(apkBytes,{maxEntries:20000,maxEntryUncompressed:256*1024*1024,maxTotalUncompressed:1024*1024*1024,maxCompressionRatio:500,ratioGuardMinimum:4*1024*1024});const files=unzipSync(apkBytes),manifest=files["META-INF/MANIFEST.MF"]??files["META-INF/manifest.mf"];const sfName=Object.keys(files).find(n=>/^META-INF\/[^/]+\.SF$/i.test(n)),sigName=sfName?Object.keys(files).find(n=>new RegExp(`^META-INF/${sfName.split("/").pop()!.replace(/\.SF$/i,"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\.(?:RSA|EC|DSA)$`,"i").test(n)):undefined;if(!manifest||!sfName||!sigName)return empty;const sf=files[sfName],cms=files[sigName],base=sfName.split("/").pop()!.replace(/\.SF$/i,"");const msf=await verifyJarV1ManifestAndSf(files,manifest,sf);const cmsResult=await verifyCms(cms,sf);const attestedAll=msf.sfManifestDigestVerified||(msf.perSectionTotal>0&&msf.perSectionVerified===msf.perSectionTotal&&msf.perSectionTotal>=msf.manifestEntries);const errors=[...msf.errors,...cmsResult.errors];const warnings=[...msf.warnings,...cmsResult.warnings];return{present:true,verified:msf.verifiedEntries===msf.manifestEntries&&msf.manifestEntries>0&&attestedAll&&cmsResult.verified&&!errors.length,signerBase:base,manifestEntries:msf.manifestEntries,verifiedEntries:msf.verifiedEntries,sfManifestDigestVerified:msf.sfManifestDigestVerified,cmsSignatureVerified:cmsResult.verified,signerCertificateSha256:cmsResult.certSha256,errors,warnings};}catch(e){return{...empty,present:true,errors:[e instanceof Error?e.message:String(e)]};}}
