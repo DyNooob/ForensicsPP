@@ -4,7 +4,12 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 ## [Unreleased]
 
-- 暂无未发布变更。
+### Added
+- APK v1 (JAR) 签名校验补齐 per-section `.SF` digest 比对：此前仅校验 whole-manifest digest，MANIFEST.MF 中被篡改的条目可绕过校验；现在逐段比对，被篡改条目直接报 mismatch，并支持 per-section 全覆盖视为 fully attested。
+- 新增单元测试：jar-v1-manifest（4）、password（4）、jwt（5），覆盖 v1 签名 attestation 路径、MySQL native 密码、JWT HS256/RS256 round-trip。
+
+### Changed
+- 版本号升级为 `1.0.0-beta.5`。
 
 ## [1.0.0-beta.4] - 2026-08-16
 
@@ -374,6 +379,7 @@ Forensics++ follows semantic versioning where practical. This file records user-
 - Historical compiled-site release.
 
 [Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.4...HEAD
+[1.0.0-beta.5]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.1...v1.0.0-beta.2
