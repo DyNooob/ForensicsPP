@@ -2,14 +2,25 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
-## [Unreleased]
+## [1.0.0-beta.5] - 2026-08-27
 
 ### Added
+- 新增版本过旧提示横幅：版本发布日期超过 90 天时自动提示，可一键跳转 GitHub Releases 下载新版；关闭状态仅对当前会话生效（刷新后重新提示），切换工具不会复活。过期判定完全由代码计算（发布日期 + 90 天 vs 当前日期），发版只需维护 `appReleaseDate` 一个常量。
 - APK v1 (JAR) 签名校验补齐 per-section `.SF` digest 比对：此前仅校验 whole-manifest digest，MANIFEST.MF 中被篡改的条目可绕过校验；现在逐段比对，被篡改条目直接报 mismatch，并支持 per-section 全覆盖视为 fully attested。
+- Carver 新增格式支持：TIFF/MP4/Ogg/PCAP/FLAC 使用真实 extent 边界函数；MP3/RTF/PostScript 以启发式边界截断。
 - 新增单元测试：jar-v1-manifest（4）、password（4）、jwt（5），覆盖 v1 签名 attestation 路径、MySQL native 密码、JWT HS256/RS256 round-trip。
+- 新增单文件构建目标 `npm run build:standalone`（`SINGLE_FILE=1`）：把全部 JS/CSS 内联进单个 `index.html`，可直接双击从 `file://` 打开，无需静态服务器。常规 `npm run build`（多 chunk、子目录托管用）不受影响。
 
 ### Changed
 - 版本号升级为 `1.0.0-beta.5`。
+- 空态布局：文件输入类工具的空工作区铺满视口剩余高度，输入卡片改为顶部对齐（不再上下居中）。
+- 构建日期统一为 2026-08-27（`index.html` meta、`sitemap.xml`、`lastUpdated`）。
+
+### Fixed
+- 修复移动端标签溢出：Binary/PCAP/Browser 三个工具的自定义分段控件在窄屏下可横向滚动（此前最后一个标签被裁切且无滚动条）。
+- 修复 CyberChef 在窄屏下的布局：内嵌 iframe 保持 920px 桌面宽度，外层舞台横向平移，操作/配方/输出三栏不再挤压变形。
+- 修复 `locatePngStart`：当签名损坏的 PNG 位于另一个签名完整的 PNG 之前时，旧逻辑会跳过损坏样本；现改为单遍升序扫描，最早出现的 PNG 优先定位（含签名缺失的修复路径）。
+- 修复版本过旧横幅在网格布局下被塌缩/覆盖的问题：顶栏与横幅归入同一顶区容器，横幅不再被工具内容压盖。
 
 ## [1.0.0-beta.4] - 2026-08-16
 

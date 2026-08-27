@@ -630,8 +630,10 @@ export type FileEmbeddedSignature = {
   preview: string;
   risk: string[];
   confidence?: "low" | "medium" | "high";
-  extent?: "exact" | "structural" | "heuristic" | "unknown";
+  extent?: "exact" | "structural" | "heuristic" | "unknown" | "repaired";
   detail?: string;
+  repaired?: boolean;
+  repairNote?: string;
   parentOffset?: number;
   depth?: number;
   virtualPath?: string;

@@ -21,7 +21,7 @@
 
 self.onmessage = async (event: MessageEvent<{ source: string; bytes: ArrayBuffer; maxRecords: number }>) => {
   try {
-    const workerGlobal = globalThis as typeof globalThis & { process?: { env: Record<string, string | undefined> } };
+    const workerGlobal = globalThis as unknown as { process?: { env?: Record<string, string | undefined> } };
     workerGlobal.process ??= { env: {} };
     const { parseEvtxBytes } = await import("./parser");
     const result = parseEvtxBytes(new Uint8Array(event.data.bytes), event.data.source, event.data.maxRecords);

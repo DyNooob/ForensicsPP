@@ -50,6 +50,7 @@ const packageToProject = {
   "sql.js": "sql.js",
   "typescript": "TypeScript",
   "vite": "Vite",
+  "vite-plugin-singlefile": "Vite SingleFile Plugin",
   vitest: "Vitest",
   yaml: "YAML"
 } as const;

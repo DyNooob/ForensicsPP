@@ -85,9 +85,11 @@ export function scanRecursiveCarvableObjects(source: Uint8Array, options: Recurs
     const signatures = scanCarvableObjects(bytes, { startOffset: 0, maxHits: Math.min(128, maxObjects - output.length) });
     for (const hit of signatures) {
       if (hit.offset === 0 && origin !== "signature") continue;
-      const retained = hit.size > 0 && hit.size <= maxObjectBytes && hit.offset + hit.size <= bytes.length
-        ? bytes.slice(hit.offset, hit.offset + hit.size)
-        : new Uint8Array();
+      const retained = hit.repairedBytes && hit.repairedBytes.length
+        ? hit.repairedBytes
+        : (hit.size > 0 && hit.size <= maxObjectBytes && hit.offset + hit.size <= bytes.length
+          ? bytes.slice(hit.offset, hit.offset + hit.size)
+          : new Uint8Array());
       const virtualPath = `${path}::${hit.label}@0x${hit.offset.toString(16).toUpperCase()}`;
       if (!add({ ...hit, depth, virtualPath, origin: "signature", bytes: retained })) return;
       const isWholeCurrentObject = hit.offset === 0 && hit.size === bytes.length;
@@ -109,7 +111,7 @@ export function scanRecursiveCarvableObjects(source: Uint8Array, options: Recurs
         if (!entry.bytes.length || expandedBytes + entry.bytes.length > maxExpandedBytes) continue;
         expandedBytes += entry.bytes.length;
         const entryPath = `${path}!/${entry.name}`;
-        const first = scanCarvableObjects(entry.bytes, { startOffset: 0, maxHits: 8 }).find((hit) => hit.offset === 0);
+        const first = scanCarvableObjects(entry.bytes, { startOffset: 0, maxHits: 8, pngTolerant: false }).find((hit) => hit.offset === 0);
         const expandedOrigin: RecursiveCarverObject["origin"] = entry.sourceKind === "zip" || entry.sourceKind === "tar" || entry.sourceKind === "cpio"
           ? "archive-entry"
           : "decompressed";

@@ -25,6 +25,7 @@
     "verify:dist": "node scripts/verify-dist.mjs",
     "release:package": "node scripts/package-release.mjs",
     "build": "npm run clean && npm run check:headers && npm run typecheck && vite build && node scripts/finalize-dist.mjs && npm run verify:dist",
+    "build:standalone": "npm run clean && npm run check:headers && npm run typecheck && SINGLE_FILE=1 vite build && node scripts/finalize-dist.mjs && npm run verify:dist",
     "verify": "npm run test && npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "audit:layout": "node scripts/layout-audit.mjs",
@@ -51,6 +52,7 @@
     "sql-formatter": "^15.8.2",
     "sql.js": "^1.14.1",
     "vite": "^6.0.3",
+    "vite-plugin-singlefile": "^2.3.3",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

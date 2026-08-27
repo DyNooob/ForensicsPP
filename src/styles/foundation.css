@@ -616,12 +616,19 @@ textarea {
   max-width: 100%;
   min-width: 0;
   height: 100vh;
-  grid-template-rows: var(--topbar-height) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--app-bg-2) 93%, var(--app-primary-soft)) 0,
     var(--app-bg) 100%
   );
+}
+
+.app-top-region {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .tool-topbar {
@@ -1069,6 +1076,13 @@ input[type="radio"] {
   padding-inline: clamp(22px, 3vw, 40px);
 }
 
+/* Empty-state workbenches (file tools waiting for an upload, text tools
+   without input) keep their short card glued to the top of a viewport-height
+   body, leaving a half-screen of blank gradient below. The fix lives on the
+   grid itself (it carries the `empty-` class) — see the `.tool-grid[class*=
+   "empty-"]` rule further down — where we stretch it to fill the body and
+   center its content so the screen reads as a calm, complete panel. */
+
 .tool-body > * {
   margin-inline: auto;
 }
@@ -1142,11 +1156,28 @@ input[type="radio"] {
   align-items: start;
 }
 
-.tool-grid[class*="empty-"],
-.sql-workbench.empty-sql {
+.tool-body .tool-grid[class*="empty-"],
+.tool-body .sql-workbench.empty-sql {
   width: min(100%, 1220px);
   grid-template-columns: minmax(0, 1fr);
-  align-content: start;
+  /* Fill the viewport-height body so the empty tool reads as a complete
+     workbench (not a half-done stub), but keep the (short) empty card pinned
+     to the TOP — not floating centered, which looked unbalanced. Subtract the
+     top bar and the body's vertical padding (20+32) so we don't trigger an
+     internal scrollbar. Loaded (`has-*`) tools are unaffected. `!important` +
+     the `.tool-body` prefix guarantee this beats the per-tool workbench rules
+     (e.g. `.tool-grid.timeline-simple-workbench`) that set `align-content:
+     start` later in the cascade. */
+  min-height: calc(100dvh - var(--topbar-height) - 52px) !important;
+  align-content: start !important;
+}
+
+/* Registry tool predates the empty-/has- convention: its root grid keeps the
+   same class in both states and only shows a .desktop-drop-zone when empty.
+   Scope the fill+top-align to that empty presentation via :has(). */
+.tool-body .tool-grid.registry-browser-workbench:has(.desktop-drop-zone) {
+  min-height: calc(100dvh - var(--topbar-height) - 52px) !important;
+  align-content: start !important;
 }
 
 .tool-grid:is(
@@ -2555,4 +2586,84 @@ textarea {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Stale-version notice: shown when the installed version is over 90 days old. */
+.app-stale-banner {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #7a4d00;
+  background: color-mix(in srgb, #ffd591 26%, var(--app-surface));
+  border-bottom: 1px solid color-mix(in srgb, #ffc069 55%, var(--app-line));
+}
+
+.app-stale-banner__icon {
+  flex: 0 0 auto;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.app-stale-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-stale-banner__text a {
+  color: #b45309;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-stale-banner__text a:hover {
+  color: #92400e;
+}
+
+.app-stale-banner__close {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #7a4d00;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.app-stale-banner__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.app-stale-banner__close:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
+}
+
+[data-theme-mode="dark"] .app-stale-banner {
+  color: #ffd591;
+  background: color-mix(in srgb, #ffc069 14%, var(--app-surface));
+  border-bottom-color: color-mix(in srgb, #ffc069 40%, var(--app-line));
+}
+
+[data-theme-mode="dark"] .app-stale-banner__text a {
+  color: #ffc069;
+}
+
+[data-theme-mode="dark"] .app-stale-banner__text a:hover {
+  color: #ffd591;
+}
+
+[data-theme-mode="dark"] .app-stale-banner__close {
+  color: #ffd591;
+}
+
+[data-theme-mode="dark"] .app-stale-banner__close:hover {
+  background: rgba(255, 255, 255, 0.08);
 }

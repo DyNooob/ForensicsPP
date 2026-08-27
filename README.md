@@ -51,6 +51,13 @@ Forensics++ 是一个面向取证初筛、CTF/MISC、安全研究和日常证据
 
 APK 的“签名修复”是显式重新签名：可导入自己的 PKCS#8 私钥/X.509 证书，或生成仅在本地使用的临时修复身份。没有原开发者私钥时无法恢复原签名身份；重新签名后的 APK 与原证书身份不同。
 
+### 1.0.0-beta.5 更新要点
+
+- **版本过旧提示**：版本发布日期超过 90 天时，页面顶部自动提示并可直接跳转 GitHub Releases 下载新版；关闭后本次会话不再提示，刷新后重新出现。
+- **移动端可用性**：Binary/PCAP/Browser 标签在窄屏下可横向滚动；CyberChef 三栏在手机上改为横向平移，不再挤压裁切。
+- **空态布局**：未选择检材时工具区铺满视口，输入卡片顶部对齐，视觉更完整。
+- **取证解析增强**：修复签名损坏 PNG 位于完整签名 PNG 之前时被跳过的问题；Carver 新增 TIFF/MP4/Ogg/PCAP/FLAC 结构边界识别；APK v1 校验补齐逐段 `.SF` digest 比对。
+
 ## 快速开始
 
 ### 在线使用
@@ -100,18 +107,18 @@ npm run verify
 生成可直接交给静态服务器或文件分发的 ZIP：
 
 ```bash
-npm run build
+npm run build:standalone
 npm run release:package
 ```
 
 输出文件：
 
 ```text
-release/ForensicsPP-v1.0.0-beta.4-static.zip
+release/ForensicsPP-v1.0.0-beta.5-static.zip
 release/SHA256SUMS.txt
 ```
 
-ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。解压后可以部署到 Nginx、Apache、对象存储或其他静态托管平台。
+ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。使用 `build:standalone` 时全部 JS/CSS 内联进单个 `index.html`，解压后双击即可从 `file://` 打开，也可以部署到 Nginx、Apache、对象存储或其他静态托管平台。需要子目录托管或按需加载多 chunk 时改用 `npm run build`。
 
 ## 数据与隐私
 

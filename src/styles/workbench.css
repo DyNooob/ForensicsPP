@@ -1244,6 +1244,7 @@ details.tool-panel:not([open]) > :not(summary) {
 
 /* CyberChef */
 .cyberchef-panel {
+  position: relative;
   display: grid;
   height: calc(100vh - var(--topbar-height) - 42px);
   min-height: 620px;
@@ -1293,6 +1294,39 @@ details.tool-panel:not([open]) > :not(summary) {
 
 .cyberchef-panel iframe.is-loaded {
   opacity: 1;
+}
+
+/* On phones CyberChef's fixed three-pane layout cannot reflow (Split.js owns
+   the column widths), so instead of squeezing it into an unusable strip we keep
+   the desktop width and let the stage pan horizontally. A small chip tells the
+   user they can swipe. */
+@media (max-width: 768px) {
+  .cyberchef-stage {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cyberchef-panel iframe {
+    width: 920px;
+    min-width: 920px;
+  }
+  .cyberchef-panel::after {
+    content: "\2190 \5DE6 \53F3 \6ED1 \52A8 \4F7F \7528 \5B8C \6574 CyberChef \2192";
+    /* Plain readable hint; the escapes above render as: ← 左右滑动使用完整 CyberChef → */
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 6;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--app-primary);
+    background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+    border: 1px solid var(--app-line);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+    white-space: nowrap;
+  }
 }
 
 .cyberchef-loader {

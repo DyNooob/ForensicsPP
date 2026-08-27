@@ -38,7 +38,7 @@
     <meta name="repository" content="https://github.com/DyNooob/ForensicsPP" />
     <meta name="application-name" content="Forensics++" />
     <meta name="version" content="1.0.0-beta.5" />
-    <meta name="date" content="2026-07-23" />
+    <meta name="date" content="2026-08-27" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Forensics++" />
     <meta property="og:title" content="Forensics++ Workbench" />
@@ -52,7 +52,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
-    <meta property="og:updated_time" content="2026-07-15T00:00:00+08:00" />
+    <meta property="og:updated_time" content="2026-08-27T00:00:00+08:00" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Forensics++ Workbench" />
     <meta
@@ -91,7 +91,7 @@
         "applicationCategory": "SecurityApplication",
         "operatingSystem": "Any modern browser",
         "softwareVersion": "1.0.0-beta.5",
-        "dateModified": "2026-07-15",
+        "dateModified": "2026-08-27",
         "license": "https://github.com/DyNooob/ForensicsPP/src/branch/main/LICENSE",
         "codeRepository": "https://github.com/DyNooob/ForensicsPP",
         "url": "https://www.forensicspp.com/",
@@ -131,6 +131,49 @@
         console.log("%cNotice    %cUse only in lawful and authorized scenarios.", label, warn);
         console.log("%cLicense   %cMIT. Full source code: https://github.com/DyNooob/ForensicsPP", label, muted);
         console.groupEnd();
+      })();
+    </script>
+    <script>
+      // Boot watchdog: React error boundaries only catch render/lifecycle
+      // errors. If a module fails to load (e.g. stale Vite optimized deps, a
+      // corrupted browser cache, or a missing chunk on file://), React never
+      // mounts and the page would be a blank (white) screen with no clue.
+      // This runs OUTSIDE React and shows a diagnostic instead.
+      (() => {
+        const BOOT_TIMEOUT_MS = 6000;
+        const startedAt = Date.now();
+        const timer = window.setInterval(() => {
+          const root = document.getElementById("root");
+          const mounted = root && root.childElementCount > 0;
+          if (mounted) {
+            window.clearInterval(timer);
+            return;
+          }
+          if (Date.now() - startedAt > BOOT_TIMEOUT_MS) {
+            window.clearInterval(timer);
+            renderBootFailure();
+          }
+        }, 500);
+
+        function renderBootFailure() {
+          const root = document.getElementById("root");
+          if (!root || root.childElementCount > 0) return;
+          root.innerHTML =
+            '<div role="alert" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Noto Sans SC,sans-serif;color:#162130;background:#f5f7fa;text-align:center">' +
+            '<h1 style="margin:0;font-size:20px">页面启动失败</h1>' +
+            '<p style="margin:0;max-width:600px;color:#66768a">应用脚本未能加载完成。常见原因之一：开发服务器依赖缓存过期或浏览器缓存了旧的脚本分片。<br/>' +
+            '请重新加载；若仍失败，在终端重启开发服务器（<code>npm run dev</code>）并删除 <code>node_modules/.vite</code> 后重启。<br/>' +
+            '若你是双击本地 <code>dist/index.html</code>（file:// 协议）打开静态包：多分片构建会被浏览器 CORS 拦截而白屏，请改用单文件构建 <code>npm run build:standalone</code>，或用 <code>npm run preview</code> 启动本地服务器。</p>' +
+            '<button type="button" onclick="window.location.reload()" style="height:38px;padding:0 18px;border-radius:6px;border:1px solid #245F73;background:#245F73;color:#fff;font-size:14px;cursor:pointer">重新加载</button>' +
+            '</div>';
+        }
+
+        window.addEventListener("error", (event) => {
+          // Module/script load failures surface as error events with no error object.
+          if (event && !event.error && (event.filename || (event.target && event.target.src))) {
+            if (Date.now() - startedAt <= BOOT_TIMEOUT_MS) renderBootFailure();
+          }
+        }, true);
       })();
     </script>
   </head>

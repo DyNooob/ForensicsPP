@@ -879,7 +879,11 @@ export const copy = {
     fileLocal: "选择文件开始。",
     copied: "已复制到剪贴板",
     copyDone: "已复制",
-    parseError: "解析失败"
+    parseError: "解析失败",
+    staleVersionTitle: "版本可能已过时",
+    staleVersionBody: "当前版本 v{version} 发布于 {date}，已超过 90 天。",
+    staleVersionDownload: "前往 GitHub 下载新版",
+    dismissNotice: "关闭提示"
   },
   en: {
     product: "Forensics++",
@@ -1740,7 +1744,11 @@ export const copy = {
     fileLocal: "Choose a file to begin.",
     copied: "Copied",
     copyDone: "Copied",
-    parseError: "Parse failed"
+    parseError: "Parse failed",
+    staleVersionTitle: "Version may be outdated",
+    staleVersionBody: "Current version v{version} was released on {date} and is over 90 days old.",
+    staleVersionDownload: "Download the latest on GitHub",
+    dismissNotice: "Dismiss"
   }
 };
 

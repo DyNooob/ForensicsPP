@@ -28,7 +28,7 @@ import { Sidebar } from "./components/Sidebar";
 import type { ToolGroup } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
-import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash } from "./config/app";
+import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
 import type { ToolCategory, ToolDefinition, ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
@@ -95,6 +95,21 @@ export function App() {
     [themeColor, themeDefaultMigrated]
   );
   const appliedTheme = themeMode === "auto" ? systemTheme : themeMode === "dark" ? "dark" : "light";
+
+  // Stale-version notice: warn when the installed version is over 90 days old.
+  const STALE_VERSION_DAYS = 90;
+  const DAY_MS = 86400000;
+  const releaseTime = React.useMemo(() => Date.parse(appReleaseDate), [appReleaseDate]);
+  // Fully computed staleness check: once `releaseDate + 90 days` passes the
+  // current date, the version is stale. No hardcoded expiry date to maintain —
+  // only the release date constant in src/config/app.ts needs bumping.
+  const isVersionStale = Number.isFinite(releaseTime) && Date.now() > releaseTime + STALE_VERSION_DAYS * DAY_MS;
+  // Session-only dismissal: a fresh refresh shows the banner again; switching
+  // tools within the session must NOT resurrect it (no persistence).
+  const [staleBannerDismissed, setStaleBannerDismissed] = React.useState(false);
+  const showStaleBanner = isVersionStale && !staleBannerDismissed;
+  const dismissStaleBanner = () => setStaleBannerDismissed(true);
+
   const displayThemeColor = React.useMemo(
     () => themeDisplayColor(resolvedThemeColor, appliedTheme),
     [appliedTheme, resolvedThemeColor]
@@ -696,7 +711,8 @@ export function App() {
       </aside>
 
       <main className="tool-main" id="main-content" tabIndex={-1}>
-        <Topbar
+        <div className="app-top-region">
+          <Topbar
           t={t}
           lang={lang}
           active={active}
@@ -713,6 +729,32 @@ export function App() {
           onOpenCommandPalette={openCommandPalette}
           onSetLang={setLang}
         />
+
+        {showStaleBanner && (
+          <div
+            className="app-stale-banner"
+            role="alert"
+          >
+            <span className="app-stale-banner__icon" aria-hidden="true">⚠</span>
+            <span className="app-stale-banner__text">
+              <strong>{t.staleVersionTitle}</strong>{" "}
+              {t.staleVersionBody.replace("{version}", appVersion).replace("{date}", appReleaseDate)}{" "}
+              <a href={releaseDownloadUrl} target="_blank" rel="noreferrer" onClick={dismissStaleBanner}>
+                {t.staleVersionDownload}
+              </a>
+            </span>
+            <button
+              type="button"
+              className="app-stale-banner__close"
+              aria-label={t.dismissNotice}
+              onClick={dismissStaleBanner}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        </div>
 
         <section className={detailsExpanded || activeTool === "home" ? "tool-body" : "tool-body compact-results"}>
           {retainedTools.map((mountedTool) => (

@@ -25,6 +25,7 @@ import "@ant-design/v5-patch-for-react-19";
 import "antd/dist/reset.css";
 import "./styles.css";
 import { App } from "./App";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 function printConsoleBrand() {
   const key = "__forensicspp_console_brand__";
@@ -52,5 +53,9 @@ if (rootElement) {
   const rootHost = rootElement as HTMLElement & { __forensicspp_root__?: ReturnType<typeof createRoot> };
   const root = rootHost.__forensicspp_root__ ?? createRoot(rootElement);
   rootHost.__forensicspp_root__ = root;
-  root.render(<App />);
+  root.render(
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  );
 }

@@ -40,11 +40,11 @@ export function useToolWorkspace<T>({ id, version, isValid, onRestore }: ToolWor
   const [state, setState] = React.useState<ToolWorkspaceState>("idle");
   const generationRef = React.useRef(0);
   const queueRef = React.useRef<Promise<unknown>>(Promise.resolve());
-  const saveTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const saveTimerRef = React.useRef<number | null>(null);
   const saveSequenceRef = React.useRef(0);
   const pendingSaveRef = React.useRef<{ generation: number; sequence: number; value: T } | null>(null);
   const removalQueuedRef = React.useRef(false);
-  const removalTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const removalTimerRef = React.useRef<number | null>(null);
   const mountedRef = React.useRef(true);
   const restoreStartedRef = React.useRef(false);
   const restoreCancelledRef = React.useRef(false);

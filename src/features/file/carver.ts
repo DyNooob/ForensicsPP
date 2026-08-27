@@ -19,8 +19,11 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { findPngCandidates } from "./pngRepair";
+
 export type CarverConfidence = "low" | "medium" | "high";
-export type CarverExtent = "exact" | "structural" | "heuristic" | "unknown";
+
+export type CarverExtent = "exact" | "structural" | "heuristic" | "unknown" | "repaired";
 
 export type CarverHit = {
   label: string;
@@ -31,6 +34,12 @@ export type CarverHit = {
   confidence: CarverConfidence;
   extent: CarverExtent;
   detail?: string;
+  /** True when the carved bytes needed repair (corrupted signature / missing IEND / bad CRC). */
+  repaired?: boolean;
+  /** Human-readable repair notes for forensic reporting. */
+  repairNote?: string;
+  /** Normalized, decoder-valid bytes (e.g. a repaired PNG). Preferred over a raw slice on extraction. */
+  repairedBytes?: Uint8Array;
   parentOffset?: number;
   depth: number;
 };
@@ -362,6 +371,165 @@ function tarExtent(bytes: Uint8Array, offset: number) {
   return null;
 }
 
+function tiffExtent(bytes: Uint8Array, offset: number) {
+  const little = bytes[offset] === 0x49 && bytes[offset + 1] === 0x49;
+  const big = bytes[offset] === 0x4d && bytes[offset + 1] === 0x4d;
+  if (!little && !big) return null;
+  // The first IFD offset (4 bytes) sits at offset + 4; reject positions too
+  // close to EOF before reading it to avoid an out-of-bounds DataView access.
+  if (offset + 8 > bytes.length) return null;
+  const view = viewFor(bytes);
+  const u16 = (o: number) => view.getUint16(o, little);
+  const u32 = (o: number) => view.getUint32(o, little);
+  const typeSize: Record<number, number> = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8 };
+  let maxEnd = offset + 8;
+  const readValues = (dataOffset: number, type: number, count: number): number[] => {
+    const size = typeSize[type] ?? 0;
+    if (!size || count > 0x400000 || dataOffset + size * count > bytes.length) return [];
+    const out: number[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const o = dataOffset + i * size;
+      if (type === 3) out.push(u16(o));
+      else if (type === 4) out.push(u32(o));
+      else if (type === 11) out.push(view.getFloat32(o, little));
+      else if (type === 12) out.push(Number(view.getFloat64(o, little)));
+      else out.push(u32(o));
+    }
+    return out;
+  };
+  const visited = new Set<number>();
+  let current = u32(offset + 4);
+  for (let guard = 0; guard < 64 && current >= 8 && current + 2 <= bytes.length && !visited.has(current); guard += 1) {
+    visited.add(current);
+    const entries = u16(current);
+    maxEnd = Math.max(maxEnd, current + 2 + entries * 12);
+    const tags: Record<number, { type: number; count: number; dataOffset: number; inlined: boolean }> = {};
+    for (let i = 0; i < entries; i += 1) {
+      const entry = current + 2 + i * 12;
+      if (entry + 12 > bytes.length) break;
+      const tag = u16(entry);
+      const type = u16(entry + 2);
+      const count = u32(entry + 4);
+      const size = typeSize[type] ?? 0;
+      if (!size) continue;
+      const inlined = size * count <= 4;
+      tags[tag] = { type, count, dataOffset: inlined ? entry + 8 : u32(entry + 8), inlined };
+    }
+    for (const [offTag, lenTag] of [[273, 279], [324, 325], [513, 514]]) {
+      const off = tags[offTag];
+      const len = tags[lenTag];
+      if (!off || !len) continue;
+      const offsets = readValues(off.dataOffset, off.type, off.count);
+      const lengths = readValues(len.dataOffset, len.type, len.count);
+      for (let i = 0; i < Math.min(offsets.length, lengths.length); i += 1) {
+        const end = offsets[i] + lengths[i];
+        if (end > 0 && end <= bytes.length) maxEnd = Math.max(maxEnd, end);
+      }
+    }
+    const nextOffset = current + 2 + entries * 12;
+    // The declared entry count may describe an IFD that extends past EOF; guard
+    // the next-IFD offset read so a truncated/crafted TIFF cannot throw.
+    if (nextOffset + 4 > bytes.length) break;
+    const next = u32(nextOffset);
+    if (!next) break;
+    current = next;
+  }
+  if (maxEnd <= offset + 8 || maxEnd > bytes.length) return null;
+  return { size: maxEnd - offset, extent: "structural", confidence: "medium", detail: "TIFF IFD chain + strip/tile data extents" } as const;
+}
+
+function mp4Extent(bytes: Uint8Array, offset: number) {
+  const view = viewFor(bytes);
+  let cursor = offset;
+  let lastEnd = offset;
+  for (let guard = 0; guard < 100_000 && cursor + 8 <= bytes.length; guard += 1) {
+    const size = view.getUint32(cursor, false);
+    const type = ascii(bytes, cursor + 4, 4);
+    if (!/^[ -~]{4}$/.test(type)) break;
+    if (size === 0) {
+      return { size: bytes.length - offset, extent: "heuristic", confidence: "medium", detail: "MP4 box with size 0 (extends to EOF)" } as const;
+    }
+    let next: number;
+    if (size === 1) {
+      if (cursor + 16 > bytes.length) break;
+      const large = Number(view.getBigUint64(cursor + 8, false));
+      if (large < 16 || cursor + large > bytes.length) break;
+      next = cursor + large;
+    } else if (size >= 8) {
+      // A box whose declared size runs past EOF is truncated/corrupt; stop at
+      // the last fully-contained box rather than reporting a size beyond buffer.
+      if (cursor + size > bytes.length) break;
+      next = cursor + size;
+    } else break;
+    lastEnd = next;
+    cursor = next;
+  }
+  if (lastEnd <= offset) return null;
+  return { size: lastEnd - offset, extent: "structural", confidence: "high", detail: "Top-level ISO BMFF box chain" } as const;
+}
+
+function oggExtent(bytes: Uint8Array, offset: number) {
+  let cursor = offset;
+  let lastEnd = offset;
+  for (let guard = 0; guard < 100_000 && cursor + 27 <= bytes.length; guard += 1) {
+    if (ascii(bytes, cursor, 4) !== "OggS") break;
+    if (bytes[cursor + 4] > 7) break;
+    const segments = bytes[cursor + 26];
+    const tableStart = cursor + 27;
+    if (tableStart + segments > bytes.length) break;
+    let pageBytes = 27 + 1 + segments;
+    for (let i = 0; i < segments; i += 1) pageBytes += bytes[tableStart + i];
+    const pageEnd = cursor + pageBytes;
+    // A page whose declared segment table extends past EOF is truncated; keep
+    // the last fully-valid page instead of reporting a size beyond the buffer.
+    if (pageEnd > bytes.length) break;
+    lastEnd = pageEnd;
+    if ((bytes[cursor + 5] & 0x04) !== 0) break;
+    cursor = lastEnd;
+  }
+  if (lastEnd <= offset) return null;
+  return { size: lastEnd - offset, extent: "structural", confidence: "medium", detail: "Ogg page chain" } as const;
+}
+
+function pcapExtent(bytes: Uint8Array, offset: number) {
+  const b0 = bytes[offset], b1 = bytes[offset + 1], b2 = bytes[offset + 2], b3 = bytes[offset + 3];
+  let little = false;
+  if (b0 === 0xd4 && b1 === 0xc3 && b2 === 0xb2 && b3 === 0xa1) little = true;
+  else if (b0 === 0x4d && b1 === 0x3c && b2 === 0xb2 && b3 === 0xa1) little = true;
+  else if (b0 === 0xa1 && b1 === 0xb2 && b2 === 0xc3 && b3 === 0xd4) little = false;
+  else if (b0 === 0xa1 && b1 === 0xb2 && b2 === 0x3c && b3 === 0x4d) little = false;
+  else return null;
+  const view = viewFor(bytes);
+  let cursor = offset + 24;
+  let lastEnd = cursor;
+  for (let guard = 0; guard < 100_000 && cursor + 16 <= bytes.length; guard += 1) {
+    const inclLen = view.getUint32(cursor + 8, little);
+    if (inclLen > 0x10_000_00 || cursor + 16 + inclLen > bytes.length) break;
+    lastEnd = cursor + 16 + inclLen;
+    cursor = lastEnd;
+  }
+  if (lastEnd <= offset + 24) return null;
+  return { size: lastEnd - offset, extent: "structural", confidence: "high", detail: "PCAP global header + packet records" } as const;
+}
+
+function flacExtent(bytes: Uint8Array, offset: number) {
+  if (ascii(bytes, offset, 4) !== "fLaC") return null;
+  const view = viewFor(bytes);
+  let cursor = offset + 4;
+  for (let guard = 0; guard < 1000 && cursor + 4 <= bytes.length; guard += 1) {
+    const header = view.getUint32(cursor, false);
+    const last = (header & 0x8000_0000) !== 0;
+    const length = header & 0x0fff_ffff;
+    const blockEnd = cursor + 4 + length;
+    if (blockEnd > bytes.length) {
+      return { size: bytes.length - offset, extent: "heuristic", confidence: "low", detail: "FLAC metadata + audio frames to EOF" } as const;
+    }
+    cursor = blockEnd;
+    if (last) break;
+  }
+  return { size: bytes.length - offset, extent: "heuristic", confidence: "low", detail: "FLAC metadata blocks; audio frames to EOF" } as const;
+}
+
 export const carverFormats: CarverFormatDefinition[] = [
   { label: "PNG", magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], extension: "png", mime: "image/png", extent: pngExtent },
   { label: "JPEG", magic: [0xff, 0xd8, 0xff], extension: "jpg", mime: "image/jpeg", extent: jpegExtent },
@@ -405,24 +573,44 @@ export const carverFormats: CarverFormatDefinition[] = [
   { label: "JFFS2 node", magic: [0x85, 0x19], extension: "jffs2", mime: "application/octet-stream" },
   { label: "PEM certificate", magic: Array.from("-----BEGIN CERTIFICATE-----", (value) => value.charCodeAt(0)), extension: "pem", mime: "application/x-pem-file", extent: (bytes, offset) => pemExtent(bytes, offset, "-----END CERTIFICATE-----") },
   { label: "PEM private key", magic: Array.from("-----BEGIN PRIVATE KEY-----", (value) => value.charCodeAt(0)), extension: "pem", mime: "application/x-pem-file", extent: (bytes, offset) => pemExtent(bytes, offset, "-----END PRIVATE KEY-----") },
-  { label: "PEM RSA private key", magic: Array.from("-----BEGIN RSA PRIVATE KEY-----", (value) => value.charCodeAt(0)), extension: "pem", mime: "application/x-pem-file", extent: (bytes, offset) => pemExtent(bytes, offset, "-----END RSA PRIVATE KEY-----") }
+  { label: "PEM RSA private key", magic: Array.from("-----BEGIN RSA PRIVATE KEY-----", (value) => value.charCodeAt(0)), extension: "pem", mime: "application/x-pem-file", extent: (bytes, offset) => pemExtent(bytes, offset, "-----END RSA PRIVATE KEY-----") },
+  { label: "TIFF", magic: [0x49, 0x49, 0x2a, 0x00], extension: "tiff", mime: "image/tiff", extent: tiffExtent },
+  { label: "TIFF", magic: [0x4d, 0x4d, 0x00, 0x2a], extension: "tiff", mime: "image/tiff", extent: tiffExtent },
+  { label: "MP4 / ISO BMFF", magic: [0x66, 0x74, 0x79, 0x70], magicOffset: 4, extension: "mp4", mime: "video/mp4", extent: mp4Extent },
+  { label: "Ogg", magic: [0x4f, 0x67, 0x67, 0x53], extension: "ogg", mime: "application/ogg", extent: oggExtent },
+  { label: "PCAP", magic: [0xd4, 0xc3, 0xb2, 0xa1], extension: "pcap", mime: "application/vnd.tcpdump.pcap", extent: pcapExtent },
+  { label: "PCAP", magic: [0xa1, 0xb2, 0xc3, 0xd4], extension: "pcap", mime: "application/vnd.tcpdump.pcap", extent: pcapExtent },
+  { label: "FLAC", magic: [0x66, 0x4c, 0x61, 0x43], extension: "flac", mime: "audio/flac", extent: flacExtent },
+  { label: "MP3 (ID3)", magic: [0x49, 0x44, 0x33], extension: "mp3", mime: "audio/mpeg" },
+  { label: "RTF", magic: [0x7b, 0x5c, 0x72, 0x74, 0x66], extension: "rtf", mime: "application/rtf" },
+  { label: "PostScript", magic: [0x25, 0x21, 0x50, 0x53], extension: "ps", mime: "application/postscript" }
 ];
 
 export type ScanCarverOptions = {
   startOffset?: number;
   maxHits?: number;
+  /** Include corruption-tolerant PNG detection (signature-damaged / truncated). Default true. */
+  pngTolerant?: boolean;
 };
 
 export function scanCarvableObjects(bytes: Uint8Array, options: ScanCarverOptions = {}) {
   const startOffset = Math.max(0, options.startOffset ?? 0);
   const maxHits = Math.max(1, Math.min(4096, options.maxHits ?? 256));
+  const pngTolerant = options.pngTolerant ?? true;
   const byFirstByte = new Map<number, CarverFormatDefinition[]>();
   for (const format of carverFormats) {
     const rows = byFirstByte.get(format.magic[0]) ?? [];
     rows.push(format);
     byFirstByte.set(format.magic[0], rows);
   }
-  const candidates: Array<{ format: CarverFormatDefinition; offset: number }> = [];
+  // Corruption-tolerant PNG detection runs first so it can claim PNG offsets
+  // even when the standard signature is missing or damaged (the generic loop
+  // below would otherwise skip them or fall back to a guess).
+  const pngCandidates = pngTolerant ? findPngCandidates(bytes, startOffset, maxHits) : [];
+  const pngCovered = new Set(pngCandidates.map((candidate) => candidate.offset));
+  const pngFormat = carverFormats.find((format) => format.label === "PNG");
+  type Candidate = { format: CarverFormatDefinition; offset: number; preset?: { size: number; extent: CarverExtent; confidence: CarverConfidence; detail?: string; repaired?: boolean; repairNote?: string; repairedBytes?: Uint8Array } };
+  const candidates: Candidate[] = [];
   const seen = new Set<string>();
   for (let magicPosition = startOffset; magicPosition < bytes.length && candidates.length < maxHits; magicPosition += 1) {
     const rows = byFirstByte.get(bytes[magicPosition]);
@@ -432,13 +620,31 @@ export function scanCarvableObjects(bytes: Uint8Array, options: ScanCarverOption
       if (offset < startOffset || !matchAt(bytes, magicPosition, format.magic)) continue;
       const key = `${format.label}:${offset}`;
       if (seen.has(key) || (format.validate && !format.validate(bytes, offset))) continue;
+      // Defer to the tolerant PNG result for this offset.
+      if (format.label === "PNG" && pngCovered.has(offset)) continue;
       seen.add(key);
       candidates.push({ format, offset });
       if (candidates.length >= maxHits) break;
     }
   }
+  for (const png of pngCandidates) {
+    if (!pngFormat || candidates.length >= maxHits) break;
+    candidates.push({
+      format: pngFormat,
+      offset: png.offset,
+      preset: {
+        size: png.size,
+        extent: png.extent,
+        confidence: png.confidence,
+        detail: png.repaired ? png.repairNote : "PNG IEND boundary",
+        repaired: png.repaired,
+        repairNote: png.repairNote,
+        repairedBytes: png.repairedBytes
+      }
+    });
+  }
   candidates.sort((left, right) => left.offset - right.offset || right.format.magic.length - left.format.magic.length);
-  const resolvedExtents = candidates.map(({ format, offset }) => format.extent?.(bytes, offset) ?? null);
+  const resolvedExtents = candidates.map((candidate) => candidate.preset ?? candidate.format.extent?.(bytes, candidate.offset) ?? null);
   const nextDistinctOffset = new Array<number | undefined>(candidates.length);
   let nextOffsetValue: number | undefined;
   for (let index = candidates.length - 1; index >= 0;) {
@@ -449,8 +655,12 @@ export function scanCarvableObjects(bytes: Uint8Array, options: ScanCarverOption
     nextOffsetValue = offset;
     index = groupStart - 1;
   }
-  const hits = candidates.map(({ format, offset }, index): CarverHit => {
+  const hits = candidates.map((candidate, index): CarverHit => {
+    const { format, offset } = candidate;
     const resolved = resolvedExtents[index];
+    const presetFields = candidate.preset
+      ? { repaired: candidate.preset.repaired, repairNote: candidate.preset.repairNote, repairedBytes: candidate.preset.repairedBytes }
+      : {};
     if (resolved) {
       return {
         label: format.label,
@@ -461,14 +671,15 @@ export function scanCarvableObjects(bytes: Uint8Array, options: ScanCarverOption
         confidence: resolved.confidence ?? "high",
         extent: resolved.extent,
         detail: resolved.detail,
-        depth: 0
+        depth: 0,
+        ...presetFields
       };
     }
     const nextOffset = nextDistinctOffset[index];
-    const enclosingEnd = candidates.reduce<number | undefined>((best, candidate, candidateIndex) => {
+    const enclosingEnd = candidates.reduce<number | undefined>((best, other, candidateIndex) => {
       const known = resolvedExtents[candidateIndex];
-      if (!known || candidate.offset >= offset || candidate.offset + known.size <= offset) return best;
-      const end = candidate.offset + known.size;
+      if (!known || other.offset >= offset || other.offset + known.size <= offset) return best;
+      const end = other.offset + known.size;
       return best == null || end < best ? end : best;
     }, undefined);
     const boundary = Math.min(nextOffset ?? bytes.length, enclosingEnd ?? bytes.length, bytes.length);
@@ -487,7 +698,8 @@ export function scanCarvableObjects(bytes: Uint8Array, options: ScanCarverOption
         : nextOffset != null
           ? "Format boundary is not resolved; size stops at the next recognized object."
           : "Format boundary is not resolved; size reaches the end of the supplied buffer.",
-      depth: 0
+      depth: 0,
+      ...presetFields
     };
   });
   for (const hit of hits) {

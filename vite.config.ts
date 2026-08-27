@@ -21,6 +21,7 @@
 
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { viteSingleFile } from "vite-plugin-singlefile";
 
 const copyrightBanner = `/*!
  * Forensics++ (ForensicsPP.com)
@@ -44,24 +45,33 @@ function copyrightCssPlugin(): Plugin {
   };
 }
 
+// Opt-in single-file build (SINGLE_FILE=1). Inlines all JS/CSS into one
+// index.html so the result opens by double-click from file:// (no server).
+// vite-plugin-singlefile forces inlineDynamicImports=true, which conflicts
+// with manualChunks, so we drop manualChunks in this mode. The default
+// `npm run build` stays multi-chunk and is unaffected.
+const singleFileBuild = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SINGLE_FILE === "1";
+
 export default defineConfig({
   base: "./",
-  plugins: [react(), copyrightCssPlugin()],
+  plugins: [react(), copyrightCssPlugin(), ...(singleFileBuild ? [viteSingleFile()] : [])],
   build: {
     target: "es2022",
     rollupOptions: {
       output: {
         banner: copyrightBanner,
-        manualChunks(id) {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "vendor-react";
-          if (id.includes("node_modules/antd") || id.includes("node_modules/@ant-design") || id.includes("node_modules/rc-")) return "vendor-antd";
-          if (id.includes("node_modules/crypto-js") || id.includes("node_modules/bcryptjs")) return "vendor-crypto";
-          if (id.includes("node_modules/exifr")) return "vendor-exifr";
-          if (id.includes("node_modules/jsqr")) return "vendor-jsqr";
-          if (id.includes("node_modules/fflate")) return "vendor-fflate";
-          if (id.includes("node_modules/postal-mime")) return "vendor-email";
-          if (id.includes("node_modules/sql-formatter") || id.includes("node_modules/sql.js")) return "vendor-sql";
-        }
+        ...(!singleFileBuild && {
+          manualChunks(id: string) {
+            if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "vendor-react";
+            if (id.includes("node_modules/antd") || id.includes("node_modules/@ant-design") || id.includes("node_modules/rc-")) return "vendor-antd";
+            if (id.includes("node_modules/crypto-js") || id.includes("node_modules/bcryptjs")) return "vendor-crypto";
+            if (id.includes("node_modules/exifr")) return "vendor-exifr";
+            if (id.includes("node_modules/jsqr")) return "vendor-jsqr";
+            if (id.includes("node_modules/fflate")) return "vendor-fflate";
+            if (id.includes("node_modules/postal-mime")) return "vendor-email";
+            if (id.includes("node_modules/sql-formatter") || id.includes("node_modules/sql.js")) return "vendor-sql";
+          }
+        })
       }
     }
   },

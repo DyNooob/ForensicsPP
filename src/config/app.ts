@@ -96,9 +96,13 @@ export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } a
 
 export const storagePrefix = "forensicspp:";
 export const appVersion = "1.0.0-beta.5";
+/** Date this version was published (YYYY-MM-DD). Bump together with `appVersion` on each release. */
+export const appReleaseDate = "2026-08-27";
+/** Where users download new releases. */
+export const releaseDownloadUrl = `${projectLinks.repo}/releases`;
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-08-16";
+export const lastUpdated = "2026-08-27";
 export const legalVersion = "2026-07-13-v2";
 export const feedbackEmail = "toolab@digiforensics.cn";
 

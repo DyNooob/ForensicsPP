@@ -118,6 +118,8 @@ function buildFileEmbeddedSignatures(bytes: Uint8Array, includeHashes = true) {
       confidence: hit.confidence,
       extent: hit.extent,
       detail: hit.detail,
+      repaired: hit.repaired,
+      repairNote: hit.repairNote,
       parentOffset: hit.parentOffset,
       depth: hit.depth,
       virtualPath: hit.virtualPath,

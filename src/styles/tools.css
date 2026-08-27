@@ -5127,6 +5127,23 @@ textarea {
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
+/* Repaired-embedded-object marker in the Binary Workbench embedded table.
+   Theme-adaptive: blends with --app-surface so it reads in light & dark. */
+.repaired-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 700;
+  line-height: 1.5;
+  color: #15803d;
+  background: color-mix(in srgb, #22c55e 16%, var(--app-surface));
+  border: 1px solid color-mix(in srgb, #22c55e 38%, transparent);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .image-channel-grid figure:hover,
 .image-repair-preview-grid figure:hover {
   transform: translateY(-2px);
@@ -5360,4 +5377,62 @@ textarea {
   white-space: nowrap;
   min-width: 42px;
   text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile overflow guard for tab / segmented bars.
+   Binary / Browser / PCAP workbenches render more tabs than fit on a phone;
+   without this the trailing items are clipped with no way to reach them.
+   Make the bar scroll horizontally (with hidden scrollbar) instead.
+   --------------------------------------------------------------------------- */
+.binary-page-tabs,
+.browser-artifact-tabs {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 4px;
+}
+
+/* The empty/has- reset rules (e.g. `.file-analysis-workbench.has-binary > *`)
+   force `overflow: visible !important` on direct children, which would clip the
+   binary tab bar on mobile. Re-assert the scroll container with !important. */
+.binary-workbench .binary-page-tabs {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+.binary-page-tabs > .app-segmented-button,
+.browser-artifact-tabs > .app-segmented-button {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+/* Keep PCAP's tidy 6-up grid on desktop, but let it scroll on small screens. */
+@media (max-width: 760px) {
+  .pcap-simple-tabs {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .pcap-simple-tabs .ant-btn {
+    width: auto;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+}
+
+.binary-page-tabs::-webkit-scrollbar,
+.browser-artifact-tabs::-webkit-scrollbar,
+.pcap-simple-tabs::-webkit-scrollbar {
+  display: none;
 }
