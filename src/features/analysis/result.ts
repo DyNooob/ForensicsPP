@@ -74,6 +74,10 @@ export type AnalysisEnvelope<T = unknown> = {
     startedAt: string;
     completedAt: string;
     parameters?: Record<string, unknown>;
+    /** Assigned by the result store on publish. Stable id for this run: `<evidenceKey>/<toolId>#<sequence>`. */
+    runId?: string;
+    /** 1-based sequence number for the same evidenceId + toolId (Run #1, #2, #3...). Assigned on publish. */
+    sequence?: number;
   };
   summary: {
     title: string;

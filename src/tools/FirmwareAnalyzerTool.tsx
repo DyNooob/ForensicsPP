@@ -24,6 +24,7 @@ import { AButton, ALinearProgress, InfoTable, PanelTitle, ToolFactGrid, ToolPane
 import { analyzerTargetLabel } from "../core/analyzerRouting";
 import { evidenceReaderFromBlob, type EvidenceReader } from "../core/evidence/reader";
 import { dispatchToolHandoff } from "../core/toolHandoff";
+import { useToolRuntime } from "../core/runtime";
 import { appVersion, type ToolId } from "../config/app";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { buildFirmwareManifest, materializeFirmwareObject, type FirmwareAnalysisSession, type FirmwareObject } from "../features/firmware/analyzer";
@@ -65,9 +66,8 @@ export function FirmwareAnalyzerTool({
   setActiveTool?: (tool: ToolId, options?: { replaceHash?: boolean }) => void;
 }) {
   const english = t.waiting === "Waiting";
+  const rt = useToolRuntime("firmware", active);
   const [session, setSession] = React.useState<FirmwareAnalysisSession | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState("");
   const [progress, setProgress] = React.useState({ loaded: 0, total: 0, phase: "scan" as "scan" | "resolve" | "recursive" });
   const [filter, setFilter] = React.useState("");
   const [selectedId, setSelectedId] = React.useState("");
@@ -77,26 +77,15 @@ export function FirmwareAnalyzerTool({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const readerRef = React.useRef<EvidenceReader | null>(null);
   const fileRef = React.useRef<File | null>(null);
-  const abortRef = React.useRef<AbortController | null>(null);
-  const requestRef = React.useRef(0);
+  const reqRef = React.useRef(0);
+  const loading = rt.status === "running";
+  const error = rt.error?.error ?? "";
 
-  React.useEffect(() => () => abortRef.current?.abort(), []);
-  React.useEffect(() => {
-    if (active) return;
-    requestRef.current += 1;
-    abortRef.current?.abort();
-    setLoading(false);
-  }, [active]);
-
-  const clear = React.useCallback(() => {
-    requestRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
+  const clear = () => {
+    rt.reset();
     readerRef.current = null;
     fileRef.current = null;
     setSession(null);
-    setError("");
-    setLoading(false);
     setFilter("");
     setSelectedId("");
     setPreview("");
@@ -104,7 +93,7 @@ export function FirmwareAnalyzerTool({
     setProgress({ loaded: 0, total: 0, phase: "scan" });
     clearAnalysisResult("firmware");
     if (inputRef.current) inputRef.current.value = "";
-  }, []);
+  };
 
   const publish = React.useCallback((file: File, next: FirmwareAnalysisSession, startedAt: string, completedAt: string) => {
     const analysis = next.analysis;
@@ -141,44 +130,41 @@ export function FirmwareAnalyzerTool({
     });
   }, [english]);
 
-  const handleFile = React.useCallback(async (file?: File) => {
+  const handleFile = async (file?: File) => {
     if (!file || !active) return;
-    const requestId = ++requestRef.current;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    const myReq = ++reqRef.current;
+    rt.cancel();
     setSession(null);
     setSelectedId("");
     setPreview("");
-    setError("");
-    setLoading(true);
+    setProgress({ loaded: 0, total: 0, phase: "scan" });
     clearAnalysisResult("firmware");
     const reader = evidenceReaderFromBlob(file);
     readerRef.current = reader;
     fileRef.current = file;
     const startedAt = new Date().toISOString();
     try {
-      const next = await runWorkerTask<FirmwareWorkerRequest, FirmwareAnalysisSession, FirmwareWorkerProgress>({
-        createWorker: () => new Worker(new URL("../features/firmware/firmware.worker.ts", import.meta.url), { type: "module" }),
-        request: { file },
-        signal: controller.signal,
-        timeoutMs: 15 * 60_000,
-        onProgress: ({ loaded, total, phase }) => {
-          if (requestId === requestRef.current) setProgress({ loaded, total, phase });
-        }
-      });
-      if (controller.signal.aborted || requestId !== requestRef.current) return;
+      const next = await rt.run(
+        ({ signal }) => runWorkerTask<FirmwareWorkerRequest, FirmwareAnalysisSession, FirmwareWorkerProgress>({
+          createWorker: () => new Worker(new URL("../features/firmware/firmware.worker.ts", import.meta.url), { type: "module" }),
+          request: { file },
+          signal,
+          timeoutMs: 15 * 60_000,
+          onProgress: ({ loaded, total, phase }) => {
+            if (myReq === reqRef.current) setProgress({ loaded, total, phase });
+          }
+        }),
+        { stage: "firmware scan", recovery: "reset" }
+      );
+      if (myReq !== reqRef.current) return;
       setSession(next);
       publish(file, next, startedAt, new Date().toISOString());
       const first = next.analysis.objects[0];
       if (first) setSelectedId(first.id);
-    } catch (caught) {
-      if (!controller.signal.aborted && requestId === requestRef.current) setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-      if (!controller.signal.aborted && requestId === requestRef.current) setLoading(false);
+    } catch {
+      // rt.error already carries ToolErrorInfo; UI renders rt.error?.error
     }
-  }, [active, publish]);
+  };
 
   const selected = React.useMemo(() => session?.analysis.objects.find((object) => object.id === selectedId) ?? null, [session, selectedId]);
   const visibleObjects = React.useMemo(() => {

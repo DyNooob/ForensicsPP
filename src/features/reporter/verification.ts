@@ -20,8 +20,9 @@
  */
 
 import type { CaseEvidenceFile } from "../../models";
+import type { EvidenceVerificationStatus } from "../../core/evidence/identity";
 
-export type EvidenceVerificationStatus = "match" | "mismatch" | "missing" | "unverified";
+export type { EvidenceVerificationStatus };
 
 export type EvidenceVerificationRow = {
   registered: CaseEvidenceFile;

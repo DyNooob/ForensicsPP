@@ -27,6 +27,8 @@ import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildDocumentForensicsEnvelope } from "../features/document/envelope";
 
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 type View = "summary" | "findings" | "metadata" | "structure" | "extracts";
@@ -99,6 +101,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     abortRef.current?.abort();
     setLoading(true);
     setError("");
+    const startedAt = new Date().toISOString();
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -107,6 +110,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
       setAnalysis(result);
       workspace.save(persistableDocumentAnalysis(result));
       setView("summary");
+      publishAnalysisResult("documentforensics", buildDocumentForensicsEnvelope(result, { startedAt, completedAt: new Date().toISOString() }));
     } catch (caught) {
       if (!active || (caught instanceof DOMException && caught.name === "AbortError")) return;
       setAnalysis(null);
@@ -136,6 +140,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     setStructureKind("all");
     setError("");
     if (inputRef.current) inputRef.current.value = "";
+    clearAnalysisResult("documentforensics");
   };
 
   React.useEffect(() => () => {

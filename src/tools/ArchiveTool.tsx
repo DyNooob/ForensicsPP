@@ -30,6 +30,8 @@ import { hexPreview, previewText } from "../utils/binary";
 import { hashBytesInWorker } from "../features/hash/task";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildArchiveEnvelope } from "../features/archive/envelope";
 import { parseZipCentralDirectory, type ZipDirectoryEntry } from "../features/archive/zipDirectory";
 
 type EntryMeta = ZipDirectoryEntry;
@@ -194,6 +196,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       return;
     }
     setLoading(true);
+    const startedAt = new Date().toISOString();
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (!active || requestId !== requestRef.current) return;
@@ -209,6 +212,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       setEntryType("all");
       setSortBy("path");
       workspace.save({ archive: nextArchive, selectedName: firstFile?.name ?? "", query: "", entryType: "all", sortBy: "path" });
+      publishAnalysisResult("archive", buildArchiveEnvelope(nextArchive, { startedAt, completedAt: new Date().toISOString() }));
     } catch (caught) {
       if (active && requestId === requestRef.current) {
         setArchive(null);
@@ -252,6 +256,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     setEntryHashingKey("");
     setEntryHashError("");
     if (inputRef.current) inputRef.current.value = "";
+    clearAnalysisResult("archive");
   };
 
   const loadEntry = async (entry: ArchiveEntry) => {

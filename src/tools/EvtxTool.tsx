@@ -27,6 +27,8 @@ import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildEvtxEnvelope } from "../features/evtx/envelope";
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
@@ -144,6 +146,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     if (!active || !selectedFiles.length || loading) return;
     const run = runRef.current + 1;
     runRef.current = run;
+    const startedAt = new Date().toISOString();
     const controller = new AbortController();
     parseAbortRef.current?.abort();
     parseAbortRef.current = controller;
@@ -176,6 +179,11 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       setProgress("");
       setView(results.some(isAnalysis) ? "overview" : "files");
       if (results.length) workspace.save(persistableEvtxResults(results));
+      const completedAt = new Date().toISOString();
+      for (const file of results) {
+        if (!("events" in file)) continue;
+        publishAnalysisResult("evtx", buildEvtxEnvelope(file, { startedAt, completedAt }));
+      }
     }
     if (parseAbortRef.current === controller) parseAbortRef.current = null;
   };
@@ -198,6 +206,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
   const clear = () => {
     workspace.clear();
+    clearAnalysisResult("evtx");
     cancel();
     setSelectedFiles([]);
     setParsedFiles([]);

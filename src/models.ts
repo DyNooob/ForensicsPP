@@ -297,6 +297,20 @@ export type CaseEvidenceFile = {
   type: string;
   lastModified?: string;
   sha256?: string;
+  /**
+   * Forensic identity. Derived from a SHA-256 digest (`sha256:<hex>`) when one
+   * is available, otherwise `pending:<uuid>` to make the unresolved state explicit.
+   * Optional for backward compatibility with pre-beta.6 records (.fppcase imports, legacy results).
+   */
+  id?: string;
+  /**
+   * Provenance of the evidence file within the workbench. Optional for backward compatibility.
+   */
+  source?: "upload" | "handoff" | "carve" | "case-import" | "case-package" | "unknown";
+  /**
+   * Verification state. Optional for backward compatibility; defaults to "unverified".
+   */
+  verification?: "match" | "mismatch" | "missing" | "unverified";
 };
 
 export type CaseTimelineEvent = Pick<TimelineEvent, "iso" | "local" | "raw" | "format" | "line" | "source" | "context" | "epochMs">;

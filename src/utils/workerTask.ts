@@ -24,7 +24,7 @@ export type WorkerTaskMessage<TResult, TProgress = never> =
   | { type: "progress"; progress: TProgress }
   | { type: "error"; error: string };
 
-type WorkerTaskOptions<TRequest, TResult, TProgress> = {
+export type WorkerTaskOptions<TRequest, TResult, TProgress> = {
   createWorker: () => Worker;
   request: TRequest;
   transfer?: Transferable[];

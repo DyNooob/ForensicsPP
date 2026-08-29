@@ -24,6 +24,7 @@ import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
 import { ToolHost } from "./components/ToolHost";
+import { resolveRetainedTools } from "./core/runtime";
 import { Sidebar } from "./components/Sidebar";
 import type { ToolGroup } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
@@ -118,7 +119,7 @@ export function App() {
   const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
   const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
   const [pendingToolClose, setPendingToolClose] = React.useState<ToolId[] | null>(null);
-  const retainedTools = mountedTools.includes(activeTool) ? mountedTools : [...mountedTools, activeTool];
+  const retainedTools = resolveRetainedTools(activeTool, mountedTools, maxMountedTools);
   React.useEffect(() => {
     clearLegacyEvidenceStorage();
   }, []);

@@ -90,6 +90,8 @@ import { SqliteForensicPanel } from "../features/sqlite/ForensicPanel";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
 import { readToolSessionResult, removeToolSession, writeToolSession } from "../utils/toolSessions";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildSqliteEnvelope } from "../features/sqlite/envelope";
 
 function sqliteColumnPreferredWidth(column: string) {
   const normalized = column.toLowerCase();
@@ -550,6 +552,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     setForensicLoading(true);
     setSessionStatus("");
     setError("");
+    const startedAt = new Date().toISOString();
     try {
       const databaseForWorker = copySqliteArrayBuffer(input.database);
       const walForWorker = input.wal?.byteLength ? copySqliteArrayBuffer(input.wal) : undefined;
@@ -608,6 +611,13 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       setWalInfo(analysis.wal?.info ?? null);
       setHasShm(input.shm);
       setForensicAnalysis(annotatedForensicAnalysis);
+      publishAnalysisResult("sqlite", buildSqliteEnvelope(annotatedForensicAnalysis, {
+        name: input.name,
+        size: input.size,
+        wal: Boolean(input.wal?.byteLength),
+        startedAt,
+        completedAt: new Date().toISOString()
+      }));
       setOriginalBytes(baselineCopy);
       setTables(nextTables);
       setObjects(nextObjects);

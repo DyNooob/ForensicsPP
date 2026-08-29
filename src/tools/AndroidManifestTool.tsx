@@ -34,6 +34,8 @@ import { verifyAndroidV4Idsig, type AndroidV4Verification } from "../features/an
 import { runWorkerTask } from "../utils/workerTask";
 import { useStoredState } from "../utils/storage";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildAndroidEnvelope } from "../features/android/envelope";
 
 type Finding = { level: string; title: string; detail: string };
 type AndroidWorkerResult = {
@@ -160,6 +162,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
       setSourceFile(null);
       setRepairStatus("");
       setInfo(value.info);
+      publishAnalysisResult("android", buildAndroidEnvelope(value.info));
       setError("");
       resetReview();
     }
@@ -177,10 +180,11 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     try {
       const next = services.parseAndroidManifest(text, name, new Blob([text]).size);
       setInfo(next);
+      publishAnalysisResult("android", buildAndroidEnvelope(next));
       workspace.save({ info: next });
       resetReview();
     } catch (caught) {
-      setInfo(null);
+      setInfo(null);clearAnalysisResult("android");
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
@@ -199,7 +203,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     setParsing(false);
     setManifestText("");
     setSourceName(file.name);
-    setInfo(null);
+    setInfo(null);clearAnalysisResult("android");
     resetReview();
     if (file.size > MAX_ARCHIVE_SIZE) {
       setError(english ? "Files larger than 256 MiB are not opened in the browser." : "浏览器内不打开超过 256 MiB 的文件。");
@@ -223,11 +227,12 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
       setManifestText(result.xml);
       setSourceName(file.name);
       setInfo(next);
+      publishAnalysisResult("android", buildAndroidEnvelope(next));
       workspace.save({ info: next });
       resetReview();
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setInfo(null);
+      setInfo(null);clearAnalysisResult("android");
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (abortRef.current === controller) {
@@ -255,7 +260,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     workspace.clear();
     setParsing(false);
     setManifestText("");
-    setInfo(null);
+    setInfo(null);clearAnalysisResult("android");
     setSourceFile(null);
     setRepairKeyFile(null);
     setRepairCertFile(null);
@@ -402,7 +407,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           className="single-textarea android-simple-editor manifest-textarea"
           aria-label={english ? "AndroidManifest XML input" : "AndroidManifest XML 输入"}
           value={manifestText}
-          onChange={(event) => { setManifestText(event.target.value); setSourceName("pasted AndroidManifest.xml"); setInfo(null); resetReview(); }}
+          onChange={(event) => { setManifestText(event.target.value); setSourceName("pasted AndroidManifest.xml"); setInfo(null);clearAnalysisResult("android"); resetReview(); }}
           placeholder="<manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; ...>"
         />}
         <div className="android-simple-primary-action">

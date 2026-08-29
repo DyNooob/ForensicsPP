@@ -28,6 +28,8 @@ import type { WindowsArtifactAnalysis } from "../models";
 import { formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildWindowsEnvelope } from "../features/windows/envelope";
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_MFT_FILE_BYTES = 256 * 1024 * 1024;
@@ -74,6 +76,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
 
   const loadFile = async (file?: File) => {
     if (!file || !active) return;
+    const startedAt = new Date().toISOString();
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
     setDropActive(false);
@@ -107,6 +110,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       setAnalysis(nextAnalysis);
       workspace.save({ analysis: nextAnalysis });
+      publishAnalysisResult("windows", buildWindowsEnvelope(nextAnalysis, { startedAt, completedAt: new Date().toISOString() }));
     } catch (caught) {
       if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {
         setAnalysis(null);
@@ -130,6 +134,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     setView("overview");
     setPathFilter("");
     if (inputRef.current) inputRef.current.value = "";
+    clearAnalysisResult("windows");
   };
 
   const detailRows = analysis?.rows.filter(([name]) => !["Name", "Size", "Artifact type"].includes(name)) ?? [];

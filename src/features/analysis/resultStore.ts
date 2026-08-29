@@ -21,11 +21,26 @@
 
 import { isToolId, type ToolId } from "../../config/app";
 import type { AnalysisEnvelope } from "./result";
+import { evidenceKeyFromSources } from "../../core/evidence/identity";
 
-const currentResults = new Map<ToolId, AnalysisEnvelope>();
-const histories = new Map<ToolId, AnalysisEnvelope[]>();
-const listeners = new Map<ToolId | "*", Set<() => void>>();
 const MAX_HISTORY_PER_TOOL = 8;
+
+/** Per-(evidence, tool) slot: the current envelope plus the most recent runs. */
+type StoredRun = { current: AnalysisEnvelope | null; runs: AnalysisEnvelope[] };
+
+/**
+ * Storage index (beta.6, P0-4):
+ *   EvidenceKey -> (ToolId -> { current, runs })
+ *
+ * The public API is unchanged from the previous ToolId-keyed store; the
+ * evidence dimension is threaded internally so that repeated runs of the same
+ * tool against different evidence are no longer collapsed into a single
+ * `history` guess. `currentAnalysisResult(toolId)` keeps returning the latest
+ * result for that tool (tracked by `latestByTool`).
+ */
+const store = new Map<string, Map<ToolId, StoredRun>>();
+const latestByTool = new Map<ToolId, { key: string; result: AnalysisEnvelope }>();
+const listeners = new Map<ToolId | "*", Set<() => void>>();
 
 function notify(toolId: ToolId) {
   listeners.get(toolId)?.forEach((listener) => listener());
@@ -53,28 +68,65 @@ function caseSafeValue(value: unknown, depth = 0): unknown {
   return String(value);
 }
 
+function runsForTool(toolId: ToolId): AnalysisEnvelope[] {
+  const merged: AnalysisEnvelope[] = [];
+  for (const bucket of store.values()) {
+    const stored = bucket.get(toolId);
+    if (stored) merged.push(...stored.runs);
+  }
+  const seen = new Set<string>();
+  return merged
+    .filter((result) => {
+      const id = result.run.runId ?? result.id;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .sort((a, b) => (b.run.sequence ?? 0) - (a.run.sequence ?? 0))
+    .slice(0, MAX_HISTORY_PER_TOOL);
+}
+
 export function publishAnalysisResult(toolId: ToolId, result: AnalysisEnvelope) {
-  currentResults.set(toolId, result);
-  const history = histories.get(toolId) ?? [];
-  histories.set(toolId, [result, ...history.filter((item) => item.id !== result.id)].slice(0, MAX_HISTORY_PER_TOOL));
+  const key = evidenceKeyFromSources(result.source);
+  const bucket = store.get(key) ?? new Map<ToolId, StoredRun>();
+  const previous = bucket.get(toolId);
+  const sequence = (previous?.runs.length ?? 0) + 1;
+  const stamped: AnalysisEnvelope = {
+    ...result,
+    run: {
+      ...result.run,
+      runId: `${key}/${toolId}#${sequence}`,
+      sequence
+    }
+  };
+  bucket.set(toolId, {
+    current: stamped,
+    runs: [stamped, ...(previous?.runs ?? [])].slice(0, MAX_HISTORY_PER_TOOL)
+  });
+  store.set(key, bucket);
+  latestByTool.set(toolId, { key, result: stamped });
   notify(toolId);
 }
 
 export function clearAnalysisResult(toolId: ToolId) {
-  currentResults.delete(toolId);
+  for (const bucket of store.values()) {
+    const stored = bucket.get(toolId);
+    if (stored) bucket.set(toolId, { current: null, runs: stored.runs });
+  }
+  latestByTool.delete(toolId);
   notify(toolId);
 }
 
 export function currentAnalysisResult(toolId: ToolId) {
-  return currentResults.get(toolId) ?? null;
+  return latestByTool.get(toolId)?.result ?? null;
 }
 
 export function analysisResultHistory(toolId: ToolId) {
-  return (histories.get(toolId) ?? []).slice();
+  return runsForTool(toolId);
 }
 
 export function currentAnalysisResults() {
-  return Array.from(currentResults.entries()).map(([toolId, result]) => ({ toolId, result }));
+  return Array.from(latestByTool.entries()).map(([toolId, { result }]) => ({ toolId, result }));
 }
 
 export function analysisResultSnapshots() {
@@ -107,12 +159,21 @@ export function subscribeAnalysisResult(toolId: ToolId | "*", listener: () => vo
 }
 
 export function clearAnalysisResults() {
-  const affected = Array.from(currentResults.keys());
-  currentResults.clear();
+  const affected = Array.from(latestByTool.keys());
+  store.clear();
+  latestByTool.clear();
   for (const toolId of affected) notify(toolId);
 }
 
 export function clearAnalysisHistory(toolId?: ToolId) {
-  if (toolId) histories.delete(toolId);
-  else histories.clear();
+  if (toolId) {
+    for (const bucket of store.values()) {
+      const stored = bucket.get(toolId);
+      if (stored) bucket.set(toolId, { current: stored.current, runs: [] });
+    }
+    return;
+  }
+  for (const bucket of store.values()) {
+    for (const [id, stored] of bucket) bucket.set(id, { current: stored.current, runs: [] });
+  }
 }

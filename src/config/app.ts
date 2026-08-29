@@ -28,12 +28,12 @@ const toolDefinitions = [
   { id: "jwt", category: "analysis", name: "jwt", desc: "jwtDesc" },
   { id: "password", category: "analysis", name: "password", desc: "passwordDesc" },
   { id: "sql", category: "analysis", name: "sql", desc: "sqlDesc" },
-  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc", accepts: [".sqlite", ".sqlite3", ".db", "-wal"], capabilities: ["database", "deleted-record-recovery", "wal", "timeline"] },
+  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc", accepts: [".sqlite", ".sqlite3", ".db", "-wal"], capabilities: ["database", "deleted-record-recovery", "wal", "timeline"], resourcePolicy: "suspendable", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "registry", category: "analysis", name: "registry", desc: "registryDesc" },
   { id: "plist", category: "analysis", name: "plist", desc: "plistDesc" },
   { id: "browserartifacts", category: "analysis", name: "browserartifacts", desc: "browserartifactsDesc" },
-  { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc" },
-  { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc", accepts: [".pdf", ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt"], capabilities: ["document", "pdf", "ooxml", "ole", "metadata", "embedded-files"] },
+  { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc", accepts: [".evtx"], capabilities: ["windows-event-log", "timeline"], supportsEvidence: true, supportsResult: true, supportsHandoff: true },
+  { id: "documentforensics", category: "analysis", name: "documentforensics", desc: "documentforensicsDesc", accepts: [".pdf", ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt"], capabilities: ["document", "pdf", "ooxml", "ole", "metadata", "embedded-files"], supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "android", category: "analysis", name: "android", desc: "androidDesc", accepts: [".apk", ".apks", ".xapk", ".xml", ".idsig"], capabilities: ["android", "manifest", "signing", "certificate", "archive"] },
   { id: "ioc", category: "analysis", name: "ioc", desc: "iocDesc" },
   { id: "email", category: "analysis", name: "email", desc: "emailDesc" },
@@ -42,14 +42,14 @@ const toolDefinitions = [
   { id: "qr", category: "analysis", name: "qr", desc: "qrDesc", hidden: true, mergedInto: "image" },
   { id: "fileid", category: "analysis", name: "fileid", desc: "fileidDesc", hidden: true, mergedInto: "binary" },
   { id: "png", category: "analysis", name: "png", desc: "pngDesc", hidden: true, mergedInto: "image" },
-  { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc", accepts: [".zip", ".jar", ".apk", ".gz", ".tar", ".cpio"], capabilities: ["archive", "zip", "extraction", "zip-bomb-guard"] },
+  { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc", accepts: [".zip", ".jar", ".apk", ".gz", ".tar", ".cpio"], capabilities: ["archive", "zip", "extraction", "zip-bomb-guard"], supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc", accepts: ["*/*"], capabilities: ["binary", "file-identification", "pe", "elf", "mach-o", "hex", "strings", "ioc", "entropy", "yara", "embedded-signature"] },
-  { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"] },
-  { id: "disk", category: "analysis", name: "disk", desc: "diskDesc", accepts: [".dd", ".raw", ".img", ".iso"], capabilities: ["random-access", "mbr", "gpt", "fat", "ntfs", "ext", "iso9660"] },
-  { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc", accepts: [".lnk", ".pf", ".reg", ".mft", ".j"], capabilities: ["windows", "mft", "usn-journal", "prefetch", "lnk", "timeline"] },
-  { id: "memory", category: "analysis", name: "memory", desc: "memoryDesc", accepts: [".dmp", ".mdmp", ".raw", ".mem"], capabilities: ["minidump", "memory-triage", "pe-carving"] },
+  { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
+  { id: "disk", category: "analysis", name: "disk", desc: "diskDesc", accepts: [".dd", ".raw", ".img", ".iso"], capabilities: ["random-access", "mbr", "gpt", "fat", "ntfs", "ext", "iso9660"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
+  { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc", accepts: [".lnk", ".pf", ".reg", ".mft", ".j"], capabilities: ["windows", "mft", "usn-journal", "prefetch", "lnk", "timeline"], supportsEvidence: true, supportsResult: true, supportsHandoff: true },
+  { id: "memory", category: "analysis", name: "memory", desc: "memoryDesc", accepts: [".dmp", ".mdmp", ".raw", ".mem"], capabilities: ["minidump", "memory-triage", "pe-carving"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "strings", category: "analysis", name: "strings", desc: "stringsDesc", hidden: true, mergedInto: "binary" },
-  { id: "bulk", category: "analysis", name: "bulk", desc: "bulkDesc", accepts: ["*/*"], capabilities: ["streaming", "ioc", "strings", "offsets"] },
+  { id: "bulk", category: "analysis", name: "bulk", desc: "bulkDesc", accepts: ["*/*"], capabilities: ["streaming", "ioc", "strings", "offsets"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "entropy", category: "analysis", name: "entropy", desc: "entropyDesc", hidden: true, mergedInto: "binary" },
   { id: "hash", category: "transform", name: "hash", desc: "hashDesc" },
   { id: "timestamp", category: "transform", name: "timestamp", desc: "timestampDesc" },
@@ -58,7 +58,7 @@ const toolDefinitions = [
   { id: "uuid", category: "transform", name: "uuid", desc: "uuidDesc" },
   { id: "json", category: "transform", name: "json", desc: "jsonDesc" },
   { id: "regex", category: "transform", name: "regex", desc: "regexDesc" },
-  { id: "pcap", category: "network", name: "pcap", desc: "pcapDesc", accepts: [".pcap", ".pcapng"], capabilities: ["network", "tcp-reassembly", "http", "dns", "tls", "ioc", "timeline"] },
+  { id: "pcap", category: "network", name: "pcap", desc: "pcapDesc", accepts: [".pcap", ".pcapng"], capabilities: ["network", "tcp-reassembly", "http", "dns", "tls", "ioc", "timeline"], resourcePolicy: "suspendable", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true },
   { id: "yara", category: "analysis", name: "yara", desc: "yaraDesc", hidden: true, mergedInto: "binary" }
 ] as const;
 
@@ -66,6 +66,12 @@ export type ToolId = (typeof toolDefinitions)[number]["id"];
 export type ToolCategory = (typeof toolDefinitions)[number]["category"];
 export type ToolName = (typeof toolDefinitions)[number]["name"];
 export type ToolDescription = (typeof toolDefinitions)[number]["desc"];
+export type ResourcePolicy =
+  | "retain"
+  | "retain-with-cache-eviction"
+  | "suspendable"
+  | "dispose-on-switch";
+
 export type ToolDefinition = {
   id: ToolId;
   category: ToolCategory;
@@ -75,6 +81,12 @@ export type ToolDefinition = {
   capabilities?: readonly string[];
   hidden?: boolean;
   mergedInto?: ToolId;
+  resourcePolicy?: ResourcePolicy;
+  heavy?: boolean;
+  supportsEvidence?: boolean;
+  supportsResult?: boolean;
+  supportsHandoff?: boolean;
+  supportsPersistence?: boolean;
 };
 
 export const tools: readonly ToolDefinition[] = toolDefinitions;
