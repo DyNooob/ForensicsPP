@@ -21,6 +21,7 @@
 
 import React from "react";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
+import { useStaleRunGuard } from "../core/runtime";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { persistableDocumentAnalysis, type DocumentAnalysis } from "../features/document/analyzer";
 import { copy } from "../i18n";
@@ -65,6 +66,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
   const [dragActive, setDragActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const guard = useStaleRunGuard(active);
   const workspace = useToolWorkspace<DocumentAnalysis>({
     id: "document-forensics",
     version: 2,
@@ -98,6 +100,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
 
   const analyze = async (targetFile: File | null = file) => {
     if (!active || !targetFile) return;
+    const requestId = guard.next();
     abortRef.current?.abort();
     setLoading(true);
     setError("");
@@ -106,11 +109,13 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     abortRef.current = controller;
     try {
       const result = await analyzeInWorker(targetFile, controller.signal);
-      if (!active || controller.signal.aborted) return;
-      setAnalysis(result);
-      workspace.save(persistableDocumentAnalysis(result));
-      setView("summary");
-      publishAnalysisResult("documentforensics", buildDocumentForensicsEnvelope(result, { startedAt, completedAt: new Date().toISOString() }));
+      if (!guard.isCurrent(requestId) || controller.signal.aborted) return;
+      guard.commit(requestId, () => {
+        setAnalysis(result);
+        workspace.save(persistableDocumentAnalysis(result));
+        setView("summary");
+        publishAnalysisResult("documentforensics", buildDocumentForensicsEnvelope(result, { startedAt, completedAt: new Date().toISOString() }));
+      });
     } catch (caught) {
       if (!active || (caught instanceof DOMException && caught.name === "AbortError")) return;
       setAnalysis(null);
@@ -132,6 +137,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
   const clear = () => {
     workspace.clear();
     cancel();
+    guard.next();
     setFile(null);
     setAnalysis(null);
     setView("summary");

@@ -35,26 +35,23 @@ export function DiskImageTool({ t, active=true }:{t:(typeof copy)["zh"];active?:
   const [analysis,setAnalysis]=React.useState<DiskAnalysis|null>(null);
   const input=React.useRef<HTMLInputElement|null>(null);
   const rt=useToolRuntime("disk",active);
-  // Local supersede guard: useToolRuntime owns status/error, but result *write-back*
-  // is the tool's business data, so we discard a run superseded by a newer one.
-  const reqRef=React.useRef(0);
 
   const load=async(file?:File)=>{
     if(!file||!active)return;
     rt.cancel();
-    const myReq=++reqRef.current;
     const startedAt=new Date().toISOString();
     setAnalysis(null);
+    let reqId=0;
     try{
       const result=await rt.run(
-        ({signal})=>analyzeDiskImage(evidenceReaderFromBlob(file),file.name,signal),
+        ({signal,requestId})=>{reqId=requestId;return analyzeDiskImage(evidenceReaderFromBlob(file),file.name,signal);},
         {stage:"disk image analysis",recovery:"reset"}
       );
-      if(myReq!==reqRef.current)return;
-      setAnalysis(result);
-      publishAnalysisResult("disk", buildDiskImageEnvelope(result, { startedAt, completedAt: new Date().toISOString() }));
+      rt.commit(reqId,()=>{
+        setAnalysis(result);
+        publishAnalysisResult("disk", buildDiskImageEnvelope(result, { startedAt, completedAt: new Date().toISOString() }));
+      });
     }catch{
-      if(myReq!==reqRef.current)return;
       // rt.error already carries ToolErrorInfo; UI renders rt.error?.error
     }
   };

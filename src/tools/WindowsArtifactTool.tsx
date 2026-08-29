@@ -29,6 +29,7 @@ import { formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { useStaleRunGuard } from "../core/runtime";
 import { buildWindowsEnvelope } from "../features/windows/envelope";
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
@@ -49,7 +50,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   const [view, setView] = React.useState<ResultView>("overview");
   const [pathFilter, setPathFilter] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const requestRef = React.useRef(0);
+  const guard = useStaleRunGuard(active);
   const abortRef = React.useRef<AbortController | null>(null);
   const workspace = useToolWorkspace<WindowsWorkspace>({
     id: "windows-artifact",
@@ -63,12 +64,12 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     }
   });
   React.useEffect(() => () => {
-    requestRef.current += 1;
+    guard.next();
     abortRef.current?.abort();
   }, []);
   React.useEffect(() => {
     if (active) return;
-    requestRef.current += 1;
+    guard.next();
     abortRef.current?.abort();
     abortRef.current = null;
     setLoading(false);
@@ -77,7 +78,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   const loadFile = async (file?: File) => {
     if (!file || !active) return;
     const startedAt = new Date().toISOString();
-    const requestId = ++requestRef.current;
+    const requestId = guard.next();
     abortRef.current?.abort();
     setDropActive(false);
     setError("");
@@ -98,7 +99,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     abortRef.current = controller;
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (!active || requestId !== requestRef.current) return;
+      if (!guard.isCurrent(requestId)) return;
       const workerBytes = bytes.slice();
       const nextAnalysis = await runWorkerTask<WindowsWorkerRequest, WindowsArtifactAnalysis>({
         createWorker: () => new Worker(new URL("../features/windows/windows.worker.ts", import.meta.url), { type: "module" }),
@@ -107,23 +108,25 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
-      setAnalysis(nextAnalysis);
-      workspace.save({ analysis: nextAnalysis });
-      publishAnalysisResult("windows", buildWindowsEnvelope(nextAnalysis, { startedAt, completedAt: new Date().toISOString() }));
+      if (!guard.isCurrent(requestId) || controller.signal.aborted) return;
+      guard.commit(requestId, () => {
+        setAnalysis(nextAnalysis);
+        workspace.save({ analysis: nextAnalysis });
+        publishAnalysisResult("windows", buildWindowsEnvelope(nextAnalysis, { startedAt, completedAt: new Date().toISOString() }));
+      });
     } catch (caught) {
-      if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {
+      if (guard.isCurrent(requestId) && !(caught instanceof DOMException && caught.name === "AbortError")) {
         setAnalysis(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      if (requestId === requestRef.current) setLoading(false);
+      if (guard.isCurrent(requestId)) setLoading(false);
     }
   };
 
   const clear = () => {
-    requestRef.current += 1;
+    guard.next();
     abortRef.current?.abort();
     abortRef.current = null;
     workspace.clear();

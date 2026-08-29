@@ -8,6 +8,10 @@
  * Platform: DigiForensics.cn
  * Project: https://github.com/DyNooob/ForensicsPP
  *
+ * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+ * lightweight forensic triage, encoding/decoding, metadata inspection,
+ * hashes, archive parsing, and local analysis.
+ *
  * Do not use this project for unauthorized access, intrusion,
  * privacy infringement, or unlawful activity.
  *
@@ -18,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ToolId } from "../../config/app";
 import { createManagedTask, type ManagedTask } from "./managedTask";
+import { createRunGuard, type RunGuard } from "./runGuard";
 import { describeToolError, type ToolErrorInfo, type ToolRuntimeStatus } from "./toolLifecycle";
 
 export type ToolRuntimeRunContext = { signal: AbortSignal; requestId: number };
@@ -28,6 +33,13 @@ export type ToolRuntime = {
   status: ToolRuntimeStatus;
   error: ToolErrorInfo | null;
   run: <T>(task: ToolRuntimeRunTask<T>, options?: ToolRuntimeRunOptions) => Promise<T>;
+  /**
+   * Publish a result only if `requestId` still owns the current run and the tool is
+   * active. Mirrors the stale-run guard every tool used to hand-roll with a private
+   * `reqRef` — now a single shared contract (beta.6 §11). Capture `requestId` from the
+   * `run` task context, then call `rt.commit(requestId, () => publish(...))`.
+   */
+  commit: <T>(requestId: number, fn: () => T) => T | undefined;
   reset: () => void;
   cancel: () => void;
   warn: (message: string, stage?: string) => void;
@@ -47,7 +59,7 @@ export type ToolRuntime = {
  */
 export function useToolRuntime(toolId: ToolId, active: boolean): ToolRuntime {
   const managedRef = useRef<ManagedTask>(createManagedTask());
-  const requestRef = useRef(0);
+  const guardRef = useRef<RunGuard>(createRunGuard(() => activeRef.current));
   const statusRef = useRef<ToolRuntimeStatus>("idle");
   const activeRef = useRef(active);
   const disposeFns = useRef(new Set<() => void>());
@@ -70,16 +82,16 @@ export function useToolRuntime(toolId: ToolId, active: boolean): ToolRuntime {
 
   const run = useCallback(
     async <T,>(task: ToolRuntimeRunTask<T>, options?: ToolRuntimeRunOptions): Promise<T> => {
-      const requestId = ++requestRef.current;
+      const requestId = guardRef.current.next();
       const controller = managedRef.current.register();
       setStatus("running");
       setError(null);
       try {
         const result = await task({ signal: controller.signal, requestId });
-        if (requestId === requestRef.current && activeRef.current) setStatus("success");
+        if (guardRef.current.isCurrent(requestId)) setStatus("success");
         return result;
       } catch (caught) {
-        const superseded = requestId !== requestRef.current;
+        const superseded = !guardRef.current.isCurrent(requestId);
         const aborted = caught instanceof DOMException && caught.name === "AbortError";
         if (!superseded) {
           if (aborted) setStatus("idle");
@@ -96,8 +108,13 @@ export function useToolRuntime(toolId: ToolId, active: boolean): ToolRuntime {
     [toolId]
   );
 
+  const commit = useCallback(
+    <T,>(requestId: number, fn: () => T): T | undefined => guardRef.current.commit(requestId, fn),
+    []
+  );
+
   const reset = useCallback(() => {
-    requestRef.current += 1;
+    guardRef.current.next();
     managedRef.current.abortAll();
     setStatus("idle");
     setError(null);
@@ -122,5 +139,18 @@ export function useToolRuntime(toolId: ToolId, active: boolean): ToolRuntime {
     };
   }, []);
 
-  return { status, error, run, reset, cancel, warn, registerDispose, managed: managedRef.current };
+  return { status, error, run, commit, reset, cancel, warn, registerDispose, managed: managedRef.current };
+}
+
+/**
+ * Lightweight stale-run guard for tools that do not route their analysis through
+ * `useToolRuntime.run` (e.g. they manage their own worker via a private AbortController).
+ * Returns the same {@link RunGuard} contract: call `guard.next()` once per analysis, then
+ * `guard.commit(id, () => publish(...))` to publish only the current run's result.
+ */
+export function useStaleRunGuard(active: boolean): RunGuard {
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const guardRef = useRef<RunGuard>(createRunGuard(() => activeRef.current));
+  return guardRef.current;
 }

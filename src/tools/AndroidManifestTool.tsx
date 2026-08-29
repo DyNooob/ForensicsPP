@@ -23,6 +23,7 @@ import { copyText } from "../utils/clipboard";
 import React from "react";
 import { zipSync } from "fflate";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
+import { useStaleRunGuard } from "../core/runtime";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { AndroidApkEntry, AndroidComponent, AndroidManifestInfo, AndroidSigningInfo } from "../models";
@@ -85,6 +86,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
   const [v4Result, setV4Result] = React.useState<AndroidV4Verification | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const guard = useStaleRunGuard(active);
   const hasSource = Boolean(info || manifestText.trim() || error);
   const visibleComponents = React.useMemo(() => {
     const query = componentFilter.trim().toLowerCase();
@@ -191,6 +193,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
 
   const handleFile = async (file?: File) => {
     if (!file || !active) return;
+    const requestId = guard.next();
     setSourceFile(file);
     setRepairStatus("");
     setV4File(null);
@@ -222,14 +225,16 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
         signal: controller.signal,
         timeoutMs: 180_000
       });
-      if (!active || controller.signal.aborted) return;
+      if (!guard.isCurrent(requestId) || controller.signal.aborted) return;
       const next = services.parseAndroidManifest(result.xml, file.name, file.size, result.archiveInfo);
-      setManifestText(result.xml);
-      setSourceName(file.name);
-      setInfo(next);
-      publishAnalysisResult("android", buildAndroidEnvelope(next));
-      workspace.save({ info: next });
-      resetReview();
+      guard.commit(requestId, () => {
+        setManifestText(result.xml);
+        setSourceName(file.name);
+        setInfo(next);
+        publishAnalysisResult("android", buildAndroidEnvelope(next));
+        workspace.save({ info: next });
+        resetReview();
+      });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setInfo(null);clearAnalysisResult("android");
@@ -257,6 +262,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
   const clear = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    guard.next();
     workspace.clear();
     setParsing(false);
     setManifestText("");

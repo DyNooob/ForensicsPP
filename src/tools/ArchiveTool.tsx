@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
+import { useStaleRunGuard } from "../core/runtime";
 import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { ArchiveWorkerRequest } from "../features/archive/archive.worker";
@@ -112,7 +113,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
   const [dropActive, setDropActive] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const archiveBytesRef = React.useRef<Uint8Array | null>(null);
-  const requestRef = React.useRef(0);
+  const guard = useStaleRunGuard(active);
   const entryAbortRef = React.useRef<AbortController | null>(null);
   const entryHashAbortRef = React.useRef<AbortController | null>(null);
   const workspace = useToolWorkspace<ArchiveWorkspace>({
@@ -130,7 +131,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     }
   });
   React.useEffect(() => () => {
-    requestRef.current += 1;
+    guard.next();
     entryAbortRef.current?.abort();
     entryHashAbortRef.current?.abort();
     archiveBytesRef.current = null;
@@ -138,7 +139,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
 
   React.useEffect(() => {
     if (active) return;
-    requestRef.current += 1;
+    guard.next();
     entryAbortRef.current?.abort();
     entryAbortRef.current = null;
     entryHashAbortRef.current?.abort();
@@ -173,7 +174,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
 
   const loadFile = async (file?: File) => {
     if (!file || !active) return;
-    const requestId = ++requestRef.current;
+    const requestId = guard.next();
     entryAbortRef.current?.abort();
     entryHashAbortRef.current?.abort();
     entryHashAbortRef.current = null;
@@ -199,28 +200,30 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     const startedAt = new Date().toISOString();
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (!active || requestId !== requestRef.current) return;
+      if (!guard.isCurrent(requestId)) return;
       const parsed = parseArchiveEntries(bytes);
       if (!parsed.entries.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
       archiveBytesRef.current = bytes;
       const nextEntries = parsed.entries.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
       const nextArchive = { name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries), entries: nextEntries, skipped: parsed.skipped } satisfies ArchiveState;
-      setArchive(nextArchive);
-      setSelectedName(firstFile?.name ?? "");
-      setQuery("");
-      setEntryType("all");
-      setSortBy("path");
-      workspace.save({ archive: nextArchive, selectedName: firstFile?.name ?? "", query: "", entryType: "all", sortBy: "path" });
-      publishAnalysisResult("archive", buildArchiveEnvelope(nextArchive, { startedAt, completedAt: new Date().toISOString() }));
+      guard.commit(requestId, () => {
+        setArchive(nextArchive);
+        setSelectedName(firstFile?.name ?? "");
+        setQuery("");
+        setEntryType("all");
+        setSortBy("path");
+        workspace.save({ archive: nextArchive, selectedName: firstFile?.name ?? "", query: "", entryType: "all", sortBy: "path" });
+        publishAnalysisResult("archive", buildArchiveEnvelope(nextArchive, { startedAt, completedAt: new Date().toISOString() }));
+      });
     } catch (caught) {
-      if (active && requestId === requestRef.current) {
+      if (guard.isCurrent(requestId)) {
         setArchive(null);
         archiveBytesRef.current = null;
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     } finally {
-      if (active && requestId === requestRef.current) setLoading(false);
+      if (guard.isCurrent(requestId)) setLoading(false);
     }
   };
 
@@ -237,7 +240,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
   }, [active]);
 
   const clear = () => {
-    requestRef.current += 1;
+    guard.next();
     entryAbortRef.current?.abort();
     entryAbortRef.current = null;
     entryHashAbortRef.current?.abort();
@@ -271,7 +274,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     }
     setLoadingEntry(entry.name);
     setError("");
-    const requestId = requestRef.current;
+    const requestId = guard.current();
     const controller = new AbortController();
     entryAbortRef.current = controller;
     try {
@@ -283,12 +286,12 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
         signal: controller.signal,
         timeoutMs: 120_000
       });
-      if (!active || controller.signal.aborted || requestId !== requestRef.current) return null;
+      if (!guard.isCurrent(requestId) || controller.signal.aborted) return null;
       const data = new Uint8Array(extracted);
       setArchive((current) => current ? { ...current, entries: current.entries.map((item) => item.name === entry.name ? { ...item, data } : item) } : current);
       return data;
     } catch (caught) {
-      if (active && requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
+      if (guard.isCurrent(requestId) && !(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
       return null;
     } finally {
       if (entryAbortRef.current === controller) entryAbortRef.current = null;
@@ -309,7 +312,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     if (!active || !selected || selected.name.endsWith("/") || selected.encrypted || entryHashingKey) return;
     const key = selected.name;
     if (entryHashes[key]) return;
-    const requestId = requestRef.current;
+    const requestId = guard.current();
     setEntryHashingKey(key);
     setEntryHashError("");
     const controller = new AbortController();
@@ -321,14 +324,14 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       const dataCopy = new Uint8Array(data.length);
       dataCopy.set(data);
       const result = await hashBytesInWorker(dataCopy, ["sha256"], { signal: controller.signal });
-      if (!active || controller.signal.aborted || requestId !== requestRef.current) return;
+      if (!guard.isCurrent(requestId) || controller.signal.aborted) return;
       if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
       setEntryHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
     } catch (caught) {
-      if (active && requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
+      if (guard.isCurrent(requestId) && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (entryHashAbortRef.current === controller) entryHashAbortRef.current = null;
-      if (requestId === requestRef.current) setEntryHashingKey("");
+      if (guard.isCurrent(requestId)) setEntryHashingKey("");
     }
   };
 

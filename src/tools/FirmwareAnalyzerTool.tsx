@@ -77,7 +77,6 @@ export function FirmwareAnalyzerTool({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const readerRef = React.useRef<EvidenceReader | null>(null);
   const fileRef = React.useRef<File | null>(null);
-  const reqRef = React.useRef(0);
   const loading = rt.status === "running";
   const error = rt.error?.error ?? "";
 
@@ -132,8 +131,8 @@ export function FirmwareAnalyzerTool({
 
   const handleFile = async (file?: File) => {
     if (!file || !active) return;
-    const myReq = ++reqRef.current;
     rt.cancel();
+    let reqId = 0;
     setSession(null);
     setSelectedId("");
     setPreview("");
@@ -145,22 +144,26 @@ export function FirmwareAnalyzerTool({
     const startedAt = new Date().toISOString();
     try {
       const next = await rt.run(
-        ({ signal }) => runWorkerTask<FirmwareWorkerRequest, FirmwareAnalysisSession, FirmwareWorkerProgress>({
-          createWorker: () => new Worker(new URL("../features/firmware/firmware.worker.ts", import.meta.url), { type: "module" }),
-          request: { file },
-          signal,
-          timeoutMs: 15 * 60_000,
-          onProgress: ({ loaded, total, phase }) => {
-            if (myReq === reqRef.current) setProgress({ loaded, total, phase });
-          }
-        }),
+        ({ signal, requestId }) => {
+          reqId = requestId;
+          return runWorkerTask<FirmwareWorkerRequest, FirmwareAnalysisSession, FirmwareWorkerProgress>({
+            createWorker: () => new Worker(new URL("../features/firmware/firmware.worker.ts", import.meta.url), { type: "module" }),
+            request: { file },
+            signal,
+            timeoutMs: 15 * 60_000,
+            onProgress: ({ loaded, total, phase }) => {
+              rt.commit(reqId, () => setProgress({ loaded, total, phase }));
+            }
+          });
+        },
         { stage: "firmware scan", recovery: "reset" }
       );
-      if (myReq !== reqRef.current) return;
-      setSession(next);
-      publish(file, next, startedAt, new Date().toISOString());
-      const first = next.analysis.objects[0];
-      if (first) setSelectedId(first.id);
+      rt.commit(reqId, () => {
+        setSession(next);
+        publish(file, next, startedAt, new Date().toISOString());
+        const first = next.analysis.objects[0];
+        if (first) setSelectedId(first.id);
+      });
     } catch {
       // rt.error already carries ToolErrorInfo; UI renders rt.error?.error
     }
