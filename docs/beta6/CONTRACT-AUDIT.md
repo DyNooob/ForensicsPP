@@ -5,7 +5,7 @@
 > Verdict per invariant: **HOLD** (already correct, keep + test) or **NEEDS-FIX** (break provenance, must fix before/with C-B4).
 > No code was changed during this audit.
 
-## 5.1 Evidence ID 与 SHA-256 必须分离 — ❌ NEEDS-FIX
+## 5.1 Evidence ID 与 SHA-256 必须分离 — ✅ FIXED
 
 - `src/core/evidence/identity.ts:45-48` `deriveEvidenceId`:
   ```ts
@@ -16,6 +16,8 @@
 - `src/models.ts:300-305` even documents `id` as `sha256:<hex>` — the anti-pattern is enshrined in the type comment.
 - `CaseEvidenceFile` already keeps `sha256` as a **separate** field (models.ts:294-314), so the separation exists structurally; only the *assignment* is wrong.
 - **Proposed minimal fix**: `deriveEvidenceId` returns a stable object identity `evid:<uuid>` unconditionally (never content-derived). `sha256` stays as the content fingerprint; `verification`/`source` carry provenance. `isResolvedEvidenceId` is repurposed to mean "has a content hash" (checks `sha256`), not id format. `evidenceKeyFromSources` groups by `id` (object identity) with `name:size:lastModified` fallback for pre-identity records. Update the models.ts comment. No fake Evidence; large evidence can still enter flow because id is assigned immediately (no hash needed).
+
+> **Status: FIXED on branch `beta6`.** `deriveEvidenceId` now returns `evid:<uuid>` (object identity, never the hash); `isResolvedEvidenceId` checks the `evid:` prefix; `evidenceKeyFromSources` keys on `evid:` ids with sha256/legacy fallbacks; `buildEvidenceIdentity` normalizes `sha256` to lowercase; `models.ts:300` comment corrected. `tests/evidence-identity.test.ts` updated + new test asserting unique-per-acquisition identity independent of content. Tools still need to populate `source.id` from `buildEvidenceIdentity` at load — done where lineage requires it (§5.4/§5.5 handoff) and via a follow-up sweep.
 
 ## 5.2 一次用户动作 = 一个 Run — ✅ HOLD
 
@@ -77,7 +79,7 @@
 
 | # | Invariant | File(s) | Fix |
 |---|---|---|---|
-| 5.1 | id ≠ sha256 | identity.ts, models.ts | object identity `evid:<uuid>`; sha256 separate |
+| 5.1 | id ≠ sha256 | identity.ts, models.ts | ✅ FIXED: `evid:<uuid>` object identity; sha256 separate (tools still populate `source.id` in 5.4/5.5 sweep) |
 | 5.4 | derived artifact ≠ source | models.ts, toolHandoff.ts, BinaryTool, FirmwareAnalyzer | derived `CaseEvidenceFile` + `lineage` |
 | 5.5 | handoff lineage | toolHandoff.ts | `sourceEvidenceId/sourceRunId/sourceResultId/artifactId` |
 | 5.6 | finding machine-readable | result.ts + all builders + Reporter | add `code` (+`review`), keep `level` |

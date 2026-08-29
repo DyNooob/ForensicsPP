@@ -29,37 +29,49 @@ import {
 import type { CaseEvidenceFile } from "../src/models";
 
 describe("evidence identity (beta.6 P0-3)", () => {
-  it("derives a sha256-scoped id when a digest is present", () => {
+  it("derives a stable object identity (evid:<uuid>) and never uses the digest as the id", () => {
     const id = deriveEvidenceId({ name: "a.bin", size: 10, sha256: "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789" });
-    expect(id).toBe("sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+    expect(id.startsWith("evid:")).toBe(true);
+    expect(id).not.toContain("abcdef0123456789");
+    expect(id.length).toBe("evid:".length + 36);
   });
 
-  it("marks an unfingerprinted file as pending rather than faking a hash identity", () => {
+  it("assigns an object identity even when no digest is available (large evidence can enter flow before hashing)", () => {
     const id = deriveEvidenceId({ name: "a.bin", size: 10 });
-    expect(id.startsWith("pending:")).toBe(true);
-    expect(id.length).toBe("pending:".length + 36);
+    expect(id.startsWith("evid:")).toBe(true);
+    expect(id.length).toBe("evid:".length + 36);
   });
 
-  it("distinguishes resolved from unresolved identities", () => {
-    expect(isResolvedEvidenceId("sha256:" + "a".repeat(64))).toBe(true);
+  it("assigns a unique object identity per acquisition even for identical content (id != hash)", () => {
+    const same = { name: "a.bin", size: 10, sha256: "A".repeat(64) };
+    const first = deriveEvidenceId(same);
+    const second = deriveEvidenceId(same);
+    expect(first).not.toBe(second);
+    expect(first.startsWith("evid:")).toBe(true);
+    expect(second.startsWith("evid:")).toBe(true);
+  });
+
+  it("treats only evid:<uuid> as a resolved object identity", () => {
+    expect(isResolvedEvidenceId("evid:" + "a".repeat(8) + "-" + "a".repeat(4) + "-" + "a".repeat(4) + "-" + "a".repeat(4) + "-" + "a".repeat(12))).toBe(true);
+    expect(isResolvedEvidenceId("sha256:" + "a".repeat(64))).toBe(false);
     expect(isResolvedEvidenceId("pending:" + "a".repeat(36))).toBe(false);
     expect(isResolvedEvidenceId(undefined)).toBe(false);
-    expect(isResolvedEvidenceId("sha256:zzzz")).toBe(false);
   });
 
   it("builds an identity without mutating the input record", () => {
     const input: CaseEvidenceFile = { name: "a.bin", size: 10, type: "application/octet-stream", sha256: "B".repeat(64) };
     const identity = buildEvidenceIdentity(input, { source: "upload", verification: "unverified" });
-    expect(identity.id).toBe("sha256:" + "b".repeat(64));
+    expect(identity.id?.startsWith("evid:")).toBe(true);
+    expect(identity.sha256).toBe("b".repeat(64));
     expect(identity.source).toBe("upload");
     expect(identity.verification).toBe("unverified");
     expect(input.id).toBeUndefined();
   });
 
-  it("computes a stable store key from resolved ids, then raw hashes, then legacy dedup key", () => {
+  it("computes a stable store key from object ids, then raw hashes, then legacy dedup key", () => {
     const resolvedA = buildEvidenceIdentity({ name: "a.bin", size: 10, type: "application/octet-stream", sha256: "A".repeat(64) });
     const resolvedB = buildEvidenceIdentity({ name: "b.bin", size: 20, type: "application/octet-stream", sha256: "B".repeat(64) });
-    expect(evidenceKeyFromSources([resolvedA, resolvedB])).toBe(`sha256:${"a".repeat(64)}|sha256:${"b".repeat(64)}`);
+    expect(evidenceKeyFromSources([resolvedA, resolvedB])).toBe(`${resolvedA.id}|${resolvedB.id}`);
 
     const raw = { name: "c.bin", size: 30, type: "application/octet-stream", sha256: "C".repeat(64) };
     expect(evidenceKeyFromSources([raw])).toBe(`sha256:${"c".repeat(64)}`);

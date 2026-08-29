@@ -35,23 +35,24 @@ export type EvidenceVerificationStatus = "match" | "mismatch" | "missing" | "unv
  */
 export type EvidenceSource = "upload" | "handoff" | "carve" | "case-import" | "case-package" | "unknown";
 
-const SHA256_RE = /^[a-f0-9]{64}$/i;
+const EVID_RE = /^evid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * A resolved evidence identity derives its stable `id` from a SHA-256 digest.
- * An unresolved identity is explicitly marked `pending:<uuid>` so it can never
- * be mistaken for a hash-based identity.
+ * Stable object identity for a piece of evidence, assigned at acquisition.
+ *
+ * Deliberately NOT derived from the content SHA-256: two logically distinct
+ * evidence items can share bytes yet carry different provenance, and a large
+ * evidence file must be able to enter analysis before its hash is computed.
+ * The caller is responsible for retaining this identity across re-runs so that
+ * repeated analysis of the same file groups under one evidence key.
  */
 export function deriveEvidenceId(file: { name: string; size: number; sha256?: string }): string {
-  if (file.sha256 && SHA256_RE.test(file.sha256)) return `sha256:${file.sha256.toLowerCase()}`;
-  return `pending:${crypto.randomUUID()}`;
+  return `evid:${crypto.randomUUID()}`;
 }
 
-/** True only for SHA-256-derived identities — `pending:`/legacy ids are not resolved. */
+/** True only for a workbench-assigned object identity (`evid:<uuid>`). */
 export function isResolvedEvidenceId(id: string | undefined): boolean {
-  if (!id) return false;
-  const [, digest] = id.split(":", 2);
-  return id.startsWith("sha256:") && SHA256_RE.test(digest ?? "");
+  return typeof id === "string" && EVID_RE.test(id);
 }
 
 /**
@@ -66,6 +67,7 @@ export function buildEvidenceIdentity(
   return {
     ...file,
     id: deriveEvidenceId(file),
+    ...(file.sha256 ? { sha256: file.sha256.toLowerCase() } : {}),
     source: options.source ?? file.source ?? "unknown",
     verification: options.verification ?? file.verification ?? "unverified"
   };

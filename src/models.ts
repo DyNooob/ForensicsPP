@@ -302,6 +302,13 @@ export type CaseEvidenceFile = {
    * is available, otherwise `pending:<uuid>` to make the unresolved state explicit.
    * Optional for backward compatibility with pre-beta.6 records (.fppcase imports, legacy results).
    */
+  /**
+   * Forensic identity: a stable object identity assigned by the workbench at
+   * acquisition (`evid:<uuid>`), independent of content. The SHA-256 digest is
+   * tracked separately in `sha256` and used only as a verification fingerprint —
+   * it must never be used as the identity. Optional for backward compatibility
+   * with pre-beta.6 records (.fppcase imports, legacy results).
+   */
   id?: string;
   /**
    * Provenance of the evidence file within the workbench. Optional for backward compatibility.
