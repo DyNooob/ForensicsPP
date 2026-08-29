@@ -24,10 +24,20 @@ import type { ToolId } from "../../config/app";
 
 export type AnalysisFinding = {
   id?: string;
+  /**
+   * Stable, machine-readable significance code (snake_case, namespaced by analyzer,
+   * e.g. `android.debuggable`, `sqlite.deleted_record_recovered`, `windows.network_strings`).
+   * The Reporter must match findings by `code` (or `category` fallback), never by parsing
+   * the `title`/`detail` text. Assigned by the envelope builder, not by guessing from strings.
+   */
+  code?: string;
   level: "info" | "warn" | "error" | "critical" | string;
   title: string;
   detail: string;
+  /** Human-readable grouping; retained for backward compatibility. Prefer `code` for machine matching. */
   category?: string;
+  /** When true, a human examiner must eyeball this finding before it is treated as evidentiary. */
+  review?: boolean;
   confidence?: "low" | "medium" | "high";
 };
 

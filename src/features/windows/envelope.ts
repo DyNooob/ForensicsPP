@@ -171,7 +171,7 @@ export function buildWindowsEnvelope(analysis: WindowsArtifactAnalysis, meta: Wi
         { label: "Indicators", value: String(indicators.length) }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "windows.finding" })),
     indicators,
     artifacts,
     timeline,

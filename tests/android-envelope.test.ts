@@ -68,6 +68,18 @@ describe("buildAndroidEnvelope", () => {
     expect(envelope.findings.some((finding) => finding.title === "Cleartext traffic")).toBe(true);
   });
 
+  it("assigns machine-readable finding codes and review flags (5.6)", () => {
+    const envelope = buildAndroidEnvelope(makeInfo({ debuggable: "true", cleartextTraffic: "true" }));
+    // Every finding must carry a stable code (not derived from the title text).
+    expect(envelope.findings.every((finding) => typeof finding.code === "string" && finding.code.length > 0)).toBe(true);
+    const debuggable = envelope.findings.find((finding) => finding.title === "Debuggable");
+    expect(debuggable?.code).toBe("android-config");
+    expect(debuggable?.review).toBe(true);
+    const cleartext = envelope.findings.find((finding) => finding.title === "Cleartext traffic");
+    expect(cleartext?.code).toBe("android-config");
+    expect(cleartext?.review).toBe(true);
+  });
+
   it("reports unverified signatures as an error", () => {
     const envelope = buildAndroidEnvelope(makeInfo({
       signing: { present: true, blockOffset: 0, blockSize: 100, centralDirectoryOffset: 50, schemes: ["v2"], signers: [], unknownPairIds: [], warnings: [], verified: false }

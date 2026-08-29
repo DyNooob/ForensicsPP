@@ -130,7 +130,7 @@ export function buildSqliteEnvelope(analysis: SqliteForensicAnalysis, meta: Sqli
         { label: "Fragments", value: String(fragmentCount) }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "sqlite.finding" })),
     indicators: [],
     artifacts,
     timeline: [],

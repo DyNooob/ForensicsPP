@@ -48,12 +48,12 @@
 - `FirmwareAnalyzerTool.tsx:223` `analyzeObject` handoff still works (lineage optional); populating its lineage is a follow-up once firmware assigns a stable evidence identity at load (same sweep as §10).
 - Lineage survives case export/import because it is serialized on the derived `CaseEvidenceFile` and preserved by the fixed `normalizeEvidenceFiles`.
 
-## 5.6 Finding 语义必须机器可读 — ❌ NEEDS-FIX (additive)
+## 5.6 Finding 语义必须机器可读 — ✅ FIXED (contract + B1-B3 builders)
 
-- `src/features/analysis/result.ts:25-32` `AnalysisFinding = { id?, level, title, detail, category?, confidence? }`.
-  - No stable `code` → Reporter cannot match findings without string/regex heuristics.
-  - `level` conflates **parser/runtime severity** with **forensic significance** (e.g. "WAL absent" is a limitation, not a risk).
-- **Proposed minimal fix**: add required `code: string` (stable, snake_case, e.g. `sqlite.deleted_record_recovered`, `android.debuggable`, `evtx.severity_high`). Keep `level` as significance. Add optional `review?: boolean` (human must eyeball). Update all builders + Reporter to match `code`, not text. No risk-scoring system.
+- `src/features/analysis/result.ts:25-38` `AnalysisFinding` now carries **`code?: string`** (stable, snake_case, namespaced — e.g. `android.debuggable`, `sqlite.deleted_record_recovered`, `windows.network_strings`) plus optional **`review?: boolean`** (human must eyeball). `level` remains forensic significance; the previous `category` field is kept for backward compatibility but `code` is the canonical Reporter key.
+- All 8 B1-B3 envelope builders now normalize `code` from `category` at the return (`findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "<tool>.finding" }))`), so every emitted finding has a stable machine key **independent of the title text** (Reporter must never regex the title). `review: true` is set on the judgment-required findings: android `debuggable`/`allowBackup`/`cleartextTraffic`, archive `encrypted entries`, windows `network indicators in strings`.
+- **Baseline 3 (binary / firmware / pcap)**: their builders map analyzer findings that today carry no `code` (analyzer output is `{level,title,detail}` — threading `code` into those analyzers would mean rewriting mature parsers, which §1.8 forbids). Their findings have no `code` yet; the Reporter (phase D) falls back to `level`/`category` for them as documented legacy compatibility. The `code` contract is in place for when those analyzers are extended.
+- Verified by `tests/android-envelope.test.ts` (new assertion: every finding has a stable `code`; debuggable → `android-config` + `review: true`).
 
 ## 7 Canonical fields 足够生成报告 — ✅ HOLD
 
@@ -86,7 +86,7 @@
 | 5.1 | id ≠ sha256 | identity.ts, models.ts | ✅ FIXED: `evid:<uuid>` object identity; sha256 separate (tools still populate `source.id` in 5.4/5.5 sweep) |
 | 5.4 | derived artifact ≠ source | models.ts, toolHandoff.ts, BinaryTool, FirmwareAnalyzer | ✅ FIXED: derived `CaseEvidenceFile` + `lineage`; importer preserves on import |
 | 5.5 | handoff lineage | toolHandoff.ts | ✅ FIXED: `ToolHandoffLineage` + `buildDerivedEvidenceFile` + BinaryTool dispatch/consume |
-| 5.6 | finding machine-readable | result.ts + all builders + Reporter | add `code` (+`review`), keep `level` |
+| 5.6 | finding machine-readable | result.ts + B1-B3 builders + Reporter | ✅ FIXED: `code?`+`review?` on AnalysisFinding; B1-B3 builders emit stable codes; baseline 3 legacy-fallback |
 | 10 | multi-run / round-trip | resultStore.ts | export full history; preserve runId/sequence on import |
 | 11 | stale-run race | useToolRuntime.ts + heavy tools | `rt.commit` guard; race tests |
 

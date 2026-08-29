@@ -100,7 +100,7 @@ export function buildMemoryEnvelope(analysis: MemoryTriage, meta: MemoryEnvelope
         { label: "PE headers", value: String(peHits.length) }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "memory.finding" })),
     indicators: [],
     artifacts,
     timeline: [],

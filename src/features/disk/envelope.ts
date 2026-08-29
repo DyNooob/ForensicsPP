@@ -112,7 +112,7 @@ export function buildDiskImageEnvelope(analysis: DiskAnalysis, meta: DiskEnvelop
         { label: "Deleted entries", value: String(deletedEntries.length) }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "disk.finding" })),
     indicators: [],
     artifacts,
     timeline: [],

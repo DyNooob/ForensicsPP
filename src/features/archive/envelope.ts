@@ -75,7 +75,8 @@ export function buildArchiveEnvelope(analysis: ArchiveAnalysis, meta: ArchiveEnv
       title: "Encrypted entries",
       detail: `${encryptedEntries.length} entry/entries are encrypted (general-purpose bit 0); content cannot be previewed without a password.`,
       category: "archive-encrypted",
-      confidence: "high"
+      confidence: "high",
+      review: true
     });
   }
   if (totalUncompressed > 0 && ratio > 500) {
@@ -144,7 +145,7 @@ export function buildArchiveEnvelope(analysis: ArchiveAnalysis, meta: ArchiveEnv
         { label: "Ratio", value: Number.isFinite(ratio) ? `${ratio.toFixed(1)}:1` : "∞" }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "archive.finding" })),
     indicators: [],
     artifacts,
     timeline: [],

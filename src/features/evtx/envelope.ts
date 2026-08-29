@@ -195,7 +195,7 @@ export function buildEvtxEnvelope(file: EvtxFileAnalysis, meta: EvtxEnvelopeMeta
         { label: "Truncated", value: file.truncated ? "yes" : "no" }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "evtx.finding" })),
     indicators,
     artifacts,
     timeline: events.slice(0, EVTX_TIMELINE_CAP).map((event) => eventToTimeline(event, file.source)),

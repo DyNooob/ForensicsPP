@@ -143,7 +143,7 @@ export function buildDocumentForensicsEnvelope(analysis: DocumentAnalysis, meta:
         { label: "Encrypted", value: analysis.encrypted ? "yes" : "no" }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "document.finding" })),
     indicators,
     artifacts,
     timeline: [],

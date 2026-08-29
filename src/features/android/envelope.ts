@@ -59,13 +59,13 @@ export function buildAndroidEnvelope(info: AndroidManifestInfo, meta: AndroidEnv
   }
 
   if (isAffirmative(info.debuggable)) {
-    findings.push({ level: "warn", title: "Debuggable", detail: "android:debuggable=\"true\" — the app can be attached by a debugger; common in malware/sample builds.", category: "android-config", confidence: "high" });
+    findings.push({ level: "warn", title: "Debuggable", detail: "android:debuggable=\"true\" — the app can be attached by a debugger; common in malware/sample builds.", category: "android-config", confidence: "high", review: true });
   }
   if (isAffirmative(info.allowBackup)) {
-    findings.push({ level: "warn", title: "Allow backup", detail: "android:allowBackup=\"true\" — application data may be extracted via adb backup.", category: "android-config", confidence: "high" });
+    findings.push({ level: "warn", title: "Allow backup", detail: "android:allowBackup=\"true\" — application data may be extracted via adb backup.", category: "android-config", confidence: "high", review: true });
   }
   if (isAffirmative(info.cleartextTraffic)) {
-    findings.push({ level: "warn", title: "Cleartext traffic", detail: "android:usesCleartextTraffic=\"true\" — plaintext network traffic is permitted.", category: "android-config", confidence: "high" });
+    findings.push({ level: "warn", title: "Cleartext traffic", detail: "android:usesCleartextTraffic=\"true\" — plaintext network traffic is permitted.", category: "android-config", confidence: "high", review: true });
   }
 
   const dangerousPermissions = (info.permissionRows ?? []).filter((row) => row.severity === "high" || row.severity === "critical");
@@ -133,7 +133,7 @@ export function buildAndroidEnvelope(info: AndroidManifestInfo, meta: AndroidEnv
         { label: "Risky entries", value: String(riskyEntries.length) }
       ]
     },
-    findings,
+    findings: findings.map((f) => ({ ...f, code: f.code ?? f.category ?? "android.finding" })),
     indicators,
     artifacts,
     timeline: [],
