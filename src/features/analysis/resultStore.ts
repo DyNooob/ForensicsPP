@@ -90,21 +90,30 @@ export function publishAnalysisResult(toolId: ToolId, result: AnalysisEnvelope) 
   const key = evidenceKeyFromSources(result.source);
   const bucket = store.get(key) ?? new Map<ToolId, StoredRun>();
   const previous = bucket.get(toolId);
-  const sequence = (previous?.runs.length ?? 0) + 1;
+  // Preserve an already-stamped run (case import / cross-session restore) so the
+  // original runId + sequence survive the round-trip; otherwise stamp fresh.
+  // Sequence is monotonic (derived from the highest retained sequence), NOT from
+  // `runs.length` — runs are capped at MAX_HISTORY_PER_TOOL, so length-based
+  // numbering would repeat a sequence once the cap is hit and collide runIds.
+  const incomingRunId = result.run?.runId;
+  const incomingSequence = result.run?.sequence;
+  const priorSequence = previous
+    ? Math.max(0, ...previous.runs.map((r) => r.run.sequence ?? 0))
+    : 0;
+  const sequence = incomingSequence ?? priorSequence + 1;
+  const runId = incomingRunId ?? `${key}/${toolId}#${sequence}`;
   const stamped: AnalysisEnvelope = {
     ...result,
-    run: {
-      ...result.run,
-      runId: `${key}/${toolId}#${sequence}`,
-      sequence
-    }
+    run: { ...result.run, runId, sequence }
   };
-  bucket.set(toolId, {
-    current: stamped,
-    runs: [stamped, ...(previous?.runs ?? [])].slice(0, MAX_HISTORY_PER_TOOL)
-  });
+  const runs = [stamped, ...(previous?.runs ?? [])].slice(0, MAX_HISTORY_PER_TOOL);
+  // The "current" result is the most recent run for this evidence+tool, derived from
+  // sequence so a re-imported history reassembles correctly regardless of order.
+  const current = [...runs]
+    .sort((a, b) => (b.run.sequence ?? 0) - (a.run.sequence ?? 0))[0] ?? stamped;
+  bucket.set(toolId, { current, runs });
   store.set(key, bucket);
-  latestByTool.set(toolId, { key, result: stamped });
+  latestByTool.set(toolId, { key, result: current });
   notify(toolId);
 }
 
@@ -129,14 +138,27 @@ export function currentAnalysisResults() {
   return Array.from(latestByTool.entries()).map(([toolId, { result }]) => ({ toolId, result }));
 }
 
+/**
+ * Full run history (not just the latest per tool) for case export. Iterates every
+ * evidence bucket so repeated runs of the same tool against different evidence are
+ * all retained. Round-trips back through `restoreAnalysisResultSnapshots`.
+ */
 export function analysisResultSnapshots() {
-  return currentAnalysisResults().map(({ toolId, result }) => ({ toolId, result: caseSafeValue(result) as AnalysisEnvelope }));
+  const all: Array<{ toolId: ToolId; result: AnalysisEnvelope }> = [];
+  for (const bucket of store.values()) {
+    for (const [toolId, stored] of bucket) {
+      for (const run of stored.runs) {
+        all.push({ toolId, result: caseSafeValue(run) as AnalysisEnvelope });
+      }
+    }
+  }
+  return all;
 }
 
 export function restoreAnalysisResultSnapshots(value: unknown) {
   if (!Array.isArray(value)) return 0;
   let restored = 0;
-  for (const item of value.slice(0, 100)) {
+  for (const item of value.slice(0, 1000)) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
     if (typeof row.toolId !== "string" || !isToolId(row.toolId) || !row.result || typeof row.result !== "object") continue;
