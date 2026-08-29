@@ -23,16 +23,17 @@ import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, AInputNumber, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
-import type { EntropyAnalysis, FileAnalysis, FileEmbeddedSignature, StringsAnalysis, YaraScanResult } from "../models";
+import type { CaseEvidenceFile, EntropyAnalysis, FileAnalysis, FileEmbeddedSignature, StringsAnalysis, YaraScanResult } from "../models";
 import { analyzerForArtifact, analyzerTargetLabel } from "../core/analyzerRouting";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { evidenceReaderFromBlob, readEvidenceFully } from "../core/evidence/reader";
-import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
+import { buildEvidenceIdentity } from "../core/evidence/identity";
+import { clearAnalysisResult, currentAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { appVersion, type ToolId } from "../config/app";
 import { runWorkerTask } from "../utils/workerTask";
 import type { BinaryWorkerRequest } from "../features/file/file.worker";
-import { dispatchToolHandoff, subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
+import { buildDerivedEvidenceFile, dispatchToolHandoff, subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { useStoredState } from "../utils/storage";
 
 type HexRow = { offset: number; hex: string; ascii: string };
@@ -122,10 +123,35 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
   const offset = React.useMemo(() => parseByteOffset(offsetInput, Math.max(0, bytes.length - 1), 0), [bytes.length, offsetInput, parseByteOffset]);
   const hexRows = React.useMemo(() => binaryHexDumpRows(bytes, offset, viewLength), [binaryHexDumpRows, bytes, offset, viewLength]);
 
+  /** Stable forensic identity for the currently loaded file (upload or derived handoff). Assigned once per acquisition. */
+  const evidenceRef = React.useRef<CaseEvidenceFile | null>(null);
+  /** The File object the current `evidenceRef` was derived from; used to reuse identity across re-runs of the same file. */
+  const lastFileRef = React.useRef<File | null>(null);
+  /** When set, the next `handleFile` should treat the file as a Derived Artifact from this handoff. */
+  const handoffEvidenceRef = React.useRef<CaseEvidenceFile | null>(null);
+
   const handleFile = async (file: File | undefined) => {
     if (!file || !active) return;
     const requestId = ++requestRef.current;
     abortRef.current?.abort();
+    // Assign (or reuse) a stable evidence identity for this acquisition so re-runs
+    // accumulate under the same key and a handoff-derived file keeps its lineage.
+    if (handoffEvidenceRef.current) {
+      evidenceRef.current = handoffEvidenceRef.current;
+      lastFileRef.current = file;
+    } else if (lastFileRef.current !== file) {
+      handoffEvidenceRef.current = null;
+      evidenceRef.current = buildEvidenceIdentity(
+        {
+          name: file.name,
+          size: file.size,
+          type: file.type || "application/octet-stream",
+          lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
+        },
+        { source: "upload" }
+      );
+      lastFileRef.current = file;
+    }
     setDropActive(false);
     setError("");
     setStorageNotice("");
@@ -179,7 +205,7 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
         schemaVersion: "1",
         id: `binary-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         analyzer: { id: "binary", version: appVersion },
-        source: [{
+        source: [evidenceRef.current ?? {
           name: file.name,
           size: file.size,
           type: file.type || "application/octet-stream",
@@ -252,7 +278,10 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
     if (!active) return;
     const consume = () => {
       const handoff = takeToolHandoff("binary");
-      if (handoff) void handleFileRef.current(handoff.file);
+      if (handoff) {
+        handoffEvidenceRef.current = buildDerivedEvidenceFile(handoff, handoff.file);
+        void handleFileRef.current(handoff.file);
+      }
     };
     consume();
     return subscribeToolHandoff("binary", consume);
@@ -262,6 +291,9 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
     requestRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    evidenceRef.current = null;
+    lastFileRef.current = null;
+    handoffEvidenceRef.current = null;
     workspace.clear();
     clearAnalysisResult("binary");
     setAnalysis(null);
@@ -385,7 +417,14 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
       sourceTool: "binary",
       targetTool,
       label: `${payload.label} @ 0x${payload.offset.toString(16).toUpperCase()}`,
-      file: new File([copy.buffer], name, { type: payload.mime || "application/octet-stream" })
+      file: new File([copy.buffer], name, { type: payload.mime || "application/octet-stream" }),
+      lineage: {
+        sourceEvidenceId: evidenceRef.current?.id ?? "",
+        sourceRunId: currentAnalysisResult("binary")?.run.runId,
+        artifactId: `embedded-${index}-${payload.offset}`,
+        artifactType: "embedded-file",
+        artifactLabel: payload.label
+      }
     });
     setActiveTool(targetTool);
   };

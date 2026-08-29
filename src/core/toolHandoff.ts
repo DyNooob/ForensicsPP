@@ -20,6 +20,28 @@
  */
 
 import type { ToolId } from "../config/app";
+import type { CaseEvidenceFile } from "../models";
+import { buildEvidenceIdentity } from "./evidence/identity";
+
+/**
+ * Minimal, stable provenance carried with a handoff so the receiving tool can
+ * register the delivered file as a Derived Artifact that traces back to its
+ * origin Evidence / Analysis Run / Artifact. Intentionally flat — no DAG.
+ */
+export type ToolHandoffLineage = {
+  /** Identity of the Source Evidence the handed-off file was derived from. */
+  sourceEvidenceId: string;
+  /** Run id of the analysis that produced the derived artifact. */
+  sourceRunId?: string;
+  /** Result (envelope) id of the analysis that produced the derived artifact. */
+  sourceResultId?: string;
+  /** Artifact id within the source result (e.g. `embedded-0-<offset>`). */
+  artifactId?: string;
+  /** Kind of the derived artifact (e.g. `embedded-file`, `attachment`). */
+  artifactType?: string;
+  /** Human label for the derived artifact. */
+  artifactLabel?: string;
+};
 
 export type ToolHandoff = {
   id: string;
@@ -28,6 +50,8 @@ export type ToolHandoff = {
   file: File;
   label: string;
   createdAt: number;
+  /** Optional provenance so the target can register a Derived Artifact with lineage. */
+  lineage?: ToolHandoffLineage;
 };
 
 type Listener = () => void;
@@ -85,4 +109,35 @@ export function clearToolHandoff(toolId: ToolId) {
 
 export function clearToolHandoffs() {
   pending.clear();
+}
+
+/**
+ * Build a Derived Artifact evidence record for a file delivered via handoff.
+ * The returned `CaseEvidenceFile` carries a fresh stable object identity
+ * (`evid:<uuid>`), `source: "handoff"`, and a `lineage` block tracing back to
+ * the origin Evidence / Run / Artifact named in `handoff.lineage`. This is what
+ * lets the receiving tool answer "this result came from which Source Evidence?"
+ * after a Case export/import round-trip.
+ */
+export function buildDerivedEvidenceFile(handoff: ToolHandoff, file: File): CaseEvidenceFile {
+  const base = buildEvidenceIdentity(
+    {
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/octet-stream",
+      lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
+    },
+    { source: "handoff" }
+  );
+  const lineage = handoff.lineage;
+  if (!lineage) return base;
+  return {
+    ...base,
+    lineage: {
+      originEvidenceId: lineage.sourceEvidenceId,
+      ...(lineage.sourceRunId ? { originRunId: lineage.sourceRunId } : {}),
+      ...(lineage.sourceResultId ? { originResultId: lineage.sourceResultId } : {}),
+      ...(lineage.artifactId ? { originArtifactId: lineage.artifactId } : {})
+    }
+  };
 }

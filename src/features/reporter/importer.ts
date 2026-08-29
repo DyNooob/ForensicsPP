@@ -48,6 +48,9 @@ function requiredString(value: unknown, field: string, index: number, max = 5000
   return result.slice(0, max);
 }
 
+const ALLOWED_EVIDENCE_SOURCES = ["upload", "handoff", "carve", "case-import", "case-package", "unknown"] as const;
+const ALLOWED_EVIDENCE_VERIFICATION = ["match", "mismatch", "missing", "unverified"] as const;
+
 function normalizeEvidenceFiles(value: unknown): CaseEvidenceFile[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_IMPORTED_FILES).flatMap((item) => {
@@ -57,12 +60,34 @@ function normalizeEvidenceFiles(value: unknown): CaseEvidenceFile[] {
     const size = typeof source.size === "number" && Number.isFinite(source.size) && source.size >= 0 ? source.size : null;
     if (!name || size == null) return [];
     const sha256 = stringValue(source.sha256).trim();
+    const id = stringValue(source.id).trim();
+    const sourceKind = stringValue(source.source).trim();
+    const verification = stringValue(source.verification).trim();
+    const lineage = record(source.lineage);
+    const originEvidenceId = lineage ? stringValue(lineage.originEvidenceId).trim() : "";
     return [{
       name: name.slice(0, 1000),
       size,
       type: stringValue(source.type, "application/octet-stream", 300),
       ...(stringValue(source.lastModified).trim() ? { lastModified: stringValue(source.lastModified).trim().slice(0, 80) } : {}),
-      ...(SHA256_PATTERN.test(sha256) ? { sha256: sha256.toLowerCase() } : {})
+      ...(SHA256_PATTERN.test(sha256) ? { sha256: sha256.toLowerCase() } : {}),
+      ...(id ? { id: id.slice(0, 200) } : {}),
+      ...(ALLOWED_EVIDENCE_SOURCES.includes(sourceKind as (typeof ALLOWED_EVIDENCE_SOURCES)[number])
+        ? { source: sourceKind as CaseEvidenceFile["source"] }
+        : {}),
+      ...(ALLOWED_EVIDENCE_VERIFICATION.includes(verification as (typeof ALLOWED_EVIDENCE_VERIFICATION)[number])
+        ? { verification: verification as CaseEvidenceFile["verification"] }
+        : {}),
+      ...(originEvidenceId
+        ? {
+          lineage: {
+            originEvidenceId: originEvidenceId.slice(0, 200),
+            ...(lineage && stringValue(lineage.originRunId).trim() ? { originRunId: stringValue(lineage.originRunId).trim().slice(0, 200) } : {}),
+            ...(lineage && stringValue(lineage.originResultId).trim() ? { originResultId: stringValue(lineage.originResultId).trim().slice(0, 200) } : {}),
+            ...(lineage && stringValue(lineage.originArtifactId).trim() ? { originArtifactId: stringValue(lineage.originArtifactId).trim().slice(0, 200) } : {})
+          }
+        }
+        : {})
     }];
   });
 }

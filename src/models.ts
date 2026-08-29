@@ -318,6 +318,17 @@ export type CaseEvidenceFile = {
    * Verification state. Optional for backward compatibility; defaults to "unverified".
    */
   verification?: "match" | "mismatch" | "missing" | "unverified";
+  /**
+   * Provenance for a Derived Artifact: traces this evidence back to the Source
+   * Evidence / Analysis Run / Artifact it was derived from (via Tool Handoff).
+   * Present only when `source` is `"handoff"` or `"carve"`.
+   */
+  lineage?: {
+    originEvidenceId: string;
+    originRunId?: string;
+    originResultId?: string;
+    originArtifactId?: string;
+  };
 };
 
 export type CaseTimelineEvent = Pick<TimelineEvent, "iso" | "local" | "raw" | "format" | "line" | "source" | "context" | "epochMs">;

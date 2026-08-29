@@ -32,17 +32,21 @@
 - `src/features/analysis/resultStore.ts:82-93` `evidenceKeyFromSources` joins resolved ids with `|`. ✓
 - **Needs test (not fix)**: browserartifacts publishing multiple real sources preserves all of them through store → case serialize → import.
 
-## 5.4 Derived Artifact 与 Source Evidence 必须分开 — ❌ NEEDS-FIX
+## 5.4 Derived Artifact 与 Source Evidence 必须分开 — ✅ FIXED
 
-- `src/models.ts`: `CaseEvidenceFile` exists, but there is **no** derived-artifact type carrying an origin link. `AnalysisArtifact` (result.ts:34-46) has `parentId`/`depth` but **no** origin `evidenceId`/`runId`.
-- Handoff payload (`src/core/toolHandoff.ts:24-31`) carries only `file: File` — no `artifactId`/`sourceEvidenceId`/`sourceRunId`.
-- Dispatch sites `BinaryTool.tsx:384` (`analyzeEmbedded` → `analyzerForArtifact`) and `FirmwareAnalyzerTool.tsx:223` (`analyzeObject`) pass **no lineage** — the carved/extracted object IS a derived artifact but its origin is lost.
-- **Proposed minimal fix (coupled with 5.5)**: `ToolHandoff` gains optional `sourceEvidenceId?`, `sourceRunId?`, `sourceResultId?`, `artifactId?`. The target tool, on `takeToolHandoff`, builds a derived `CaseEvidenceFile` with `source: "handoff"` plus a `lineage` field `{ originEvidenceId, originRunId, originResultId, artifactId }`. The derived artifact's `id` is still a stable `evid:<uuid>` (per 5.1); binary/firmware envelope `source` references it. Chain `mail.eml → attachment.exe → binary Run R2` becomes traceable. No tool imports another tool's internals.
+- `src/core/toolHandoff.ts`: added `ToolHandoffLineage { sourceEvidenceId, sourceRunId?, sourceResultId?, artifactId?, artifactType?, artifactLabel? }` and `ToolHandoff.lineage?`.
+- `src/models.ts:312-321`: `CaseEvidenceFile` now carries optional `lineage: { originEvidenceId, originRunId?, originResultId?, originArtifactId? }` (present only for `handoff`/`carve` sources).
+- Added `buildDerivedEvidenceFile(handoff, file)` → a derived `CaseEvidenceFile` with fresh `evid:<uuid>` identity, `source: "handoff"`, and `lineage` copied from `handoff.lineage`. The derived artifact gets its OWN identity — it never collapses to the origin (two distinct `evid:` ids).
+- `BinaryTool.tsx`: on `takeToolHandoff` it builds the derived evidence via `buildDerivedEvidenceFile` and reuses it across re-runs; `publishAnalysisResult` now uses `source: [evidenceRef.current]` (stable per-acquisition identity). The `mail.eml → attachment.exe → binary Run R2` chain is now representable.
+- `src/features/reporter/importer.ts:51` `normalizeEvidenceFiles` **now preserves** `id` / `source` / `verification` / `lineage` on import (previously dropped them all — a real provenance break). Invalid `source`/`verification` enum values are stripped rather than trusted.
+- Verified by `tests/handoff-lineage.test.ts` (5 tests): helper correctness, in-memory handoff round-trip, case-import preservation, and rejection of fabricated lineage.
 
-## 5.5 Tool Handoff 必须补足 lineage — ❌ NEEDS-FIX
+## 5.5 Tool Handoff 必须补足 lineage — ✅ FIXED
 
-- `src/core/toolHandoff.ts:24-31` `ToolHandoff = { id, sourceTool, targetTool, file, label, createdAt }`. No lineage.
-- Same fix as 5.4: add `sourceEvidenceId?`, `sourceRunId?`, `sourceResultId?`, `artifactId?`. Keep `file` for bytes only; never couple tool internals. Lineage must survive case export/import (serialized on the derived `CaseEvidenceFile` + envelope `source`).
+- `src/core/toolHandoff.ts:24-49` `ToolHandoff` now carries optional `lineage`. `dispatchToolHandoff` forwards it (the input type is `Omit<ToolHandoff, "id" | "createdAt">`, so `lineage?` flows through).
+- `BinaryTool.tsx:384` `analyzeEmbedded` now dispatches with `lineage: { sourceEvidenceId: evidenceRef.current?.id, sourceRunId: currentAnalysisResult("binary")?.run.runId, artifactId: embedded-<i>-<offset>, artifactType: "embedded-file", artifactLabel }`. No tool imports another tool's internals — lineage is populated from the tool's own published evidence id + runId.
+- `FirmwareAnalyzerTool.tsx:223` `analyzeObject` handoff still works (lineage optional); populating its lineage is a follow-up once firmware assigns a stable evidence identity at load (same sweep as §10).
+- Lineage survives case export/import because it is serialized on the derived `CaseEvidenceFile` and preserved by the fixed `normalizeEvidenceFiles`.
 
 ## 5.6 Finding 语义必须机器可读 — ❌ NEEDS-FIX (additive)
 
@@ -80,8 +84,8 @@
 | # | Invariant | File(s) | Fix |
 |---|---|---|---|
 | 5.1 | id ≠ sha256 | identity.ts, models.ts | ✅ FIXED: `evid:<uuid>` object identity; sha256 separate (tools still populate `source.id` in 5.4/5.5 sweep) |
-| 5.4 | derived artifact ≠ source | models.ts, toolHandoff.ts, BinaryTool, FirmwareAnalyzer | derived `CaseEvidenceFile` + `lineage` |
-| 5.5 | handoff lineage | toolHandoff.ts | `sourceEvidenceId/sourceRunId/sourceResultId/artifactId` |
+| 5.4 | derived artifact ≠ source | models.ts, toolHandoff.ts, BinaryTool, FirmwareAnalyzer | ✅ FIXED: derived `CaseEvidenceFile` + `lineage`; importer preserves on import |
+| 5.5 | handoff lineage | toolHandoff.ts | ✅ FIXED: `ToolHandoffLineage` + `buildDerivedEvidenceFile` + BinaryTool dispatch/consume |
 | 5.6 | finding machine-readable | result.ts + all builders + Reporter | add `code` (+`review`), keep `level` |
 | 10 | multi-run / round-trip | resultStore.ts | export full history; preserve runId/sequence on import |
 | 11 | stale-run race | useToolRuntime.ts + heavy tools | `rt.commit` guard; race tests |
