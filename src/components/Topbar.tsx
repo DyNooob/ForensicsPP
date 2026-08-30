@@ -20,7 +20,8 @@
  */
 
 import React from "react";
-import { CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SettingOutlined } from "@ant-design/icons";
+import { Drawer } from "antd";
+import { CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { ASegmentedButton, ASegmentedGroup } from "./ui";
 import { GithubIconButton } from "./GithubIconButton";
 import type { ToolDefinition } from "../config/app";
@@ -62,7 +63,9 @@ export function Topbar({
   onOpenCommandPalette,
   onSetLang
 }: TopbarProps) {
+  const [helpOpen, setHelpOpen] = React.useState(false);
   return (
+    <>
     <header className={`tool-topbar ${activeTool === "home" ? "home-topbar" : ""}`}>
       <div className="tool-topbar-frame">
         <button
@@ -107,6 +110,17 @@ export function Topbar({
                 <FileAddOutlined aria-hidden="true" />
               </button>
             )}
+            {activeTool !== "home" && active.help && (
+              <button
+                className="top-action-icon help-toggle"
+                type="button"
+                aria-label={t.toolHelp}
+                title={t.toolHelp}
+                onClick={() => setHelpOpen(true)}
+              >
+                <QuestionCircleOutlined aria-hidden="true" />
+              </button>
+            )}
             <button
               className="top-action-icon settings-toggle"
               type="button"
@@ -137,5 +151,15 @@ export function Topbar({
         </div>
       </div>
     </header>
+    <Drawer
+      title={toolTitle(active)}
+      open={helpOpen}
+      onClose={() => setHelpOpen(false)}
+      width={420}
+      styles={{ body: { whiteSpace: "pre-wrap", lineHeight: 1.7 } }}
+    >
+      {active.help?.[lang]}
+    </Drawer>
+    </>
   );
 }
