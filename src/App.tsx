@@ -40,6 +40,10 @@ import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFile
 import { rememberedTimelineEvents } from "./features/reporter/timeline";
 import { currentAnalysisResult, subscribeAnalysisResult } from "./features/analysis/resultStore";
 import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/result";
+import { useStaleVersion } from "./app/useStaleVersion";
+import { useServiceWorker } from "./app/useServiceWorker";
+import { useLegalConsent } from "./app/useLegalConsent";
+import { useCacheClear } from "./app/useCacheClear";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
 const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
@@ -60,10 +64,9 @@ export function App() {
   const [themeMode, setThemeMode] = useStoredState<ThemeMode>("app.themeMode", "light", isThemeModeValue);
   const [themeColor, setThemeColor] = useStoredState("app.themeColor", themePresets[0].hex, isStringValue);
   const [themeDefaultMigrated, setThemeDefaultMigrated] = useStoredState("app.themeDefaultV070", false, isBooleanValue);
-  const [acceptedLegalVersion, setAcceptedLegalVersion] = useStoredState("legal.acceptedVersion", "", isStringValue);
+  const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [cacheClearArmed, setCacheClearArmed] = React.useState(false);
-  const [cacheClearError, setCacheClearError] = React.useState(false);
+  const { cacheClearArmed, cacheClearError, setCacheClearError, clearLocalWorkspace } = useCacheClear(settingsOpen);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState("");
   const [reporterOpen, setReporterOpen] = React.useState(false);
@@ -101,19 +104,7 @@ export function App() {
   );
   const appliedTheme = themeMode === "auto" ? systemTheme : themeMode === "dark" ? "dark" : "light";
 
-  // Stale-version notice: warn when the installed version is over 90 days old.
-  const STALE_VERSION_DAYS = 90;
-  const DAY_MS = 86400000;
-  const releaseTime = React.useMemo(() => Date.parse(appReleaseDate), [appReleaseDate]);
-  // Fully computed staleness check: once `releaseDate + 90 days` passes the
-  // current date, the version is stale. No hardcoded expiry date to maintain —
-  // only the release date constant in src/config/app.ts needs bumping.
-  const isVersionStale = Number.isFinite(releaseTime) && Date.now() > releaseTime + STALE_VERSION_DAYS * DAY_MS;
-  // Session-only dismissal: a fresh refresh shows the banner again; switching
-  // tools within the session must NOT resurrect it (no persistence).
-  const [staleBannerDismissed, setStaleBannerDismissed] = React.useState(false);
-  const showStaleBanner = isVersionStale && !staleBannerDismissed;
-  const dismissStaleBanner = () => setStaleBannerDismissed(true);
+  const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
 
   const displayThemeColor = React.useMemo(
     () => themeDisplayColor(resolvedThemeColor, appliedTheme),
@@ -471,25 +462,7 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [toolLinkMessage]);
 
-  React.useEffect(() => {
-    if (window.isSecureContext && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register(new URL("./sw.js", document.baseURI).href).catch(() => undefined);
-    }
-  }, []);
-
-
-  React.useEffect(() => {
-    if (!settingsOpen) {
-      setCacheClearArmed(false);
-      setCacheClearError(false);
-    }
-  }, [settingsOpen]);
-
-  React.useEffect(() => {
-    if (!cacheClearArmed) return;
-    const timer = window.setTimeout(() => setCacheClearArmed(false), 4000);
-    return () => window.clearTimeout(timer);
-  }, [cacheClearArmed]);
+  useServiceWorker();
 
   const openSettingsPanel = React.useCallback(() => {
     modalOpenGuardRef.current.settings = performance.now();
@@ -649,21 +622,6 @@ export function App() {
   const resetThemeAppearance = () => {
     const fallback = themePresets[0].hex;
     setThemeColor(fallback);
-  };
-
-  const clearLocalWorkspace = async () => {
-    if (!cacheClearArmed) {
-      setCacheClearArmed(true);
-      return;
-    }
-    try {
-      await clearForensicsStorage();
-      window.location.hash = "#home";
-      window.location.reload();
-    } catch {
-      setCacheClearArmed(false);
-      setCacheClearError(true);
-    }
   };
 
   const copyCurrentToolLink = () => {
