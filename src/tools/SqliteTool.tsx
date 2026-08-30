@@ -387,7 +387,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       setQueryHistory(snapshot.queryHistory);
       setDirty(snapshot.dirty);
       setUndoState(null);
-      setQueryResult(sqliteEmptyDataSet(english ? "Last change undone" : "已撤销上一步修改"));
+      setQueryResult(sqliteEmptyDataSet(t.last_change_undone));
       setEditing(null);
       setCreating(null);
       setSelectedCell(null);
@@ -524,9 +524,9 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       return;
     }
     modalApi.confirm({
-      title: english ? "Discard unexported changes?" : "放弃尚未导出的修改？",
-      content: english ? "The current SQLite changes cannot be recovered after continuing." : "继续后，当前 SQLite 修改将无法恢复。",
-      okText: english ? "Continue" : "继续",
+      title: t.discard_unexported_changes,
+      content: t.the_current_sqlite_changes_cannot_be_recovered_after_continuing,
+      okText: t.continue,
       cancelText: t.cancelEdit,
       okButtonProps: { danger: true },
       onOk: action
@@ -671,7 +671,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     if (!active || !files.length) return;
     const requestId = ++sqliteFileRequestRef.current;
     const databaseFile = files.find((file) => !/(?:-wal|-shm|\.wal|\.shm)$/i.test(file.name));
-    if (!databaseFile) { setError(english ? "Select the SQLite database together with its WAL/SHM files." : "请同时选择 SQLite 数据库主文件。"); return; }
+    if (!databaseFile) { setError(t.select_the_sqlite_database_together_with_its_wal_shm_files); return; }
     const baseName = databaseFile.name.replace(/\.(?:db|sqlite|sqlite3)$/i, "");
     const walFile = files.find((file) => /(?:-wal|\.wal)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-wal|\.wal)$/i.test(file.name));
     const shmFile = files.find((file) => /(?:-shm|\.shm)$/i.test(file.name) && (file.name.startsWith(databaseFile.name) || file.name.startsWith(baseName))) ?? files.find((file) => /(?:-shm|\.shm)$/i.test(file.name));
@@ -679,8 +679,8 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     if (databaseFile.size > SQLITE_DATABASE_LIMIT || totalSize > SQLITE_INPUT_LIMIT) {
       setSqliteDropActive(false);
       setError(databaseFile.size > SQLITE_DATABASE_LIMIT
-        ? (english ? "The SQLite database exceeds the 256 MiB browser limit." : "SQLite 主数据库超过 256 MiB 浏览器上限。")
-        : (english ? "The selected SQLite files exceed the 320 MiB combined limit." : "所选 SQLite 文件总大小超过 320 MiB 上限。"));
+        ? (t.the_sqlite_database_exceeds_the_256_mib_browser_limit)
+        : (t.the_selected_sqlite_files_exceed_the_320_mib_combined_limit));
       return;
     }
     setSqliteDropActive(false);
@@ -732,7 +732,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const { value: session, error: restoreError } = await readToolSessionResult<SqliteStoredSession>("sqlite");
       if (restoreError) {
         setSessionStatus("error");
-        setError(english ? "The saved SQLite workspace could not be restored." : "保存的 SQLite 工作区无法恢复，请重新选择数据库文件。");
+        setError(t.the_saved_sqlite_workspace_could_not_be_restored);
         return;
       }
       if (!session || dbRef.current || sqliteFileRequestRef.current !== restoreRequestId) return;
@@ -811,7 +811,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const changedColumns = data.columns.filter((column) => before[column] !== after[column]);
       const params = data.columns.map((column, index) => coerceSqliteEditValue(data.values[editing.rowIndex]?.[index] ?? null, editing.values[column] ?? ""));
       const rowidIdentifier = sqliteInternalRowidIdentifier(columns);
-      if (!rowidIdentifier) throw new Error(english ? "This table has no safe internal row identifier and is read-only." : "当前表没有可安全使用的内部行号，已保持只读。");
+      if (!rowidIdentifier) throw new Error(t.this_table_has_no_safe_internal_row_identifier_and_is_read_only);
       db.run(`UPDATE ${quoteSqlIdentifier(activeTable.name)} SET ${assignments} WHERE ${quoteSqlIdentifier(rowidIdentifier)} = ?`, [...params, editing.rowid]);
       setUndoState(undo);
       appendChange({
@@ -841,7 +841,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const before = displaySqliteValue(selectedCell.value);
       const after = displaySqliteValue(nextValue);
       const rowidIdentifier = sqliteInternalRowidIdentifier(columns);
-      if (!rowidIdentifier) throw new Error(english ? "This table has no safe internal row identifier and is read-only." : "当前表没有可安全使用的内部行号，已保持只读。");
+      if (!rowidIdentifier) throw new Error(t.this_table_has_no_safe_internal_row_identifier_and_is_read_only);
       db.run(`UPDATE ${quoteSqlIdentifier(activeTable.name)} SET ${quoteSqlIdentifier(selectedCell.column)} = ? WHERE ${quoteSqlIdentifier(rowidIdentifier)} = ?`, [nextValue, selectedCell.rowid]);
       setUndoState(undo);
       appendChange({
@@ -911,7 +911,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const undo = createUndoSnapshot();
       const before = Object.fromEntries(data.columns.map((column, index) => [column, displaySqliteValue(data.values[rowIndex]?.[index] ?? null)]));
       const rowidIdentifier = sqliteInternalRowidIdentifier(columns);
-      if (!rowidIdentifier) throw new Error(english ? "This table has no safe internal row identifier and is read-only." : "当前表没有可安全使用的内部行号，已保持只读。");
+      if (!rowidIdentifier) throw new Error(t.this_table_has_no_safe_internal_row_identifier_and_is_read_only);
       db.run(`DELETE FROM ${quoteSqlIdentifier(activeTable.name)} WHERE ${quoteSqlIdentifier(rowidIdentifier)} = ?`, [rowid]);
       setUndoState(undo);
       appendChange({
@@ -936,7 +936,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     const db = dbRef.current;
     if (!db) return;
     if (queryMutating && !editingEnabled) {
-      setError(english ? "Enable edit mode before running a modifying statement." : "执行修改语句前请先开启编辑模式。");
+      setError(t.enable_edit_mode_before_running_a_modifying_statement);
       return;
     }
     try {
@@ -1026,7 +1026,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const exported = loadSqliteTableRowsForExport(db, activeTable, columns, tableFilter, sortColumn, sortDirection, 50000, tableFilterColumn);
       downloadDataCsv(exported, activeTable.name);
       if (exported.message.includes("capped")) {
-        messageApi.info(english ? "CSV export is capped at 50,000 rows." : "CSV 导出最多包含 50,000 行。", 4);
+        messageApi.info(t.csv_export_is_capped_at_50_000_rows, 4);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -1091,23 +1091,23 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     ? { edit: "Edit", copy: "Copy", delete: "Del" }
     : { edit: "改", copy: "复制", delete: "删" };
   const sqliteLabels = React.useMemo(() => ({
-    name: english ? "Name" : "名称",
-    type: english ? "Type" : "类型",
-    table: english ? "Table" : "当前表",
+    name: t.name,
+    type: t.componentType,
+    table: t.table,
     totalRows: english ? `${t.rows} Total` : `${t.rows}总数`,
-    page: english ? "Page" : "分页",
-    changes: english ? "Changes" : "修改",
-    rows: english ? "rows" : "行",
-    time: english ? "Time" : "时间",
-    action: english ? "Action" : "操作",
-    row: english ? "Row" : "行",
-    column: english ? "Column" : "列",
-    detail: english ? "Detail" : "详情",
-    yes: english ? "yes" : "是",
-    no: english ? "no" : "否",
-    unique: english ? "Unique" : "唯一",
-    notNull: english ? "Not null" : "非空",
-    defaultValue: english ? "Default" : "默认值"
+    page: t.page,
+    changes: t.changes,
+    rows: t.rows_2,
+    time: t.time,
+    action: t.action,
+    row: t.row,
+    column: t.column,
+    detail: t.detail,
+    yes: t.yes_2,
+    no: t.no_2,
+    unique: t.unique,
+    notNull: t.not_null,
+    defaultValue: t.default
   }), [english, t.rows]);
   const sqliteObjectType = React.useCallback((type: string) => {
     if (english) return type;
@@ -1118,11 +1118,11 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     return type;
   }, [english]);
   const sqliteSessionLabel = sessionStatus === "saved"
-    ? (english ? "saved in browser" : "已保存到浏览器")
+    ? (t.saved_in_browser)
     : sessionStatus === "too-large"
-      ? (english ? "too large for automatic restore" : "文件过大，不自动保存")
+      ? (t.too_large_for_automatic_restore)
       : sessionStatus === "error"
-        ? (english ? "automatic restore unavailable" : "无法自动保存")
+        ? (t.automatic_restore_unavailable)
         : "";
   const sqlitePageStatus = data.values.length
     ? `${data.values.length}${data.totalRows == null ? "" : `/${data.totalRows}`} ${sqliteLabels.rows}`
@@ -1132,7 +1132,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       {messageContextHolder}
       {modalContextHolder}
       <div className="tool-panel wide-panel sqlite-source-panel">
-        <PanelTitle title={english ? "SQLite database" : "SQLite 数据库"} />
+        <PanelTitle title={t.sqlite_database} />
         <input className="hidden-file-input" ref={inputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; requestFiles(files); }} />
         <div className={`desktop-drop-zone ${isSqliteDropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
@@ -1140,11 +1140,11 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
           onDragOver={(event) => { event.preventDefault(); setSqliteDropActive(true); }} onDragLeave={() => setSqliteDropActive(false)}
           onDrop={(event) => { event.preventDefault(); setSqliteDropActive(false); requestFiles(Array.from(event.dataTransfer.files ?? [])); }}>
           <strong>{fileName || t.dropFileTitle}</strong>
-          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${english ? "checksum verified" : "校验通过"}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${english ? "SHM detected" : "已检测 SHM"}` : ""}${sqliteSessionLabel ? ` · ${sqliteSessionLabel}` : ""}` : (forensicLoading ? (english ? "Opening database and checking pages" : "正在打开数据库并检查页面") : (english ? "Select the database and optional -wal/-shm files together" : "可同时选择数据库及对应的 -wal/-shm 文件"))}</span>
+          <span>{hasSqliteDb ? `${formatBytes(fileSize)} · ${tables.length} ${t.sqliteTables}${walInfo ? ` · WAL ${walInfo.committedFrames}/${walInfo.frames}, ${t.checksum_verified}${walInfo.invalidFrame ? `, ${english ? `frame ${walInfo.invalidFrame} ignored` : `第 ${walInfo.invalidFrame} 帧已忽略`}` : ""}` : ""}${hasShm ? ` · ${t.shm_detected}` : ""}${sqliteSessionLabel ? ` · ${sqliteSessionLabel}` : ""}` : (forensicLoading ? (t.opening_database_and_checking_pages) : (t.select_the_database_and_optional_wal_shm_files_together))}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" loading={forensicLoading} disabled={forensicLoading} onClick={() => inputRef.current?.click()}>{t.sqliteOpenFile}</AButton>
-          {forensicLoading && <AButton variant="outlined" icon={<StopOutlined aria-hidden="true" />} onClick={() => forensicTaskRef.current?.abort()}>{english ? "Cancel" : "取消"}</AButton>}
+          {forensicLoading && <AButton variant="outlined" icon={<StopOutlined aria-hidden="true" />} onClick={() => forensicTaskRef.current?.abort()}>{t.cancelEdit}</AButton>}
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
           <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={() => confirmDiscardBefore(clearSqliteWorkspace)}>{t.clear}</AButton>
         </div>
@@ -1154,20 +1154,20 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       {hasSqliteDb && <div className="sqlite-admin-shell wide-panel">
         <aside className="tool-panel sqlite-table-browser-panel">
           <div className="panel-heading-row"><PanelTitle title={fileName || t.sqliteTables} /><span className="status-pill">{visibleTables.length}/{tables.length}</span></div>
-          <input className="text-input" aria-label={english ? "Search tables and views" : "搜索表或视图"} value={tableSearch} onChange={(event) => setTableSearch(event.currentTarget.value)} placeholder={english ? "Search tables" : "搜索表或视图"} />
+          <input className="text-input" aria-label={t.search_tables_and_views} value={tableSearch} onChange={(event) => setTableSearch(event.currentTarget.value)} placeholder={t.search_tables} />
           <div className="sqlite-simple-table-list">{visibleTables.map((table) => <button className={table.name === selectedTable ? "active" : ""} type="button" key={`${table.type}-${table.name}`} onClick={() => { setSelectedTable(table.name); setOffset(0); }}><strong>{table.name}</strong><span>{sqliteObjectType(table.type)} · {table.rows ?? "--"} {t.rows}</span></button>)}</div>
         </aside>
 
         <div className="sqlite-admin-main">
         <div className="sqlite-workspace-tabs-row">
-          <ASegmentedGroup className="sqlite-page-tabs" value={sqlitePage} selects="single" aria-label={english ? "SQLite workspace pages" : "SQLite 页面"}>
-            <ASegmentedButton value="data" onClick={() => setSqlitePage("data")}>{english ? "Browse" : "浏览"}</ASegmentedButton>
-            <ASegmentedButton value="schema" onClick={() => setSqlitePage("schema")}>{english ? "Structure" : "结构"}</ASegmentedButton>
-            <ASegmentedButton value="forensic" onClick={() => setSqlitePage("forensic")}>{english ? "Forensics" : "取证"}</ASegmentedButton>
+          <ASegmentedGroup className="sqlite-page-tabs" value={sqlitePage} selects="single" aria-label={t.sqlite_workspace_pages}>
+            <ASegmentedButton value="data" onClick={() => setSqlitePage("data")}>{t.browse}</ASegmentedButton>
+            <ASegmentedButton value="schema" onClick={() => setSqlitePage("schema")}>{t.structure}</ASegmentedButton>
+            <ASegmentedButton value="forensic" onClick={() => setSqlitePage("forensic")}>{t.forensics}</ASegmentedButton>
             <ASegmentedButton value="sql" onClick={() => setSqlitePage("sql")}>SQL</ASegmentedButton>
-            <ASegmentedButton value="changes" onClick={() => setSqlitePage("changes")}>{english ? "Changes" : "修改"}{dirty ? " *" : ""}</ASegmentedButton>
+            <ASegmentedButton value="changes" onClick={() => setSqlitePage("changes")}>{t.changes}{dirty ? " *" : ""}</ASegmentedButton>
           </ASegmentedGroup>
-          {(sqlitePage === "data" || sqlitePage === "sql") && <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{english ? "Edit mode" : "编辑模式"}</span><Switch size="small" aria-label={english ? "Toggle edit mode" : "切换编辑模式"} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>}
+          {(sqlitePage === "data" || sqlitePage === "sql") && <div className={`sqlite-edit-mode ${editingEnabled ? "active" : ""}`}><span><EditOutlined aria-hidden="true" />{t.edit_mode}</span><Switch size="small" aria-label={t.toggle_edit_mode} checked={editingEnabled} onChange={(checked) => { setEditingEnabled(checked); if (!checked) { setEditing(null); setCreating(null); setCellEditOpen(false); } }} /></div>}
         </div>
 
         {sqlitePage === "data" && <div className="sqlite-data-workspace">
@@ -1177,19 +1177,19 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
               <div className="sqlite-filter-control">
                 <ASelect
                   className="sqlite-filter-column-select"
-                  aria-label={english ? "Filter column" : "筛选列"}
+                  aria-label={t.filter_column}
                   value={tableFilterColumn}
                   onChange={(value) => { setTableFilterColumn(String(value)); if (tableFilter) setOffset(0); }}
                   options={[
-                    { value: "", label: english ? "All columns" : "全部列" },
+                    { value: "", label: t.all_columns },
                     ...columns.map((column) => ({ value: column.name, label: column.name }))
                   ]}
                 />
-                <input className="text-input" aria-label={english ? "Filter current table rows" : "筛选当前表记录"} value={tableFilterDraft} onChange={(event) => setTableFilterDraft(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTableFilter(); }} placeholder={english ? "Filter rows" : "筛选当前表"} />
-                <AButton variant="filled" icon={<SearchOutlined aria-hidden="true" />} disabled={!tableFilterDraft.trim() && !tableFilter} onClick={applyTableFilter}>{english ? "Filter" : "筛选"}</AButton>
+                <input className="text-input" aria-label={t.filter_current_table_rows} value={tableFilterDraft} onChange={(event) => setTableFilterDraft(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTableFilter(); }} placeholder={t.filter_rows} />
+                <AButton variant="filled" icon={<SearchOutlined aria-hidden="true" />} disabled={!tableFilterDraft.trim() && !tableFilter} onClick={applyTableFilter}>{t.filter}</AButton>
                 {tableFilter && <AButton variant="text" onClick={clearTableFilter}>{t.clear}</AButton>}
               </div>
-              <label className="sqlite-page-size-control"><span>{english ? "Rows" : "每页"}</span><ASelect aria-label={english ? "Rows per page" : "每页行数"} value={limit} onChange={(value) => { setLimit(Number(value)); setOffset(0); }} options={[50, 100, 250, 500].map((value) => ({ value, label: String(value) }))} /></label>
+              <label className="sqlite-page-size-control"><span>{t.rows}</span><ASelect aria-label={t.rows_per_page} value={limit} onChange={(value) => { setLimit(Number(value)); setOffset(0); }} options={[50, 100, 250, 500].map((value) => ({ value, label: String(value) }))} /></label>
               <AButton variant="outlined" disabled={!data.values.length} onClick={() => copyDataCsv(data)}>{t.copyCsv}</AButton>
               <AButton variant="outlined" disabled={!activeTable} onClick={exportCurrentTable}>{t.sqliteDownloadTable}</AButton>
               <AButton variant="outlined" disabled={!editingEnabled || !data.editable} onClick={startCreate}>{t.sqliteNewRow}</AButton>
@@ -1197,7 +1197,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
             <div className="table-scroll sqlite-data-scroll">
               {data.columns.length ? <table className="data-table sqlite-data-table sqlite-browse-table" style={{ "--sqlite-table-width": `${sqliteDataMinWidth}px` } as React.CSSProperties}>
                 <colgroup><col className="sqlite-action-col" />{data.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteColumnWidths[index] }} key={column} />)}</colgroup>
-                <thead><tr><th className="sqlite-action-cell">{english ? "Actions" : "操作"}</th>{data.columns.map((column, index) => <th className={sortColumn === column ? "is-sorted" : ""} key={column} title={column}><button className="sqlite-column-sort" type="button" onClick={() => toggleSqliteSort(column)} aria-label={`${english ? "Sort by" : "按列排序"} ${column}${sortColumn === column ? `, ${sortDirection}` : ""}`}><span className="sqlite-column-label">{column}</span>{sortColumn === column ? (sortDirection === "asc" ? <CaretUpOutlined aria-hidden="true" /> : <CaretDownOutlined aria-hidden="true" />) : null}</button><span className="sqlite-column-resizer" role="separator" aria-label={`${english ? "Resize" : "调整列宽"} ${column}`} aria-orientation="vertical" tabIndex={0} onPointerDown={(event) => beginSqliteColumnResize(event, column, sqliteColumnWidths[index])} onDoubleClick={(event) => { event.stopPropagation(); resizeSqliteColumn(column, sqliteColumnPreferredWidth(column)); }} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); resizeSqliteColumn(column, sqliteColumnWidths[index] + (event.key === "ArrowRight" ? 12 : -12) * (event.shiftKey ? 3 : 1)); }} /></th>)}</tr></thead>
+                <thead><tr><th className="sqlite-action-cell">{t.commandGroupActions}</th>{data.columns.map((column, index) => <th className={sortColumn === column ? "is-sorted" : ""} key={column} title={column}><button className="sqlite-column-sort" type="button" onClick={() => toggleSqliteSort(column)} aria-label={`${t.sort_by} ${column}${sortColumn === column ? `, ${sortDirection}` : ""}`}><span className="sqlite-column-label">{column}</span>{sortColumn === column ? (sortDirection === "asc" ? <CaretUpOutlined aria-hidden="true" /> : <CaretDownOutlined aria-hidden="true" />) : null}</button><span className="sqlite-column-resizer" role="separator" aria-label={`${t.resize} ${column}`} aria-orientation="vertical" tabIndex={0} onPointerDown={(event) => beginSqliteColumnResize(event, column, sqliteColumnWidths[index])} onDoubleClick={(event) => { event.stopPropagation(); resizeSqliteColumn(column, sqliteColumnPreferredWidth(column)); }} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); resizeSqliteColumn(column, sqliteColumnWidths[index] + (event.key === "ArrowRight" ? 12 : -12) * (event.shiftKey ? 3 : 1)); }} /></th>)}</tr></thead>
                 <tbody>{data.values.map((row, rowIndex) => <tr key={`${data.rowids[rowIndex] ?? rowIndex}`}>
                   <td className="sqlite-action-cell"><div className="button-row compact-buttons sqlite-row-action-buttons">{editingEnabled && data.editable && <AButton variant="text" icon={<EditOutlined aria-hidden="true" />} aria-label={sqliteRowActions.edit} title={sqliteRowActions.edit} onClick={() => startEdit(rowIndex)} />}<AButton variant="text" icon={<CopyOutlined aria-hidden="true" />} aria-label={sqliteRowActions.copy} title={sqliteRowActions.copy} onClick={() => copySqliteRow(data, row)} />{editingEnabled && data.editable && <Popconfirm title={`${t.sqliteDeleteRow}: rowid ${data.rowids[rowIndex] ?? rowIndex + 1}?`} okText={t.sqliteDeleteRow} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => deleteRow(rowIndex)}><AButton variant="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={sqliteRowActions.delete} title={sqliteRowActions.delete} /></Popconfirm>}</div></td>
                   {data.columns.map((column, columnIndex) => {
@@ -1206,33 +1206,33 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
                     const inlineEditing = active && cellEditOpen;
                     return <td className={`${active ? "active-cell" : ""} ${inlineEditing ? "editing-cell" : ""}`} key={column} title={inlineEditing ? undefined : displaySqliteValue(value)} onClick={() => { if (!inlineEditing) setCellEditOpen(false); setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value }); }} onDoubleClick={() => {
                       setSelectedCell({ rowIndex, columnIndex, column, rowid: data.rowids[rowIndex] ?? null, value });
-                      if (!editingEnabled) { messageApi.info(english ? "Enable edit mode first" : "请先开启编辑模式"); return; }
-                      if (!data.editable || typeof data.rowids[rowIndex] !== "number") { messageApi.warning(english ? "This table or view cannot be edited directly" : "当前表或视图不支持直接编辑"); return; }
+                      if (!editingEnabled) { messageApi.info(t.enable_edit_mode_first); return; }
+                      if (!data.editable || typeof data.rowids[rowIndex] !== "number") { messageApi.warning(t.this_table_or_view_cannot_be_edited_directly); return; }
                       setSelectedCellDraft(editableSqliteValue(value));
                       setCellEditOpen(true);
-                    }}>{inlineEditing ? <input autoFocus className="sqlite-inline-cell-editor" aria-label={`${english ? "Edit" : "编辑"} ${column}`} value={selectedCellDraft} onChange={(event) => setSelectedCellDraft(event.currentTarget.value)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); saveSelectedCell(); } else if (event.key === "Escape") { event.preventDefault(); setCellEditOpen(false); setSelectedCellDraft(editableSqliteValue(value)); } }} /> : displaySqliteValue(value)}</td>;
+                    }}>{inlineEditing ? <input autoFocus className="sqlite-inline-cell-editor" aria-label={`${t.edit} ${column}`} value={selectedCellDraft} onChange={(event) => setSelectedCellDraft(event.currentTarget.value)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); saveSelectedCell(); } else if (event.key === "Escape") { event.preventDefault(); setCellEditOpen(false); setSelectedCellDraft(editableSqliteValue(value)); } }} /> : displaySqliteValue(value)}</td>;
                   })}
                 </tr>)}</tbody>
               </table> : <div className="empty-state">--</div>}
             </div>
             <div className="sqlite-pagination-row">
               <div className="sqlite-pagination-buttons">
-                <AButton variant="outlined" icon={<DoubleLeftOutlined aria-hidden="true" />} aria-label={english ? "First page" : "第一页"} title={english ? "First page" : "第一页"} disabled={offset <= 0} onClick={() => setOffset(0)} />
-                <AButton variant="outlined" icon={<LeftOutlined aria-hidden="true" />} aria-label={english ? "Previous page" : "上一页"} title={english ? "Previous page" : "上一页"} disabled={offset <= 0} onClick={() => setOffset(Math.max(0, offset - limit))} />
+                <AButton variant="outlined" icon={<DoubleLeftOutlined aria-hidden="true" />} aria-label={t.first_page} title={t.first_page} disabled={offset <= 0} onClick={() => setOffset(0)} />
+                <AButton variant="outlined" icon={<LeftOutlined aria-hidden="true" />} aria-label={t.previous_page} title={t.previous_page} disabled={offset <= 0} onClick={() => setOffset(Math.max(0, offset - limit))} />
               </div>
-              <span>{data.values.length ? `${offset + 1}-${pageEnd}` : "0"} · {english ? "Page" : "第"} {currentPage}{totalPages ? ` / ${totalPages}` : ""}{english ? "" : " 页"}</span>
+              <span>{data.values.length ? `${offset + 1}-${pageEnd}` : "0"} · {t.page} {currentPage}{totalPages ? ` / ${totalPages}` : ""}{t.s}</span>
               <div className="sqlite-pagination-buttons">
-                <AButton variant="outlined" icon={<RightOutlined aria-hidden="true" />} aria-label={english ? "Next page" : "下一页"} title={english ? "Next page" : "下一页"} disabled={!canGoNext} onClick={() => setOffset(offset + limit)} />
-                <AButton variant="outlined" icon={<DoubleRightOutlined aria-hidden="true" />} aria-label={english ? "Last page" : "最后一页"} title={english ? "Last page" : "最后一页"} disabled={!totalPages || currentPage >= totalPages} onClick={() => totalPages && setOffset((totalPages - 1) * limit)} />
+                <AButton variant="outlined" icon={<RightOutlined aria-hidden="true" />} aria-label={t.next_page} title={t.next_page} disabled={!canGoNext} onClick={() => setOffset(offset + limit)} />
+                <AButton variant="outlined" icon={<DoubleRightOutlined aria-hidden="true" />} aria-label={t.last_page} title={t.last_page} disabled={!totalPages || currentPage >= totalPages} onClick={() => totalPages && setOffset((totalPages - 1) * limit)} />
               </div>
             </div>
           </div>
 
           {selectedCell && <div className="tool-panel sqlite-simple-cell-panel">
-            <div className="panel-heading-row"><PanelTitle title={`${selectedCell.column}`} /><div className="button-row compact-buttons"><span className="status-pill">{selectedCell.rowid == null ? `row ${selectedCell.rowIndex + 1}` : `rowid ${selectedCell.rowid}`}</span>{selectedCell.value instanceof Uint8Array && <ASegmentedGroup value={selectedCellPreviewMode} selects="single" aria-label={english ? "Cell preview format" : "单元格预览格式"}><ASegmentedButton value="text" onClick={() => setSelectedCellPreviewMode("text")}>{english ? "Text" : "文本"}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setSelectedCellPreviewMode("hex")}>Hex</ASegmentedButton></ASegmentedGroup>}</div></div>
-            <InfoTable rows={[[english ? "Type" : "类型", sqliteValueKind(selectedCell.value)], [t.fileSize, formatBytes(sqliteValueSize(selectedCell.value))], ...(selectedCell.value instanceof Uint8Array ? [[english ? "Signature" : "文件特征", sqliteValueSignature(selectedCell.value)] as [string, string]] : [[english ? "Value" : "值", selectedCellDisplay || "--"] as [string, string]])]} />
-            <textarea aria-label={english ? "Selected cell value" : "选中单元格值"} className="single-textarea sqlite-cell-value" value={selectedCellPreview} readOnly />
-            <div className="action-row"><AButton variant="outlined" onClick={() => void copyText(selectedCellPreview)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{english ? "Copy row JSON" : "复制行 JSON"}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton></div>
+            <div className="panel-heading-row"><PanelTitle title={`${selectedCell.column}`} /><div className="button-row compact-buttons"><span className="status-pill">{selectedCell.rowid == null ? `row ${selectedCell.rowIndex + 1}` : `rowid ${selectedCell.rowid}`}</span>{selectedCell.value instanceof Uint8Array && <ASegmentedGroup value={selectedCellPreviewMode} selects="single" aria-label={t.cell_preview_format}><ASegmentedButton value="text" onClick={() => setSelectedCellPreviewMode("text")}>{t.text}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setSelectedCellPreviewMode("hex")}>Hex</ASegmentedButton></ASegmentedGroup>}</div></div>
+            <InfoTable rows={[[t.componentType, sqliteValueKind(selectedCell.value)], [t.fileSize, formatBytes(sqliteValueSize(selectedCell.value))], ...(selectedCell.value instanceof Uint8Array ? [[t.signature, sqliteValueSignature(selectedCell.value)] as [string, string]] : [[t.httpHeaderValue, selectedCellDisplay || "--"] as [string, string]])]} />
+            <textarea aria-label={t.selected_cell_value} className="single-textarea sqlite-cell-value" value={selectedCellPreview} readOnly />
+            <div className="action-row"><AButton variant="outlined" onClick={() => void copyText(selectedCellPreview)}>{t.copy}</AButton><AButton variant="outlined" onClick={copySelectedRow}>{t.copy_row_json}</AButton><AButton variant="outlined" onClick={downloadSelectedCell}>{t.sqliteDownloadCell}</AButton></div>
           </div>}
 
           {editing && <div className="tool-panel sqlite-row-editor-panel"><PanelTitle title={`${t.editRow}: rowid ${editing.rowid}`} /><div className="sqlite-editor-fields">{data.columns.map((column) => <label key={column}>{column}<textarea className="single-textarea compact-textarea" value={editing.values[column] ?? ""} onChange={(event) => setEditing({ ...editing, values: { ...editing.values, [column]: event.currentTarget.value } })} /></label>)}</div><div className="action-row"><AButton variant="filled" onClick={saveEdit}>{t.saveChanges}</AButton><AButton variant="text" onClick={() => setEditing(null)}>{t.cancelEdit}</AButton></div></div>}
@@ -1240,14 +1240,14 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
         </div>}
 
         {sqlitePage === "sql" && <div className="tool-panel wide-panel sqlite-simple-sql-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.sqliteSql} />{queryMutating ? <Popconfirm disabled={!editingEnabled} title={english ? "Run this modifying SQL statement?" : "确认执行这条修改型 SQL？"} okText={english ? "Run" : "执行"} cancelText={t.cancelEdit} onConfirm={runQuery}><AButton variant="filled" danger disabled={!sql.trim() || !editingEnabled}>{t.runSql}</AButton></Popconfirm> : <AButton variant="filled" disabled={!sql.trim()} onClick={runQuery}>{t.runSql}</AButton>}</div>
+          <div className="panel-heading-row"><PanelTitle title={t.sqliteSql} />{queryMutating ? <Popconfirm disabled={!editingEnabled} title={t.run_this_modifying_sql_statement} okText={t.run} cancelText={t.cancelEdit} onConfirm={runQuery}><AButton variant="filled" danger disabled={!sql.trim() || !editingEnabled}>{t.runSql}</AButton></Popconfirm> : <AButton variant="filled" disabled={!sql.trim()} onClick={runQuery}>{t.runSql}</AButton>}</div>
           <details className="sqlite-query-examples">
-            <summary>{english ? "Query examples" : "常用查询"}</summary>
+            <summary>{t.query_examples}</summary>
             <div className="sqlite-template-list">{sqliteTemplates.slice(0, 6).map((template) => <button className="sqlite-template-item" type="button" key={template.label} onClick={() => setSql(template.sql)}><strong>{template.label}</strong><span>{template.detail}</span></button>)}</div>
           </details>
           <textarea className="single-textarea sqlite-query-input" value={sql} onChange={(event) => setSql(event.currentTarget.value)} />
           <div className="panel-heading-row"><PanelTitle title={t.sqliteQueryResult} /><div className="button-row compact-buttons"><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => copyDataCsv(queryResult)}>{t.copyCsv}</AButton><AButton variant="outlined" disabled={!queryResult.values.length} onClick={() => downloadDataCsv(queryResult, "sqlite-query")}>{t.exportCsv}</AButton></div></div>
-          {queryResult.truncated && <Alert type="info" showIcon message={english ? "Read-only query results are limited to 2,000 rows in the browser." : "浏览器中的只读查询结果最多展示 2,000 行。"} />}
+          {queryResult.truncated && <Alert type="info" showIcon message={t.read_only_query_results_are_limited_to_2_000_rows_in_the_browser} />}
           <div className="table-scroll sqlite-query-scroll">{queryResult.columns.length ? <table className="data-table sqlite-data-table sqlite-query-table" style={{ "--sqlite-table-width": `${sqliteQueryMinWidth}px` } as React.CSSProperties}><colgroup>{queryResult.columns.map((column, index) => <col className="sqlite-value-col" style={{ width: sqliteQueryColumnWidths[index] }} key={column} />)}</colgroup><thead><tr>{queryResult.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{queryResult.values.map((row, rowIndex) => <tr key={rowIndex}>{queryResult.columns.map((column, columnIndex) => <td key={column}>{displaySqliteValue(row[columnIndex] ?? null)}</td>)}</tr>)}</tbody></table> : <div className="empty-state">{queryResult.message || "--"}</div>}</div>
         </div>}
 
@@ -1265,8 +1265,8 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
         {sqlitePage === "forensic" && forensicAnalysis && <SqliteForensicPanel analysis={forensicAnalysis} english={english} />}
 
         {sqlitePage === "changes" && <div className="tool-panel wide-panel sqlite-simple-changes-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="outlined" icon={<UndoOutlined aria-hidden="true" />} disabled={!undoState} onClick={undoLastChange}>{english ? "Undo last" : "撤销上一步"}</AButton><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={english ? "Discard all changes since the last export?" : "放弃上次导出后的全部修改？"} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
-          {changeLog.length ? <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{sqliteLabels.time}</th><th>{sqliteLabels.action}</th><th>{sqliteLabels.table}</th><th>{sqliteLabels.row}</th><th>{sqliteLabels.column}</th><th>{sqliteLabels.detail}</th></tr></thead><tbody>{changeLog.slice().reverse().map((entry) => <tr key={entry.id}><td>{entry.at}</td><td>{entry.action}</td><td>{entry.table || "--"}</td><td>{entry.rowid ?? "--"}</td><td>{entry.column ?? "--"}</td><td>{entry.detail}</td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No local changes." : "暂无本地修改。"}</div>}
+          <div className="panel-heading-row"><PanelTitle title={t.sqliteChangeLog} /><div className="button-row compact-buttons"><AButton variant="outlined" icon={<UndoOutlined aria-hidden="true" />} disabled={!undoState} onClick={undoLastChange}>{t.undo_last}</AButton><AButton variant="filled" onClick={exportDatabase}>{t.sqliteExportDb}</AButton><Popconfirm disabled={!dirty || !originalBytes} title={t.discard_all_changes_since_the_last_export} okText={t.sqliteDiscardChanges} cancelText={t.cancelEdit} okButtonProps={{ danger: true }} onConfirm={() => void discardSqliteChanges()}><AButton variant="outlined" disabled={!dirty || !originalBytes}>{t.sqliteDiscardChanges}</AButton></Popconfirm><AButton variant="outlined" disabled={!changeLog.length} onClick={exportChangeLog}>{t.sqliteExportChangeLog}</AButton></div></div>
+          {changeLog.length ? <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{sqliteLabels.time}</th><th>{sqliteLabels.action}</th><th>{sqliteLabels.table}</th><th>{sqliteLabels.row}</th><th>{sqliteLabels.column}</th><th>{sqliteLabels.detail}</th></tr></thead><tbody>{changeLog.slice().reverse().map((entry) => <tr key={entry.id}><td>{entry.at}</td><td>{entry.action}</td><td>{entry.table || "--"}</td><td>{entry.rowid ?? "--"}</td><td>{entry.column ?? "--"}</td><td>{entry.detail}</td></tr>)}</tbody></table></div> : <div className="empty-state">{t.no_local_changes}</div>}
         </div>}
         </div>
       </div>}

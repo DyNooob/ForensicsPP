@@ -76,15 +76,15 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
   }, [active]);
 
   const labels = React.useMemo(() => ({
-    statements: english ? "Statements" : "语句数",
-    currentTable: english ? "Current Table" : "当前表",
-    analyzeInput: english ? "Analyze Input" : "解析输入",
-    name: english ? "Name" : "名称",
-    details: english ? "Details" : "详细信息",
-    export: english ? "Export" : "导出",
-    noRows: english ? "No matching rows" : "没有匹配的数据行",
-    source: english ? "SQL dump source" : "SQL Dump 来源",
-    overview: english ? "Dump overview" : "Dump 概览"
+    statements: t.statements,
+    currentTable: t.current_table,
+    analyzeInput: t.analyze_input,
+    name: t.name,
+    details: t.details,
+    export: t.exportMenu,
+    noRows: t.no_matching_rows,
+    source: t.sql_dump_source,
+    overview: t.dump_overview
   }), [english]);
 
   const table = result?.tables.find((item) => item.name === selectedTable) ?? result?.tables[0] ?? null;
@@ -139,7 +139,7 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
     setFormatOutput("");
     setError("");
     if (file.size > MAX_SQL_FILE_BYTES) {
-      setError(english ? "The SQL file exceeds the 32 MiB limit." : "SQL 文件超过 32 MiB 限制。");
+      setError(t.the_sql_file_exceeds_the_32_mib_limit);
       return;
     }
     try {
@@ -165,7 +165,7 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
     workspace.clear();
     try {
       const size = new TextEncoder().encode(text).byteLength;
-      if (size > MAX_SQL_FILE_BYTES) throw new Error(english ? "SQL input exceeds the 32 MiB limit." : "SQL 输入超过 32 MiB 限制。");
+      if (size > MAX_SQL_FILE_BYTES) throw new Error(t.sql_input_exceeds_the_32_mib_limit);
       const parsed = await runSqlTask({ mode: "parse", text, name: "pasted-sql.sql", size });
       if (requestId === requestRef.current && active && "tables" in parsed) applyResult(text, parsed);
     } catch (caught) {
@@ -182,7 +182,7 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
     const requestId = ++requestRef.current;
     try {
       const size = new TextEncoder().encode(formatInput).byteLength;
-      if (size > MAX_SQL_FILE_BYTES) throw new Error(english ? "SQL input exceeds the 32 MiB limit." : "SQL 输入超过 32 MiB 限制。");
+      if (size > MAX_SQL_FILE_BYTES) throw new Error(t.sql_input_exceeds_the_32_mib_limit);
       const result = await runSqlTask(mode === "minify" ? { mode, text: formatInput } : { mode, text: formatInput, dialect });
       if (requestId === requestRef.current && active && "text" in result) setFormatOutput(result.text);
     } catch (caught) {
@@ -257,8 +257,8 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
           <AButton variant="text" disabled={processing || (!result && !error)} onClick={clear}>{t.clear}</AButton>
         </div>
         {!result && <div className="text-panel sql-input-stage">
-          <div className="text-panel-title"><strong>{english ? "Paste SQL" : "粘贴 SQL"}</strong><AButton variant="text" disabled={!formatInput} onClick={() => void copyText(formatInput)}>{t.copyInput}</AButton></div>
-          <textarea className="single-textarea sql-input-textarea" aria-label={english ? "SQL input" : "SQL 输入"} value={formatInput} onChange={(event) => { setFormatInput(event.currentTarget.value); setError(""); }} placeholder={english ? "Paste a SQL dump here" : "在这里粘贴 SQL dump"} />
+          <div className="text-panel-title"><strong>{t.paste_sql}</strong><AButton variant="text" disabled={!formatInput} onClick={() => void copyText(formatInput)}>{t.copyInput}</AButton></div>
+          <textarea className="single-textarea sql-input-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.currentTarget.value); setError(""); }} placeholder={t.paste_a_sql_dump_here} />
         </div>}
         {!result && <ToolStageFeatures items={stageFeatures} />}
         {error && <pre className="result-box">{error}</pre>}
@@ -358,8 +358,8 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
               <AButton variant="text" disabled={!formatOutput} onClick={() => void copyText(formatOutput)}>{t.copyOutput}</AButton>
             </div>
             <div className="text-columns sql-format-columns">
-              <textarea className="single-textarea" aria-label={english ? "SQL input" : "SQL 输入"} value={formatInput} onChange={(event) => { setFormatInput(event.target.value); setFormatOutput(""); }} />
-              <textarea className="single-textarea" aria-label={english ? "Formatted SQL output" : "格式化 SQL 输出"} value={formatOutput} readOnly />
+              <textarea className="single-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.target.value); setFormatOutput(""); }} />
+              <textarea className="single-textarea" aria-label={t.formatted_sql_output} value={formatOutput} readOnly />
             </div>
           </details>
         </>

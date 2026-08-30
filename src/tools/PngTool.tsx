@@ -36,9 +36,7 @@ function isPngWorkspace(value: unknown): value is PngWorkspace {
   return Boolean(value && typeof value === "object" && "analysis" in value && "previewBytes" in value);
 }
 
-export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [analysis, setAnalysis] = React.useState<PngAnalysis | null>(null);
+export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [analysis, setAnalysis] = React.useState<PngAnalysis | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -54,7 +52,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     onRestore: ({ analysis: restored, previewBytes }) => {
       setAnalysis(restored);
       setStorageNotice(restored.size > MAX_PERSISTED_PNG_PREVIEW_BYTES && !previewBytes?.byteLength
-        ? (english ? "This image is available for the current session only; reopen it after a refresh." : "当前图片仅在本次打开期间可用，刷新后请重新选择文件。")
+        ? (t.this_image_is_available_for_the_current_session_only_reopen_it_after_a_refresh)
         : "");
       if (previewBytes?.byteLength) {
         const copy = new Uint8Array(previewBytes.length);
@@ -93,7 +91,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     setAnalysis(null);
     setLoading(false);
     if (file.size > MAX_PNG_BYTES) {
-      setError(english ? "The PNG exceeds the 128 MiB limit." : "PNG 文件超过 128 MiB 限制。");
+      setError(t.the_png_exceeds_the_128_mib_limit);
       return;
     }
     setLoading(true);
@@ -114,7 +112,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
       setPreviewUrl(URL.createObjectURL(file));
       setAnalysis(next);
       setStorageNotice(file.size > MAX_PERSISTED_PNG_PREVIEW_BYTES
-        ? (english ? "This image is available for the current session only; it is not restored automatically." : "当前图片仅在本次打开期间保留，不会自动恢复。")
+        ? (t.this_image_is_available_for_the_current_session_only_it_is_not_restored_automatically)
         : "");
       workspace.save({
         analysis: { ...next, trailer: new Uint8Array() },
@@ -195,14 +193,14 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
                 {previewUrl ? <img src={previewUrl} alt={analysis.name} /> : <div className="empty-state">--</div>}
               </div>
               <InfoTable rows={[
-                [english ? "Name" : "名称", analysis.name],
-                [english ? "Dimensions" : "尺寸", `${row("Width")} × ${row("Height")}`],
-                [english ? "Bit depth" : "位深", row("Bit depth")],
-                [english ? "Color type" : "颜色类型", row("Color type")],
+                [t.name, analysis.name],
+                [t.dimensions, `${row("Width")} × ${row("Height")}`],
+                [t.bit_depth, row("Bit depth")],
+                [t.color_type, row("Color type")],
                 ["Chunks", String(analysis.chunks.length)],
                 ["CRC", badCrc.length ? `${badCrc.length} mismatch` : "OK"],
-                ["IEND", hasIend ? (english ? "Present" : "存在") : (english ? "Missing" : "缺失")],
-                [english ? "Trailer" : "尾部数据", formatBytes(analysis.trailer.length)]
+                ["IEND", hasIend ? (t.present) : (t.missing)],
+                [t.trailer, formatBytes(analysis.trailer.length)]
               ]} />
             </div>
           </div>
@@ -211,7 +209,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
             <PanelTitle title="Chunks" />
             <div className="table-scroll png-chunk-scroll">
               <table className="data-table">
-                <thead><tr><th>#</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Offset" : "偏移"}</th><th>{english ? "Length" : "长度"}</th><th>CRC</th></tr></thead>
+                <thead><tr><th>#</th><th>{t.componentType}</th><th>{t.stringOffset}</th><th>{t.stringLength}</th><th>CRC</th></tr></thead>
                 <tbody>{analysis.chunks.map((chunk, index) => (
                   <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}>
                     <td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td>
@@ -223,10 +221,10 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
 
           {analysis.textEntries.length > 0 && (
             <div className="tool-panel wide-panel png-text-panel">
-              <PanelTitle title={english ? "Text metadata" : "文本元数据"} />
+              <PanelTitle title={t.text_metadata} />
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>Chunk</th><th>{english ? "Keyword" : "关键字"}</th><th>{english ? "Text" : "文本"}</th></tr></thead>
+                  <thead><tr><th>Chunk</th><th>{t.keyword}</th><th>{t.text}</th></tr></thead>
                   <tbody>{analysis.textEntries.map((entry, index) => (
                     <tr key={`${entry.offset}-${index}`}><td>{entry.chunk}</td><td>{entry.keyword || "--"}</td><td>{entry.text}</td></tr>
                   ))}</tbody>
@@ -238,14 +236,14 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           {analysis.trailer.length > 0 && (
             <div className="tool-panel wide-panel png-trailer-panel">
               <div className="panel-heading-row">
-                <PanelTitle title={english ? "Data after IEND" : "IEND 后数据"} />
-                <AButton variant="outlined" onClick={downloadTrailer}>{english ? "Save bytes" : "保存数据"}</AButton>
+                <PanelTitle title={t.data_after_iend} />
+                <AButton variant="outlined" onClick={downloadTrailer}>{t.save_bytes}</AButton>
               </div>
               <InfoTable rows={[
-                [english ? "Size" : "大小", formatBytes(analysis.trailer.length)],
-                [english ? "Detected signatures" : "识别签名", analysis.trailerSignatures.map((item) => item.label).join(", ") || "--"]
+                [t.fileSize, formatBytes(analysis.trailer.length)],
+                [t.detected_signatures, analysis.trailerSignatures.map((item) => item.label).join(", ") || "--"]
               ]} />
-              <textarea aria-label={english ? "PNG trailing data preview" : "PNG 尾部数据预览"} className="single-textarea compact-textarea" value={analysis.trailerPreview} readOnly />
+              <textarea aria-label={t.png_trailing_data_preview} className="single-textarea compact-textarea" value={analysis.trailerPreview} readOnly />
             </div>
           )}
         </>

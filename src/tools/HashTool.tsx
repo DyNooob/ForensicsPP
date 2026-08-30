@@ -266,7 +266,7 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
     try {
       const bytes = new TextEncoder().encode(text);
       if (bytes.byteLength > MAX_HASH_TEXT_BYTES) {
-        setError(english ? "Text input exceeds the 16 MiB limit." : "文本输入超过 16 MiB 限制。");
+        setError(t.text_input_exceeds_the_16_mib_limit);
         return;
       }
       const values = await hashBytesInWorker(bytes, algorithms, { signal: controller.signal });
@@ -345,11 +345,11 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
     <div className={`tool-grid hash-simple-workbench hash-workbench ${hasInput ? "has-hash" : "empty-hash"}`}>
       <div className="tool-panel wide-panel hash-simple-input-panel">
         <ToolPanelHeader
-          title={english ? "Hash input" : "哈希输入"}
+          title={t.hash_input}
           actions={<>
             <ASegmentedGroup className="hash-simple-mode" value={mode} selects="single">
-              <ASegmentedButton value="file" onClick={() => changeMode("file")}>{english ? "Files" : "文件"}</ASegmentedButton>
-              <ASegmentedButton value="text" onClick={() => changeMode("text")}>{english ? "Text" : "文本"}</ASegmentedButton>
+              <ASegmentedButton value="file" onClick={() => changeMode("file")}>{t.totalFiles}</ASegmentedButton>
+              <ASegmentedButton value="text" onClick={() => changeMode("text")}>{t.text}</ASegmentedButton>
             </ASegmentedGroup>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
@@ -385,22 +385,22 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
                 ? (english ? `${selectedFiles.length} files selected` : `已选择 ${selectedFiles.length} 个文件`)
                 : batchRows.length
                   ? (english ? `${batchRows.length} calculated results restored` : `已恢复 ${batchRows.length} 条计算结果`)
-                  : (english ? "Select or drop files" : "选择或拖入文件")}</strong>
+                  : (t.select_or_drop_files)}</strong>
               <span>{selectedFiles.length
                 ? formatBytes(selectedFileBytes)
                 : batchRows.length
-                  ? (english ? "Re-select files to calculate again" : "重新选择文件可再次计算")
-                  : (english ? "Multiple files are supported" : "支持一次选择多个文件")}</span>
+                  ? (t.re_select_files_to_calculate_again)
+                  : (t.multiple_files_are_supported)}</span>
             </div>
             <div className="button-row">
-              <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{english ? "Select files" : "选择文件"}</AButton>
-              <AButton variant="text" onClick={() => directoryInputRef.current?.click()}>{english ? "Select folder" : "选择文件夹"}</AButton>
+              <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{t.select_files}</AButton>
+              <AButton variant="text" onClick={() => directoryInputRef.current?.click()}>{t.select_folder}</AButton>
             </div>
           </>
         ) : (
           <label className="stack-label">
-            {english ? "Text" : "文本"}
-            <textarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => handleTextChange(event.currentTarget.value)} placeholder={english ? "Enter text to hash" : "输入要计算哈希的文本"} />
+            {t.text}
+            <textarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => handleTextChange(event.currentTarget.value)} placeholder={t.enter_text_to_hash} />
           </label>
         )}
 
@@ -414,10 +414,10 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
             </div>
           </div>
           <div className="hash-simple-case-row">
-            <span>{english ? "Output case" : "输出大小写"}</span>
+            <span>{t.output_case}</span>
             <ASegmentedGroup value={hashCase} selects="single">
-              <ASegmentedButton value="lower" onClick={() => setHashCase("lower")}>{english ? "Lowercase" : "小写"}</ASegmentedButton>
-              <ASegmentedButton value="upper" onClick={() => setHashCase("upper")}>{english ? "Uppercase" : "大写"}</ASegmentedButton>
+              <ASegmentedButton value="lower" onClick={() => setHashCase("lower")}>{t.lowercase}</ASegmentedButton>
+              <ASegmentedButton value="upper" onClick={() => setHashCase("upper")}>{t.uppercase}</ASegmentedButton>
             </ASegmentedGroup>
           </div>
         </div>
@@ -428,19 +428,19 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
         </label>
 
         <div className="button-row">
-          {mode === "text" && <AButton variant="filled" disabled={!text || isHashing} onClick={() => void hashText()}>{english ? "Calculate" : "计算哈希"}</AButton>}
-          {mode === "file" && <AButton variant="filled" disabled={!selectedFiles.length || isHashing} onClick={() => void hashFiles()}>{english ? "Calculate hashes" : "计算哈希"}</AButton>}
-          {isHashing && <AButton variant="outlined" onClick={cancelHashing}>{english ? "Cancel" : "取消"}</AButton>}
+          {mode === "text" && <AButton variant="filled" disabled={!text || isHashing} onClick={() => void hashText()}>{t.calculate}</AButton>}
+          {mode === "file" && <AButton variant="filled" disabled={!selectedFiles.length || isHashing} onClick={() => void hashFiles()}>{t.calculate_hashes}</AButton>}
+          {isHashing && <AButton variant="outlined" onClick={cancelHashing}>{t.cancelEdit}</AButton>}
         </div>
-        {isHashing && <div className="hash-simple-progress"><progress max={Math.max(1, progress.total)} value={progress.done} /><span>{progress.name || (english ? "Calculating..." : "正在计算...")}{progress.total > 0 ? ` · ${formatBytes(progress.done)} / ${formatBytes(progress.total)}` : ""}</span></div>}
+        {isHashing && <div className="hash-simple-progress"><progress max={Math.max(1, progress.total)} value={progress.done} /><span>{progress.name || (t.calculating)}{progress.total > 0 ? ` · ${formatBytes(progress.done)} / ${formatBytes(progress.total)}` : ""}</span></div>}
         {error && <div className="empty-state error-state">{error}</div>}
       </div>
 
       {mode === "text" && textHashes && (
         <div className="tool-panel wide-panel hash-simple-text-result">
           <ToolPanelHeader
-            title={english ? "Text hash" : "文本哈希"}
-            subtitle={expectedTargets.length ? (textMatched ? "MATCH" : "NO MATCH") : `${text.length.toLocaleString()} ${english ? "characters" : "个字符"}`}
+            title={t.text_hash}
+            subtitle={expectedTargets.length ? (textMatched ? "MATCH" : "NO MATCH") : `${text.length.toLocaleString()} ${t.characters}`}
             actions={<AButton variant="text" onClick={() => void copyText(displayedTextHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{t.copy}</AButton>}
           />
           <InfoTable rows={displayedTextHashes} />
@@ -450,28 +450,28 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
       {mode === "file" && evaluatedRows.length > 0 && (
         <div className="tool-panel wide-panel hash-simple-results-panel hash-file-browser-panel">
           <ToolPanelHeader
-            title={english ? "File hashes" : "文件哈希"}
-            subtitle={`${evaluatedRows.length} ${english ? "files" : "个文件"}${expectedTargets.length ? ` · ${matchedFiles} MATCH` : ""}`}
+            title={t.file_hashes}
+            subtitle={`${evaluatedRows.length} ${t.files}${expectedTargets.length ? ` · ${matchedFiles} MATCH` : ""}`}
             actions={<>
-              <AButton variant="outlined" onClick={() => downloadTextFile(`hashes-${Date.now()}.csv`, rowsToCsv(filteredRows, resultAlgorithms, hashCase), "text/csv;charset=utf-8")}>{english ? "Export CSV" : "导出 CSV"}</AButton>
+              <AButton variant="outlined" onClick={() => downloadTextFile(`hashes-${Date.now()}.csv`, rowsToCsv(filteredRows, resultAlgorithms, hashCase), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
               {resultAlgorithms.includes("sha256") && <AButton variant="text" onClick={() => downloadTextFile(`hashes-${Date.now()}.sha256`, filteredRows.map((row) => `${row.sha256 ? formatHashCase(row.sha256, hashCase) : ""}  ${row.name}`).join("\n"), "text/plain;charset=utf-8")}>SHA256SUM</AButton>}
             </>}
           />
           <div className="hash-simple-result-toolbar">
-            <input className="text-input" aria-label={english ? "Filter hashed files" : "筛选已计算哈希的文件"} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter file name" : "过滤文件名"} />
+            <input className="text-input" aria-label={t.filter_hashed_files} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_file_name} />
             <span>{filteredRows.length}/{evaluatedRows.length}</span>
           </div>
           <div className="table-scroll hash-simple-scroll">
             <table className="data-table hash-simple-table">
-              <thead><tr><th>{english ? "File" : "文件"}</th><th>{t.fileSize}</th><th>{t.lastModified}</th>{expectedTargets.length > 0 && <th>{english ? "Verification" : "核验"}</th>}{resultAlgorithms.map((algorithm) => <th key={algorithm}>{ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase()}</th>)}</tr></thead>
+              <thead><tr><th>{t.sourceFile}</th><th>{t.fileSize}</th><th>{t.lastModified}</th>{expectedTargets.length > 0 && <th>{t.evidenceVerification}</th>}{resultAlgorithms.map((algorithm) => <th key={algorithm}>{ALGORITHMS.find((item) => item.id === algorithm)?.label ?? algorithm.toUpperCase()}</th>)}</tr></thead>
               <tbody>{visibleRows.map((row) => <tr key={`${row.index}-${row.name}-${row.size}`}><td>{row.name}</td><td>{formatBytes(row.size)}</td><td>{row.lastModified || "--"}</td>{expectedTargets.length > 0 && <td>{row.matched ? "MATCH" : "NO MATCH"}</td>}{resultAlgorithms.map((algorithm) => {
                 const digest = row[algorithm as keyof BatchHashRow];
                 const displayed = typeof digest === "string" ? formatHashCase(digest, hashCase) : "--";
-                return <td key={algorithm}>{displayed === "--" ? displayed : <button className="hash-simple-digest" type="button" title={english ? "Copy digest" : "复制哈希"} onClick={() => void copyText(displayed)}>{displayed}</button>}</td>;
+                return <td key={algorithm}>{displayed === "--" ? displayed : <button className="hash-simple-digest" type="button" title={t.copy_digest} onClick={() => void copyText(displayed)}>{displayed}</button>}</td>;
               })}</tr>)}</tbody>
             </table>
           </div>
-          {filteredRows.length > PAGE_SIZE && <div className="hash-simple-pagination"><span>{rangeStart}-{rangeEnd} / {filteredRows.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
+          {filteredRows.length > PAGE_SIZE && <div className="hash-simple-pagination"><span>{rangeStart}-{rangeEnd} / {filteredRows.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>{t.previous}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>{t.next}</AButton></div></div>}
         </div>
       )}
     </div>

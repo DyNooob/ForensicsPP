@@ -87,7 +87,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
     isValid: isStringsWorkspace,
     onRestore: (value) => {
       setStorageNotice(value.sourceSize > value.previewBytes.byteLength
-        ? (english ? "Only a preview is restored. Re-open the source file to view byte context." : "当前只恢复了预览数据；如需查看完整字节上下文，请重新选择源文件。")
+        ? (t.only_a_preview_is_restored_re_open_the_source_file_to_view_byte_context)
         : "");
       setSourceName(value.sourceName);
       setSourceSize(value.sourceSize);
@@ -122,7 +122,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
         start: selected.offset,
         end: selected.offset + byteLength,
         hex: "--",
-        text: english ? "Select the source file again to view byte context." : "请重新选择源文件后查看字节上下文。"
+        text: t.select_the_source_file_again_to_view_byte_context
       };
     }
     const start = Math.max(0, selected.offset - 64);
@@ -195,7 +195,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
     setError("");
     setDropActive(false);
     setStorageNotice(file.size > MAX_WORKSPACE_PREVIEW_BYTES
-      ? (english ? "Only a 4 MiB preview is retained across refreshes; the complete source remains available during this session." : "刷新后仅保留 4 MiB 预览；完整源文件仅在本次打开期间可用。")
+      ? (t.only_a_4_mib_preview_is_retained_across_refreshes_the_complete_source_remains_available_during_this_session)
       : "");
     try {
       const nextBytes = new Uint8Array(await file.slice(0, 32 * 1024 * 1024).arrayBuffer());
@@ -278,7 +278,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
     setLoading(false);
   }, [active]);
 
-  const sourceLabel = sourceName === "text input" ? (english ? "Text input" : "文本输入") : sourceName;
+  const sourceLabel = sourceName === "text input" ? (t.text_input) : sourceName;
 
   return (
     <div className={`tool-grid strings-simple-workbench strings-workbench ${hasInput ? "has-strings" : "empty-strings"}`}>
@@ -288,7 +288,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
 
       <section className="tool-panel wide-panel strings-simple-source-panel">
         <ToolPanelHeader
-          title={english ? "File or text" : "输入文件或文本"}
+          title={t.file_or_text}
           actions={<AButton variant="text" disabled={!pendingBytes.length && !hasInput && !error && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
@@ -314,12 +314,12 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
         <div className="strings-simple-source-controls">
           <label>{t.minLength}<AInputNumber min={3} max={64} value={minLength} onChange={(value) => setMinLength(Math.max(3, Math.min(64, value ?? 4)))} /></label>
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="filled" disabled={!pendingBytes.length || analyzing} onClick={analyze}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract strings" : "提取字符串")}</AButton>
+          <AButton variant="filled" disabled={!pendingBytes.length || analyzing} onClick={analyze}>{analyzing ? (t.extracting) : (t.extract_strings)}</AButton>
         </div>
         <textarea
           className="single-textarea strings-simple-input"
-          aria-label={english ? "File text for string extraction" : "需要提取字符串的文本"}
-          value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${english ? "loaded" : "已读取"}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
+          aria-label={t.file_text_for_string_extraction}
+          value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${t.loaded}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
           readOnly={sourceName !== "text input"}
           placeholder={t.textPlaceholder}
           onChange={(event) => handleText(event.target.value)}
@@ -337,7 +337,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
             </>}
           />
 
-          <div className="strings-simple-summary" aria-label={english ? "Extraction summary" : "提取摘要"}>
+          <div className="strings-simple-summary" aria-label={t.extraction_summary}>
             <span><small>{t.fileSize}</small><strong>{sourceSize > bytes.length ? `${formatBytes(bytes.length)} / ${formatBytes(sourceSize)}` : formatBytes(sourceSize)}</strong></span>
             <span><small>ASCII</small><strong>{analysis.items.filter((item) => item.encoding === "ASCII").length}</strong></span>
             <span><small>UTF-16LE</small><strong>{analysis.items.filter((item) => item.encoding === "UTF-16LE").length}</strong></span>
@@ -345,8 +345,8 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
 
           <div className="strings-simple-filters">
             <input className="text-input" aria-label={t.stringFilter} value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t.stringFilter} />
-            <ASelect aria-label={english ? "String type" : "字符串类型"} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.regexTypeAll }, ...types.map((type) => ({ value: type, label: type }))]} />
-            <ASelect aria-label={english ? "String encoding" : "字符串编码"} value={encodingFilter} onChange={(value) => setEncodingFilter(String(value))} options={[{ value: "", label: english ? "All encodings" : "全部编码" }, { value: "ASCII", label: "ASCII" }, { value: "UTF-16LE", label: "UTF-16LE" }]} />
+            <ASelect aria-label={t.string_type} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.regexTypeAll }, ...types.map((type) => ({ value: type, label: type }))]} />
+            <ASelect aria-label={t.string_encoding} value={encodingFilter} onChange={(value) => setEncodingFilter(String(value))} options={[{ value: "", label: t.all_encodings }, { value: "ASCII", label: "ASCII" }, { value: "UTF-16LE", label: "UTF-16LE" }]} />
           </div>
 
           {visibleItems.length ? (
@@ -367,13 +367,13 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
                 </tbody>
               </table>
             </div>
-          ) : <div className="empty-state">{english ? "No matching strings" : "没有匹配的字符串"}</div>}
+          ) : <div className="empty-state">{t.no_matching_strings}</div>}
 
           {filteredItems.length > PAGE_SIZE && (
             <div className="strings-simple-pagination">
-              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton>
+              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton>
               <span>{page + 1} / {pageCount}</span>
-              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton>
+              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{t.next}</AButton>
             </div>
           )}
         </section>
@@ -382,7 +382,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
       {selected && selectedContext && (
         <section className="tool-panel wide-panel strings-simple-detail-panel">
           <ToolPanelHeader
-            title={english ? "Selected string" : "当前字符串"}
+            title={t.selected_string}
             actions={<AButton variant="outlined" onClick={() => void copyText(selected.value)}>{t.copy}</AButton>}
           />
           <InfoTable rows={[
@@ -390,12 +390,12 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
             [t.stringEncoding, selected.encoding],
             [t.stringLength, String(selected.length)],
             [t.detectedType, selected.detectedType],
-            [english ? "Context window" : "上下文范围", `0x${selectedContext.start.toString(16).toUpperCase()}-0x${selectedContext.end.toString(16).toUpperCase()}`]
+            [t.context_window, `0x${selectedContext.start.toString(16).toUpperCase()}-0x${selectedContext.end.toString(16).toUpperCase()}`]
           ]} />
           <pre className="result-box strings-simple-selected-value">{selected.value}</pre>
           <div className="strings-simple-context">
             <label>Hex<pre>{selectedContext.hex}</pre></label>
-            <label>{english ? "Text" : "文本"}<pre>{selectedContext.text}</pre></label>
+            <label>{t.text}<pre>{selectedContext.text}</pre></label>
           </div>
         </section>
       )}

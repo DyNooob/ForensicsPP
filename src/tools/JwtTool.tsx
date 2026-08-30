@@ -113,8 +113,8 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     ["alg", activeAlg],
     ["typ", activeRows.get("typ") ?? "--"],
     ["kid", activeRows.get("kid") ?? "--"],
-    [english ? "Signature" : "签名状态", asymmetric && verification.status !== "idle" ? verification.detail : activeRow.signature],
-    [english ? "Token length" : "Token 长度", String(activeToken.length)]
+    [t.signature, asymmetric && verification.status !== "idle" ? verification.detail : activeRow.signature],
+    [t.token_length, String(activeToken.length)]
   ] : [], [activeAlg, activeRow, activeRows, activeToken.length, asymmetric, english, verification]);
 
   React.useEffect(() => {
@@ -126,7 +126,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
   const verifyAsymmetric = async () => {
     if (!active || !activeToken || !verifyKey.trim()) return;
     const requestId = ++verificationRequestRef.current;
-    setVerification({ status: "checking", detail: english ? "Checking..." : "正在校验..." });
+    setVerification({ status: "checking", detail: t.checking });
     try {
       const result = await verifyJwtAsymmetricSignature(activeToken, verifyKey.trim());
       if (active && requestId === verificationRequestRef.current) setVerification(result);
@@ -140,8 +140,8 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     try {
       const parsedHeader = JSON.parse(header) as Record<string, unknown>;
       JSON.parse(payload);
-      if (parsedHeader.alg !== "HS256") throw new Error(english ? "Generator supports HS256 only" : "生成器仅支持 HS256");
-      if (!secret) throw new Error(english ? "Enter a shared secret" : "请输入 shared secret");
+      if (parsedHeader.alg !== "HS256") throw new Error(t.generator_supports_hs256_only);
+      if (!secret) throw new Error(t.enter_a_shared_secret);
       setGeneratedToken(signJwtHS256(header, payload, secret));
     } catch (caught) {
       setGeneratedToken("");
@@ -166,11 +166,11 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     <div className={`tool-grid jwt-simple-workbench jwt-grid ${hasInput ? "has-jwt" : "empty-jwt"}`}>
       <div className="tool-panel wide-panel jwt-simple-main-panel">
         <ToolPanelHeader
-          title={english ? "JWT workbench" : "JWT 工作台"}
+          title={t.jwt_workbench}
           actions={<>
             <ASegmentedGroup className="jwt-simple-mode" value={mode} selects="single">
-              <ASegmentedButton value="inspect" onClick={() => setMode("inspect")}>{english ? "Decode / Verify" : "解析 / 验证"}</ASegmentedButton>
-              <ASegmentedButton value="generate" onClick={() => setMode("generate")}>{english ? "Generate HS256" : "生成 HS256"}</ASegmentedButton>
+              <ASegmentedButton value="inspect" onClick={() => setMode("inspect")}>{t.decode_verify}</ASegmentedButton>
+              <ASegmentedButton value="generate" onClick={() => setMode("generate")}>{t.generate_hs256}</ASegmentedButton>
             </ASegmentedGroup>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
@@ -178,12 +178,12 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
 
         {mode === "inspect" ? (
           <div className="jwt-simple-section">
-            <label className="stack-label">JWT<textarea className="single-textarea jwt-simple-token-input" value={tokenInput} onChange={(event) => { setTokenInput(event.currentTarget.value); setSelectedToken(""); }} placeholder={english ? "Paste one JWT or text containing multiple JWTs" : "粘贴单个 JWT，或包含多个 JWT 的文本"} /></label>
-            {activeRow && isHmac && <label className="stack-label">{english ? "Shared secret" : "共享密钥"}<APasswordField className="text-input full-input" value={secret} onChange={(event) => setSecret(event.currentTarget.value)} placeholder={english ? "Optional: verify HMAC signature" : "可选：用于校验 HMAC 签名"} /></label>}
+            <label className="stack-label">JWT<textarea className="single-textarea jwt-simple-token-input" value={tokenInput} onChange={(event) => { setTokenInput(event.currentTarget.value); setSelectedToken(""); }} placeholder={t.paste_one_jwt_or_text_containing_multiple_jwts} /></label>
+            {activeRow && isHmac && <label className="stack-label">{t.shared_secret}<APasswordField className="text-input full-input" value={secret} onChange={(event) => setSecret(event.currentTarget.value)} placeholder={t.optional_verify_hmac_signature} /></label>}
             {activeRow && asymmetric && (
               <div className="jwt-simple-key-section">
-                <label className="stack-label">{english ? "Public key or JWK" : "公钥或 JWK"}<textarea className="compact-textarea jwt-simple-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" /></label>
-                <div className="button-row"><AButton variant="outlined" disabled={!verifyKey.trim() || verification.status === "checking"} onClick={() => void verifyAsymmetric()}>{english ? "Verify signature" : "校验签名"}</AButton></div>
+                <label className="stack-label">{t.public_key_or_jwk}<textarea className="compact-textarea jwt-simple-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" /></label>
+                <div className="button-row"><AButton variant="outlined" disabled={!verifyKey.trim() || verification.status === "checking"} onClick={() => void verifyAsymmetric()}>{t.verify_signature}</AButton></div>
               </div>
             )}
             {parseError && <div className="empty-state error-state">{parseError}</div>}
@@ -191,12 +191,12 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             {activeRow && (
               <div className="jwt-simple-output">
                 <ToolPanelHeader
-                  title={multiToken ? `${english ? "JWTs" : "Token"} (${tokenRows.length})` : (english ? "Decoded token" : "解码结果")}
+                  title={multiToken ? `${t.jwts} (${tokenRows.length})` : (t.decoded_token)}
                   subtitle={`${activeAlg} · ${activeRow.signature}`}
                   actions={<ASegmentedGroup className="jwt-simple-view" value={view} selects="single">
-                    <ASegmentedButton value="decoded" onClick={() => setView("decoded")}>{english ? "Decoded" : "解码"}</ASegmentedButton>
-                    <ASegmentedButton value="claims" onClick={() => setView("claims")}>{english ? "Claims" : "声明"}</ASegmentedButton>
-                    {multiToken && <ASegmentedButton value="tokens" onClick={() => setView("tokens")}>{english ? "Tokens" : "Token 列表"}</ASegmentedButton>}
+                    <ASegmentedButton value="decoded" onClick={() => setView("decoded")}>{t.decodedUrl}</ASegmentedButton>
+                    <ASegmentedButton value="claims" onClick={() => setView("claims")}>{t.claims}</ASegmentedButton>
+                    {multiToken && <ASegmentedButton value="tokens" onClick={() => setView("tokens")}>{t.tokens}</ASegmentedButton>}
                   </ASegmentedGroup>}
                 />
 
@@ -204,12 +204,12 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                   <InfoTable rows={summaryRows} />
                   <label className="stack-label">Header<textarea className="compact-textarea jwt-simple-json" value={activeInspection.headerText || "--"} readOnly /></label>
                   <label className="stack-label">Payload<textarea className="single-textarea jwt-simple-json" value={activeInspection.payloadText || "--"} readOnly /></label>
-                  <div className="button-row"><AButton variant="outlined" onClick={() => void copyText(activeToken)}>{english ? "Copy token" : "复制 Token"}</AButton><AButton variant="text" disabled={!activeInspection.headerText} onClick={() => void copyText(activeInspection.headerText)}>{english ? "Copy Header" : "复制 Header"}</AButton><AButton variant="text" disabled={!activeInspection.payloadText} onClick={() => void copyText(activeInspection.payloadText)}>{english ? "Copy Payload" : "复制 Payload"}</AButton></div>
+                  <div className="button-row"><AButton variant="outlined" onClick={() => void copyText(activeToken)}>{t.copy_token}</AButton><AButton variant="text" disabled={!activeInspection.headerText} onClick={() => void copyText(activeInspection.headerText)}>{t.copy_header}</AButton><AButton variant="text" disabled={!activeInspection.payloadText} onClick={() => void copyText(activeInspection.payloadText)}>{t.copy_payload}</AButton></div>
                 </>}
 
-                {view === "claims" && <InfoTable rows={activeInspection.claimRows.length ? activeInspection.claimRows : [[english ? "Claims" : "声明", "--"]]} />}
+                {view === "claims" && <InfoTable rows={activeInspection.claimRows.length ? activeInspection.claimRows : [[t.claims, "--"]]} />}
 
-                {view === "tokens" && <div className="table-scroll jwt-simple-token-scroll"><table className="data-table jwt-simple-token-table"><thead><tr><th>#</th><th>alg</th><th>sub</th><th>iss</th><th>aud</th><th>exp</th><th>{english ? "Signature" : "签名"}</th></tr></thead><tbody>{tokenRows.map((row, index) => <tr className={row.token === activeToken ? "selected-row" : ""} key={`${index}-${row.token.slice(0, 24)}`}><td><button className="jwt-simple-token-select" type="button" onClick={() => setSelectedToken(row.token)}>{index + 1}</button></td><td>{row.alg}</td><td>{row.sub}</td><td>{row.iss}</td><td>{row.aud}</td><td>{row.exp}</td><td>{row.signature}</td></tr>)}</tbody></table></div>}
+                {view === "tokens" && <div className="table-scroll jwt-simple-token-scroll"><table className="data-table jwt-simple-token-table"><thead><tr><th>#</th><th>alg</th><th>sub</th><th>iss</th><th>aud</th><th>exp</th><th>{t.signature}</th></tr></thead><tbody>{tokenRows.map((row, index) => <tr className={row.token === activeToken ? "selected-row" : ""} key={`${index}-${row.token.slice(0, 24)}`}><td><button className="jwt-simple-token-select" type="button" onClick={() => setSelectedToken(row.token)}>{index + 1}</button></td><td>{row.alg}</td><td>{row.sub}</td><td>{row.iss}</td><td>{row.aud}</td><td>{row.exp}</td><td>{row.signature}</td></tr>)}</tbody></table></div>}
               </div>
             )}
           </div>
@@ -217,10 +217,10 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
           <div className="jwt-simple-section">
             <label className="stack-label">Header<textarea className="compact-textarea jwt-simple-compose" value={header} onChange={(event) => { setHeader(event.currentTarget.value); setGeneratedToken(""); }} /></label>
             <label className="stack-label">Payload<textarea className="single-textarea jwt-simple-compose" value={payload} onChange={(event) => { setPayload(event.currentTarget.value); setGeneratedToken(""); }} /></label>
-            <label className="stack-label">{english ? "Shared secret" : "共享密钥"}<APasswordField className="text-input full-input" value={secret} onChange={(event) => { setSecret(event.currentTarget.value); setGeneratedToken(""); }} /></label>
-            <div className="button-row"><AButton variant="filled" disabled={!secret} onClick={generate}>{english ? "Generate" : "生成 Token"}</AButton></div>
+            <label className="stack-label">{t.shared_secret}<APasswordField className="text-input full-input" value={secret} onChange={(event) => { setSecret(event.currentTarget.value); setGeneratedToken(""); }} /></label>
+            <div className="button-row"><AButton variant="filled" disabled={!secret} onClick={generate}>{t.generate}</AButton></div>
             {generateError && <div className="empty-state error-state">{generateError}</div>}
-            {generatedToken && <div className="jwt-simple-output"><ToolPanelHeader title={english ? "Generated token" : "生成结果"} actions={<><AButton variant="outlined" onClick={() => void copyText(generatedToken)}>{t.copy}</AButton><AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("inspect"); setView("decoded"); }}>{english ? "Decode" : "打开解析"}</AButton></>} /><textarea className="single-textarea jwt-simple-generated" value={generatedToken} readOnly /></div>}
+            {generatedToken && <div className="jwt-simple-output"><ToolPanelHeader title={t.generated_token} actions={<><AButton variant="outlined" onClick={() => void copyText(generatedToken)}>{t.copy}</AButton><AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("inspect"); setView("decoded"); }}>{t.decodeAction}</AButton></>} /><textarea className="single-textarea jwt-simple-generated" value={generatedToken} readOnly /></div>}
           </div>
         )}
       </div>

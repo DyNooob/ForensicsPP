@@ -160,9 +160,7 @@ function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
   );
 }
 
-export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("http.text.v4", "");
+export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [text, setText] = useStoredState("http.text.v4", "");
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
@@ -184,7 +182,7 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setError("");
     setText("");
     if (file.size > MAX_HTTP_TEXT_BYTES) {
-      setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      setError(t.the_file_exceeds_the_16_mib_limit);
       return;
     }
     try {
@@ -196,41 +194,41 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   };
 
   const typeLabel = parsed.kind === "request"
-    ? (english ? "Request" : "请求")
-    : parsed.kind === "response" ? (english ? "Response" : "响应") : (english ? "Unknown" : "未知");
+    ? (t.httpRequest)
+    : parsed.kind === "response" ? (t.httpResponse) : (t.unknown);
   const summaryRows: Array<[string, string]> = [
-    [english ? "Message type" : "报文类型", hasInput ? typeLabel : "--"],
-    [english ? "Start line" : "起始行", parsed.startLine || "--"],
-    [english ? "Method / Status" : "方法 / 状态", parsed.methodOrStatus || "--"],
-    [english ? "Target" : "目标", parsed.target || "--"],
+    [t.message_type, hasInput ? typeLabel : "--"],
+    [t.start_line, parsed.startLine || "--"],
+    [t.method_status, parsed.methodOrStatus || "--"],
+    [t.target, parsed.target || "--"],
     ["HTTP", parsed.version || "--"],
     ["Host", parsed.host || "--"],
     ["Content-Type", parsed.contentType || "--"],
-    [english ? "Headers" : "请求头", String(parsed.headers.length)],
-    [english ? "Body size" : "正文大小", formatBytes(parsed.bodyBytes)]
+    [t.httpHeaders, String(parsed.headers.length)],
+    [t.body_size, formatBytes(parsed.bodyBytes)]
   ];
 
   return (
     <div className={`tool-grid http-workbench ${hasInput ? "has-http" : "empty-http"}`}>
       <div className="tool-panel wide-panel http-source-panel">
         <div className="panel-heading-row">
-          <PanelTitle title={english ? "HTTP message" : "HTTP 报文"} />
+          <PanelTitle title={t.http_message} />
           <div className="button-row compact-buttons">
-            <AButton variant="text" onClick={() => setText(examples.request)}>{english ? "Request example" : "请求示例"}</AButton>
-            <AButton variant="text" onClick={() => setText(examples.response)}>{english ? "Response example" : "响应示例"}</AButton>
+            <AButton variant="text" onClick={() => setText(examples.request)}>{t.request_example}</AButton>
+            <AButton variant="text" onClick={() => setText(examples.response)}>{t.response_example}</AButton>
           </div>
         </div>
         <textarea
           className="single-textarea http-source-textarea"
-          aria-label={english ? "Raw HTTP message" : "原始 HTTP 报文"}
+          aria-label={t.raw_http_message}
           value={text}
           spellCheck={false}
-          placeholder={english ? "Paste a raw HTTP request or response" : "粘贴原始 HTTP 请求或响应"}
+          placeholder={t.paste_a_raw_http_request_or_response}
           onChange={(event) => setText(event.currentTarget.value)}
         />
         <input ref={inputRef} type="file" accept=".txt,.http,text/plain" hidden aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="action-row">
-          <AButton variant="filled" onClick={() => inputRef.current?.click()}>{english ? "Open file" : "打开文件"}</AButton>
+          <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.open_file}</AButton>
           <AButton variant="outlined" disabled={!text} onClick={() => void copyText(text)}>{t.copy}</AButton>
           <AButton variant="text" disabled={!text && !error} onClick={() => { setText(""); setError(""); }}>{t.clear}</AButton>
         </div>
@@ -246,24 +244,24 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
           <div className="tool-panel wide-panel http-headers-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Headers" : "请求头"} />
+              <PanelTitle title={t.httpHeaders} />
               <AButton variant="text" disabled={!parsed.headers.length} onClick={() => void copyText(parsed.headers.map((row) => `${row.name}: ${row.value}`).join("\n"))}>{t.copy}</AButton>
             </div>
-            <DataTable columns={[english ? "Name" : "名称", english ? "Value" : "值"]} rows={parsed.headers.map((row) => [row.name, row.value])} />
+            <DataTable columns={[t.name, t.httpHeaderValue]} rows={parsed.headers.map((row) => [row.name, row.value])} />
           </div>
 
           {(parsed.params.length > 0 || parsed.cookies.length > 0) && (
             <div className="http-detail-grid wide-panel">
               {parsed.params.length > 0 && (
                 <div className="tool-panel http-params-panel">
-                  <PanelTitle title={english ? "Parameters" : "参数"} />
-                  <DataTable columns={[english ? "Source" : "来源", english ? "Name" : "名称", english ? "Value" : "值"]} rows={parsed.params.map((row) => [row.source, row.name, row.value])} />
+                  <PanelTitle title={t.httpParams} />
+                  <DataTable columns={[t.iocSource, t.name, t.httpHeaderValue]} rows={parsed.params.map((row) => [row.source, row.name, row.value])} />
                 </div>
               )}
               {parsed.cookies.length > 0 && (
                 <div className="tool-panel http-cookies-panel">
                   <PanelTitle title="Cookies" />
-                  <DataTable columns={[english ? "Source" : "来源", english ? "Name" : "名称", english ? "Value" : "值", english ? "Attributes" : "属性"]} rows={parsed.cookies.map((row) => [row.source, row.name, row.value, row.attributes])} />
+                  <DataTable columns={[t.iocSource, t.name, t.httpHeaderValue, t.httpCookieAttrs]} rows={parsed.cookies.map((row) => [row.source, row.name, row.value, row.attributes])} />
                 </div>
               )}
             </div>
@@ -272,10 +270,10 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           {parsed.body && (
             <div className="tool-panel wide-panel http-body-panel">
               <div className="panel-heading-row">
-                <PanelTitle title={english ? "Body" : "正文"} />
+                <PanelTitle title={t.httpMessageBody} />
                 <AButton variant="text" onClick={() => void copyText(parsed.body)}>{t.copy}</AButton>
               </div>
-              <textarea aria-label={english ? "HTTP body" : "HTTP 正文"} className="single-textarea http-body-textarea" value={parsed.body} spellCheck={false} readOnly />
+              <textarea aria-label={t.http_body} className="single-textarea http-body-textarea" value={parsed.body} spellCheck={false} readOnly />
             </div>
           )}
         </>

@@ -75,9 +75,7 @@ const IOC_SAMPLE = `2026-03-14 08:21:11 连接 185.220.101.47:4444 尝试登录
 可疑发件人 attacker@spam.example 附件 invoice.js
 `;
 
-export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [text, setText] = useStoredState("ioc.text.v2", "");
+export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [text, setText] = useStoredState("ioc.text.v2", "");
   const [source, setSource] = useStoredState("ioc.source.v2", "pasted text");
   const [analyzedText, setAnalyzedText] = useStoredState("ioc.analyzedText.v2", "");
   const [analyzedSource, setAnalyzedSource] = useStoredState("ioc.analyzedSource.v2", "pasted text");
@@ -176,7 +174,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     setDropActive(false);
     try {
       if (file.size > MAX_IOC_ANALYSIS_BYTES) {
-        setError(english ? "The file exceeds the 16 MiB analysis limit." : "文件超过 16 MiB 分析上限。");
+        setError(t.the_file_exceeds_the_16_mib_analysis_limit);
         return;
       }
       const value = await file.text();
@@ -213,7 +211,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   const analyze = async () => {
     if (!active || !text.trim() || analyzing) return;
     if (new TextEncoder().encode(text).length > MAX_IOC_ANALYSIS_BYTES) {
-      setError(english ? "IOC text exceeds the 16 MiB analysis limit." : "IOC 文本超过 16 MiB 分析上限。");
+      setError(t.ioc_text_exceeds_the_16_mib_analysis_limit);
       return;
     }
     cancelAnalysis();
@@ -266,7 +264,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
 
       <section className="tool-panel wide-panel ioc-simple-source-panel">
         <ToolPanelHeader
-          title={english ? "Input" : "输入文本"}
+          title={t.inputText}
           actions={<AButton variant="text" disabled={!text && !hasInput && !error && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input className="hidden-file-input" ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
@@ -290,10 +288,10 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         </div>
         <div className="ioc-simple-source-actions">
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadIocText}</AButton>
-          <AButton variant="text" onClick={() => handleText(IOC_SAMPLE)}>{english ? "Load sample" : "载入示例"}</AButton>
-          <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={() => void analyze()}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract indicators" : "提取 IOC")}</AButton>
+          <AButton variant="text" onClick={() => handleText(IOC_SAMPLE)}>{t.load_sample}</AButton>
+          <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={() => void analyze()}>{analyzing ? (t.extracting) : (t.extract_indicators)}</AButton>
         </div>
-        <textarea className="single-textarea ioc-simple-input" aria-label={english ? "Text to scan for IOCs" : "需要提取 IOC 的文本"} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
+        <textarea className="single-textarea ioc-simple-input" aria-label={t.text_to_scan_for_iocs} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
       </section>
 
       {hasInput && (
@@ -308,16 +306,16 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           />
 
           <div className="ioc-simple-summary">
-            <span><small>{english ? "Unique indicators" : "唯一 IOC"}</small><strong>{analysis.records.length}</strong></span>
-            <span><small>{english ? "Sightings" : "出现次数"}</small><strong>{totalSightings}</strong></span>
-            <span><small>{english ? "Types" : "类型"}</small><strong>{types.length}</strong></span>
-            <span><small>{english ? "Source" : "来源"}</small><strong>{analyzedSource}</strong></span>
+            <span><small>{t.unique_indicators}</small><strong>{analysis.records.length}</strong></span>
+            <span><small>{t.sightings}</small><strong>{totalSightings}</strong></span>
+            <span><small>{t.types}</small><strong>{types.length}</strong></span>
+            <span><small>{t.iocSource}</small><strong>{analyzedSource}</strong></span>
           </div>
 
           <div className="ioc-simple-toolbar">
             <div className="ioc-simple-filters">
               <input className="text-input" aria-label={t.iocFilter} value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t.iocFilter} />
-              <ASelect aria-label={english ? "IOC type" : "IOC 类型"} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.regexTypeAll }, ...types.map((type) => ({ value: type, label: type }))]} />
+              <ASelect aria-label={t.ioc_type} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.regexTypeAll }, ...types.map((type) => ({ value: type, label: type }))]} />
             </div>
             <div className="button-row compact-buttons">
               <AButton variant="outlined" disabled={!filteredRecords.length} onClick={() => downloadTextFile(`ioc-${Date.now()}.csv`, recordsToCsv(filteredRecords), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
@@ -344,13 +342,13 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
                 </tbody>
               </table>
             </div>
-          ) : <div className="empty-state">{english ? "No matching indicators" : "没有匹配的 IOC"}</div>}
+          ) : <div className="empty-state">{t.no_matching_indicators}</div>}
 
           {filteredRecords.length > PAGE_SIZE && (
             <div className="ioc-simple-pagination">
-              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton>
+              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton>
               <span>{page + 1} / {pageCount}</span>
-              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton>
+              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{t.next}</AButton>
             </div>
           )}
         </section>
@@ -359,7 +357,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
       {selected && (
         <section className="tool-panel wide-panel ioc-simple-detail-panel">
           <ToolPanelHeader
-            title={english ? "Selected indicator" : "当前 IOC"}
+            title={t.selected_indicator}
             actions={<>
               <AButton variant="outlined" onClick={() => void copyText(selected.normalized)}>{t.copy}</AButton>
               <AButton variant="text" onClick={() => void copyText(selected.defanged)}>{t.defangedUrl}</AButton>

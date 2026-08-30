@@ -132,7 +132,7 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
       if (!controller.signal.aborted) {
         setBatchEvents([]);
         setBatchError(caught instanceof RangeError && caught.message.startsWith("TIMESTAMP_BATCH_TOO_LARGE:")
-          ? (english ? "The batch input exceeds the 32 MiB limit." : "批量输入超过 32 MiB 限制。")
+          ? (t.the_batch_input_exceeds_the_32_mib_limit)
           : caught instanceof Error ? caught.message : String(caught));
       }
     }).finally(() => {
@@ -162,39 +162,39 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
 
   return (
     <div className={`tool-grid timestamp-workbench timestamp-simple-workbench ${hasInput || submittedBatchInput.trim() ? "has-timestamp" : "empty-timestamp"}`}>
-      <ASegmentedGroup className="timestamp-page-tabs wide-panel" value={page} selects="single" aria-label={english ? "Timestamp workspace" : "时间戳工作区"}>
-        <ASegmentedButton value="single" onClick={() => setPage("single")}>{english ? "Single value" : "单值转换"}</ASegmentedButton>
-        <ASegmentedButton value="batch" onClick={() => setPage("batch")}>{english ? "Batch extract" : "批量提取"}{batchEvents.length ? ` (${batchEvents.length})` : ""}</ASegmentedButton>
+      <ASegmentedGroup className="timestamp-page-tabs wide-panel" value={page} selects="single" aria-label={t.timestamp_workspace}>
+        <ASegmentedButton value="single" onClick={() => setPage("single")}>{t.single_value}</ASegmentedButton>
+        <ASegmentedButton value="batch" onClick={() => setPage("batch")}>{t.batch_extract}{batchEvents.length ? ` (${batchEvents.length})` : ""}</ASegmentedButton>
       </ASegmentedGroup>
 
       {page === "single" && <>
         <div className="tool-panel wide-panel timestamp-simple-input-panel">
-          <ToolPanelHeader title={english ? "Timestamp input" : "时间戳输入"} actions={<AButton variant="text" disabled={!hasInput} onClick={clearSingle}>{t.clear}</AButton>} />
-          <input className="text-input full-input" aria-label={english ? "Timestamp value" : "时间戳数值"} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSubmittedInput(""); setSelectedCandidateKey(""); }} placeholder="1719705600 / 133638048000000000 / 20260706083045Z" />
+          <ToolPanelHeader title={t.timestamp_input} actions={<AButton variant="text" disabled={!hasInput} onClick={clearSingle}>{t.clear}</AButton>} />
+          <input className="text-input full-input" aria-label={t.timestamp_value} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSubmittedInput(""); setSelectedCandidateKey(""); }} placeholder="1719705600 / 133638048000000000 / 20260706083045Z" />
           <div className="timestamp-preset-row">
-            <ASelect aria-label={english ? "Timestamp format" : "时间戳格式"} value={preset} onChange={(value) => setPreset(String(value))} options={currentTimePresets.map((item) => ({ value: item.id, label: item.label }))} />
-            <AButton variant="outlined" onClick={applyPreset}>{english ? "Use current time" : "使用当前时间"}</AButton>
-            <AButton variant="filled" disabled={!input.trim()} onClick={() => { setSubmittedInput(input); setSelectedCandidateKey(""); }}>{english ? "Convert" : "转换"}</AButton>
+            <ASelect aria-label={t.timestamp_format} value={preset} onChange={(value) => setPreset(String(value))} options={currentTimePresets.map((item) => ({ value: item.id, label: item.label }))} />
+            <AButton variant="outlined" onClick={applyPreset}>{t.use_current_time}</AButton>
+            <AButton variant="filled" disabled={!input.trim()} onClick={() => { setSubmittedInput(input); setSelectedCandidateKey(""); }}>{t.convert}</AButton>
           </div>
         </div>
 
         {hasInput && <div className="tool-panel wide-panel timestamp-simple-result-panel">
           <ToolPanelHeader
-            title={english ? "Conversion result" : "转换结果"}
-            subtitle={selectedCandidate?.[0] ?? (english ? "No supported format" : "未匹配支持格式")}
+            title={t.conversion_result}
+            subtitle={selectedCandidate?.[0] ?? (t.no_supported_format)}
             actions={<>
-              <ASegmentedGroup value={outputScope} selects="single" aria-label={english ? "Conversion output scope" : "转换结果范围"}>
-                <ASegmentedButton value="common" onClick={() => setOutputScope("common")}>{english ? "Common" : "常用"}</ASegmentedButton>
-                <ASegmentedButton value="all" onClick={() => setOutputScope("all")}>{english ? "All" : "全部"}</ASegmentedButton>
+              <ASegmentedGroup value={outputScope} selects="single" aria-label={t.conversion_output_scope}>
+                <ASegmentedButton value="common" onClick={() => setOutputScope("common")}>{t.common}</ASegmentedButton>
+                <ASegmentedButton value="all" onClick={() => setOutputScope("all")}>{t.all}</ASegmentedButton>
               </ASegmentedGroup>
-              <AButton variant="outlined" disabled={!selectedCandidate} onClick={() => selectedCandidate && void copyText(selectedCandidate[1])}>{english ? "Copy ISO" : "复制 ISO"}</AButton>
-              <AButton variant="outlined" disabled={!conversionMap.get("Unix milliseconds")} onClick={() => void copyText(conversionMap.get("Unix milliseconds") ?? "")}>{english ? "Copy Unix ms" : "复制 Unix ms"}</AButton>
+              <AButton variant="outlined" disabled={!selectedCandidate} onClick={() => selectedCandidate && void copyText(selectedCandidate[1])}>{t.copy_iso}</AButton>
+              <AButton variant="outlined" disabled={!conversionMap.get("Unix milliseconds")} onClick={() => void copyText(conversionMap.get("Unix milliseconds") ?? "")}>{t.copy_unix_ms}</AButton>
               <AButton variant="text" disabled={!selectedCandidate} onClick={() => downloadTextFile(`timestamp-${Date.now()}.csv`, timestampRowsToCsv(rows, candidates), "text/csv;charset=utf-8")}>{t.exportTimestampCsv}</AButton>
             </>}
           />
-          {selectedCandidate ? <div className="table-scroll compact-scroll"><table className="data-table timestamp-conversion-table"><thead><tr><th>{english ? "Format" : "格式"}</th><th>{english ? "Value" : "值"}</th><th>{t.copy}</th></tr></thead><tbody>
+          {selectedCandidate ? <div className="table-scroll compact-scroll"><table className="data-table timestamp-conversion-table"><thead><tr><th>{t.format}</th><th>{t.httpHeaderValue}</th><th>{t.copy}</th></tr></thead><tbody>
             {visibleConversions.map(([label, value]) => <tr key={`${label}-${value}`}><td>{label}</td><td className="mono-cell">{value}</td><td><AButton variant="text" disabled={!value || value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></td></tr>)}
-          </tbody></table></div> : <div className="empty-state error-state">{rows[0]?.[1] || (english ? "Unsupported timestamp" : "无法识别时间戳")}</div>}
+          </tbody></table></div> : <div className="empty-state error-state">{rows[0]?.[1] || (t.unsupported_timestamp)}</div>}
         </div>}
 
         {candidates.length > 1 && <details className="tool-panel wide-panel timestamp-simple-candidates-panel">
@@ -209,24 +209,24 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
 
       {page === "batch" && <div className="tool-panel wide-panel timestamp-simple-batch-panel">
         <ToolPanelHeader
-          title={english ? "Extract timestamps from text" : "从文本提取时间戳"}
+          title={t.extract_timestamps_from_text}
           subtitle={`${visibleBatchEvents.length}/${batchEvents.length}`}
           actions={<>
             <AButton variant="outlined" disabled={!batchEvents.length} onClick={() => downloadTextFile(`timestamp-batch-${Date.now()}.csv`, timelineToCsv(visibleBatchEvents.length ? visibleBatchEvents : batchEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
-              <AButton variant="filled" disabled={!batchInput.trim() || batchInputTooLarge} onClick={() => { setSubmittedBatchInput(batchInput); setBatchFilter(""); setBatchFormat(""); }}>{english ? "Extract" : "提取"}</AButton>
+              <AButton variant="filled" disabled={!batchInput.trim() || batchInputTooLarge} onClick={() => { setSubmittedBatchInput(batchInput); setBatchFilter(""); setBatchFormat(""); }}>{t.extract}</AButton>
               <AButton variant="text" disabled={!batchInput && !submittedBatchInput} onClick={() => { setBatchInput(""); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }}>{t.clear}</AButton>
           </>}
         />
         <textarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
-        {batchInputTooLarge && <div className="empty-state error-state">{english ? "The batch input exceeds the 32 MiB limit." : "批量输入超过 32 MiB 限制。"}</div>}
+        {batchInputTooLarge && <div className="empty-state error-state">{t.the_batch_input_exceeds_the_32_mib_limit}</div>}
         <div className="timestamp-simple-batch-filter">
-          <input className="text-input" aria-label={english ? "Filter extracted timestamps" : "筛选提取的时间戳"} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={english ? "Filter raw value, ISO, or context" : "筛选原值、ISO 或上下文"} />
-          <ASelect aria-label={english ? "Batch result format" : "批量结果格式"} value={batchFormat} onChange={(value) => setBatchFormat(String(value))} options={[{ value: "", label: english ? "All formats" : "全部格式" }, ...batchFormats.map((format) => ({ value: format, label: format }))]} />
+          <input className="text-input" aria-label={t.filter_extracted_timestamps} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={t.filter_raw_value_iso_or_context} />
+          <ASelect aria-label={t.batch_result_format} value={batchFormat} onChange={(value) => setBatchFormat(String(value))} options={[{ value: "", label: t.all_formats }, ...batchFormats.map((format) => ({ value: format, label: format }))]} />
         </div>
         {batchParsing && <ALinearProgress />}
         {batchError && <div className="empty-state error-state">{batchError}</div>}
         <div className="table-scroll timestamp-simple-batch-scroll">
-          {visibleBatchEvents.length ? <table className="data-table timestamp-simple-batch-table"><thead><tr><th>ISO</th><th>{t.localTime}</th><th>{t.format}</th><th>{english ? "Raw" : "原值"}</th><th>{english ? "Line" : "行"}</th><th>{english ? "Context" : "上下文"}</th></tr></thead><tbody>{visibleBatchEvents.map((event) => <tr key={event.id}><td>{event.iso}</td><td>{event.local}</td><td>{event.format}</td><td>{event.raw}</td><td>{event.line}</td><td>{event.context}</td></tr>)}</tbody></table> : <div className="empty-state">{submittedBatchInput ? (english ? "No timestamp found" : "未提取到时间戳") : t.waiting}</div>}
+          {visibleBatchEvents.length ? <table className="data-table timestamp-simple-batch-table"><thead><tr><th>ISO</th><th>{t.localTime}</th><th>{t.format}</th><th>{t.raw}</th><th>{t.iocLine}</th><th>{t.regexContext}</th></tr></thead><tbody>{visibleBatchEvents.map((event) => <tr key={event.id}><td>{event.iso}</td><td>{event.local}</td><td>{event.format}</td><td>{event.raw}</td><td>{event.line}</td><td>{event.context}</td></tr>)}</tbody></table> : <div className="empty-state">{submittedBatchInput ? (t.no_timestamp_found) : t.waiting}</div>}
         </div>
       </div>}
     </div>

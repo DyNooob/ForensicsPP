@@ -127,9 +127,9 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
   }, [active, inputTooLarge, value]);
   const rowsTooMany = rowCount > MAX_BASE_CONVERT_ROWS;
   const conversionError = inputTooLarge
-    ? (english ? "Input is limited to 1,000,000 characters." : "输入内容不能超过 1,000,000 个字符。")
+    ? (t.input_is_limited_to_1_000_000_characters)
     : rowsTooMany
-      ? (english ? "Batch conversion is limited to 10,000 values." : "批量转换最多支持 10,000 个数值。")
+      ? (t.batch_conversion_is_limited_to_10_000_values)
       : "";
   const items = React.useMemo(() => {
     if (!active || conversionError) return [];
@@ -137,7 +137,7 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
   }, [active, base, conversionError, value]);
   const single = items.length === 1 ? items[0] : null;
   const resultRows = React.useMemo<Array<[string, string]>>(() => single ? [
-    [english ? "Detected input" : "识别输入", single.detectedBase],
+    [t.detected_input, single.detectedBase],
     [t.decimal, single.decimal],
     [t.hexadecimal, single.hex],
     [t.binaryBase, single.binary],
@@ -152,11 +152,11 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
   return (
     <div className={`tool-grid baseconvert-workbench baseconvert-simple-workbench ${hasInput ? "has-baseconvert" : "empty-baseconvert"}`}>
       <div className="tool-panel wide-panel baseconvert-simple-input-panel">
-        <ToolPanelHeader title={english ? "Base conversion" : "进制转换"} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
-        <label className="stack-label">{t.inputText}<textarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={english ? "Enter one value, or one value per line" : "输入一个数值，或每行输入一个数值"} /></label>
+        <ToolPanelHeader title={t.base_conversion} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
+        <label className="stack-label">{t.inputText}<textarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={t.enter_one_value_or_one_value_per_line} /></label>
         {conversionError && <div className="empty-state error-state" role="alert">{conversionError}</div>}
         <div className="baseconvert-simple-base-row">
-          <span>{english ? "Default input base" : "默认输入进制"}</span>
+          <span>{t.default_input_base}</span>
           <ASegmentedGroup className="baseconvert-base-switch" value={String(base)} selects="single">
             {[[2, t.binaryBase], [8, t.octal], [10, t.decimal], [16, t.hexadecimal]].map(([itemBase, label]) => <ASegmentedButton value={String(itemBase)} key={itemBase} onClick={() => setBase(Number(itemBase))}>{label}</ASegmentedButton>)}
           </ASegmentedGroup>
@@ -165,12 +165,12 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
 
       {single && <div className="tool-panel wide-panel baseconvert-simple-result-panel">
         <ToolPanelHeader
-          title={english ? "Conversion result" : "转换结果"}
-          subtitle={single.error ? (english ? "Invalid value" : "数值无效") : single.detectedBase}
+          title={t.conversion_result}
+          subtitle={single.error ? (t.invalid_value) : single.detectedBase}
           actions={<>
             <AButton variant="outlined" disabled={single.decimal === "--"} onClick={() => void copyText(single.decimal)}>{t.decimal}</AButton>
             <AButton variant="outlined" disabled={single.hex === "--"} onClick={() => void copyText(single.hex)}>{t.hexadecimal}</AButton>
-            <AButton variant="text" disabled={single.ascii === "--"} onClick={() => void copyText(single.ascii)}>{english ? "Copy ASCII" : "复制 ASCII"}</AButton>
+            <AButton variant="text" disabled={single.ascii === "--"} onClick={() => void copyText(single.ascii)}>{t.copy_ascii}</AButton>
           </>}
         />
         {single.error ? <div className="empty-state error-state">{single.error}</div> : <InfoTable rows={resultRows} />}
@@ -178,11 +178,11 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
 
       {items.length > 1 && <div className="tool-panel wide-panel baseconvert-simple-batch-panel">
         <ToolPanelHeader
-          title={english ? "Batch results" : "批量结果"}
-          subtitle={`${items.filter((item) => !item.error).length}/${items.length} ${english ? "converted" : "已转换"}`}
+          title={t.batch_results}
+          subtitle={`${items.filter((item) => !item.error).length}/${items.length} ${t.converted}`}
           actions={<AButton variant="outlined" onClick={() => downloadTextFile(`base-convert-${Date.now()}.csv`, rowsToCsv(items), "text/csv;charset=utf-8")}>{t.exportBaseCsv}</AButton>}
         />
-        <div className="table-scroll baseconvert-simple-scroll"><table className="data-table baseconvert-simple-table"><thead><tr><th>{english ? "Input" : "输入"}</th><th>{t.detectedBase}</th><th>{t.decimal}</th><th>{t.hexadecimal}</th><th>{t.binaryBase}</th><th>{t.octal}</th><th>{t.asciiBytes}</th><th>{english ? "Error" : "错误"}</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${index}-${item.input}`}><td>{item.input}</td><td>{item.detectedBase}</td><td>{item.decimal}</td><td>{item.hex}</td><td>{item.binary}</td><td>{item.octal}</td><td>{item.ascii}</td><td>{item.error ?? "--"}</td></tr>)}</tbody></table></div>
+        <div className="table-scroll baseconvert-simple-scroll"><table className="data-table baseconvert-simple-table"><thead><tr><th>{t.inputText}</th><th>{t.detectedBase}</th><th>{t.decimal}</th><th>{t.hexadecimal}</th><th>{t.binaryBase}</th><th>{t.octal}</th><th>{t.asciiBytes}</th><th>{t.levelError}</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${index}-${item.input}`}><td>{item.input}</td><td>{item.detectedBase}</td><td>{item.decimal}</td><td>{item.hex}</td><td>{item.binary}</td><td>{item.octal}</td><td>{item.ascii}</td><td>{item.error ?? "--"}</td></tr>)}</tbody></table></div>
       </div>}
     </div>
   );

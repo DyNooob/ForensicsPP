@@ -103,27 +103,27 @@ export function FirmwareAnalyzerTool({
       source: [{ name: file.name, size: file.size, type: file.type || "application/octet-stream", lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : "", sha256: analysis.sha256 }],
       run: { startedAt, completedAt, parameters: { chunkSize: analysis.chunkSize, recursive: analysis.recursive, localOnly: true } },
       summary: {
-        title: english ? "Firmware / embedded-file analysis" : "固件 / 嵌入文件分析",
+        title: t.firmware_embedded_file_analysis,
         text: english
           ? `${analysis.objects.length} object(s) identified across ${Object.keys(analysis.categories).length} forensic categories.`
           : `识别 ${analysis.objects.length} 个对象，覆盖 ${Object.keys(analysis.categories).length} 类取证结构。`,
         metrics: [
-          { label: english ? "Source SHA-256" : "源文件 SHA-256", value: analysis.sha256 },
-          { label: english ? "Objects" : "对象数", value: String(analysis.objects.length) },
-          { label: english ? "Filesystems" : "文件系统", value: String(analysis.categories.Filesystem ?? 0) },
-          { label: english ? "Executables" : "可执行文件", value: String(analysis.categories.Executable ?? 0) }
+          { label: t.source_sha_256, value: analysis.sha256 },
+          { label: t.objects, value: String(analysis.objects.length) },
+          { label: t.filesystems, value: String(analysis.categories.Filesystem ?? 0) },
+          { label: t.executables, value: String(analysis.categories.Executable ?? 0) }
         ]
       },
       findings: [
-        ...analysis.warnings.map((detail) => ({ level: "warn", title: english ? "Firmware scan limitation" : "固件扫描限制", detail })),
-        ...analysis.entropy.filter((block) => block.classification === "very-high").slice(0, 64).map((block) => ({ level: "warn", title: english ? "Very-high entropy region" : "极高熵区域", detail: `0x${block.offset.toString(16).toUpperCase()} - 0x${block.endOffset.toString(16).toUpperCase()} · ${block.entropy.toFixed(4)} bits/byte` }))
+        ...analysis.warnings.map((detail) => ({ level: "warn", title: t.firmware_scan_limitation, detail })),
+        ...analysis.entropy.filter((block) => block.classification === "very-high").slice(0, 64).map((block) => ({ level: "warn", title: t.very_high_entropy_region, detail: `0x${block.offset.toString(16).toUpperCase()} - 0x${block.endOffset.toString(16).toUpperCase()} · ${block.entropy.toFixed(4)} bits/byte` }))
       ],
       indicators: [],
       artifacts: analysis.objects.slice(0, 5000).map((object) => ({ id: object.id, label: object.label, kind: "embedded-file", offset: object.offset, size: object.size, sha256: object.sha256, mime: object.mime, extension: object.extension, parentId: object.parentId, depth: object.depth, confidence: object.confidence })),
       timeline: [],
       limitations: [
-        ...(analysis.objects.some((object) => object.extent === "heuristic" || object.extent === "unknown") ? [{ code: "FIRMWARE_BOUNDARY_CONFIDENCE", detail: english ? "Heuristic/unresolved carve boundaries require independent verification." : "启发式或未解析的 carving 边界需要独立复核。" }] : []),
-        ...(analysis.warnings.some((warning) => warning.includes("recursive expansion")) ? [{ code: "FIRMWARE_RECURSION_BUDGET", detail: english ? "Recursive container expansion is budgeted; remaining carved containers can be sent to their analyzers individually." : "递归容器展开受预算限制；剩余 carved container 仍可单独交给对应分析器。" }] : [])
+        ...(analysis.objects.some((object) => object.extent === "heuristic" || object.extent === "unknown") ? [{ code: "FIRMWARE_BOUNDARY_CONFIDENCE", detail: t.heuristic_unresolved_carve_boundaries_require_independent_verification }] : []),
+        ...(analysis.warnings.some((warning) => warning.includes("recursive expansion")) ? [{ code: "FIRMWARE_RECURSION_BUDGET", detail: t.recursive_container_expansion_is_budgeted_remaining_carved_containers_can_be_sent_to_their_analyzers_individually }] : [])
       ],
       data: { counts: analysis.counts, categories: analysis.categories, architectures: analysis.architectures, interestingPaths: analysis.interestingPaths, timings: analysis.timings, manifestSchema: "forensicspp.firmware-manifest/v1" }
     });
@@ -239,24 +239,24 @@ export function FirmwareAnalyzerTool({
   }, [session]);
 
   const phaseLabel = progress.phase === "scan"
-    ? (english ? "Scanning signatures / entropy / SHA-256" : "扫描签名 / 熵 / SHA-256")
+    ? (t.scanning_signatures_entropy_sha_256)
     : progress.phase === "resolve"
-      ? (english ? "Resolving object boundaries" : "解析对象边界")
-      : (english ? "Recursive container analysis" : "递归容器分析");
+      ? (t.resolving_object_boundaries)
+      : (t.recursive_container_analysis);
   const progressRatio = progress.total ? Math.min(1, progress.loaded / progress.total) : 0;
 
   return (
     <div className="tool-grid firmware-workbench">
       <div className="tool-panel wide-panel firmware-source-panel">
-        <PanelTitle title={english ? "Firmware Analyzer" : "固件分析"} />
+        <PanelTitle title={t.firmware} />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".bin,.img,.rom,.fw,.trx,.chk,.ubi,.ubifs,.squashfs,.jffs2,.tar,.gz,.zip,.apk,*/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files?.[0]); }}>
-          <strong>{session?.analysis.name ?? (english ? "Open firmware / raw image" : "打开固件 / 原始镜像")}</strong>
-          <span>{session ? `${formatBytes(session.analysis.size)} · SHA-256 ${session.analysis.sha256.slice(0, 16)}…` : (english ? "Streaming signature scan, boundary resolution, entropy map, recursive container expansion, and analyzer handoff." : "流式签名扫描、边界解析、熵图、递归容器展开和 Analyzer 联动。")}</span>
+          <strong>{session?.analysis.name ?? (t.open_firmware_raw_image)}</strong>
+          <span>{session ? `${formatBytes(session.analysis.size)} · SHA-256 ${session.analysis.sha256.slice(0, 16)}…` : (t.streaming_signature_scan_boundary_resolution_entropy_map_recursive_container_expansion_and_analyzer_handoff)}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="outlined" disabled={!session} onClick={exportManifest}>{english ? "Export manifest" : "导出扫描清单"}</AButton>
+          <AButton variant="outlined" disabled={!session} onClick={exportManifest}>{t.export_manifest}</AButton>
           <AButton variant="text" disabled={!session && !loading && !error} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <div className="firmware-progress"><ALinearProgress /><small>{phaseLabel} · {(progressRatio * 100).toFixed(1)}%</small></div>}
@@ -265,57 +265,57 @@ export function FirmwareAnalyzerTool({
 
       {session && <>
         <div className="tool-panel wide-panel">
-          <ToolPanelHeader title={english ? "Firmware triage" : "固件初筛"} subtitle={`${session.analysis.objects.length}${session.analysis.truncated ? "+" : ""} ${english ? "objects" : "个对象"}`} />
+          <ToolPanelHeader title={t.firmware_triage} subtitle={`${session.analysis.objects.length}${session.analysis.truncated ? "+" : ""} ${t.objects_2}`} />
           <ToolFactGrid items={[
             { label: "SHA-256", value: session.analysis.sha256.slice(0, 24) + "…", copyValue: session.analysis.sha256 },
-            { label: english ? "Filesystems" : "文件系统", value: String(session.analysis.categories.Filesystem ?? 0) },
-            { label: english ? "Executables" : "可执行文件", value: String(session.analysis.categories.Executable ?? 0) },
-            { label: english ? "Containers" : "容器/压缩", value: String(session.analysis.categories.Container ?? 0) },
-            { label: english ? "Databases" : "数据库", value: String(session.analysis.categories.Database ?? 0) },
-            { label: english ? "Recursive" : "递归", value: session.analysis.recursive ? (english ? "automatic" : "自动") : (english ? "selective" : "选择性") }
+            { label: t.filesystems, value: String(session.analysis.categories.Filesystem ?? 0) },
+            { label: t.executables, value: String(session.analysis.categories.Executable ?? 0) },
+            { label: t.containers, value: String(session.analysis.categories.Container ?? 0) },
+            { label: t.databases, value: String(session.analysis.categories.Database ?? 0) },
+            { label: t.recursive, value: session.analysis.recursive ? (t.automatic) : (t.selective) }
           ]} />
           <InfoTable rows={[
-            [english ? "Architectures" : "架构", Object.entries(session.analysis.architectures).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
-            [english ? "Categories" : "分类", Object.entries(session.analysis.categories).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
-            [english ? "Chunk size" : "扫描块", formatBytes(session.analysis.chunkSize)],
-            [english ? "Scan time" : "扫描耗时", `${(session.analysis.timings.scanMs / 1000).toFixed(2)} s`],
-            [english ? "Resolve time" : "边界解析耗时", `${(session.analysis.timings.resolveMs / 1000).toFixed(2)} s`],
-            [english ? "Recursive time" : "递归耗时", `${(session.analysis.timings.recursiveMs / 1000).toFixed(2)} s`],
-            [english ? "Total time" : "总耗时", `${(session.analysis.timings.totalMs / 1000).toFixed(2)} s`],
-            [english ? "Interesting paths" : "关注路径", String(session.analysis.interestingPaths.length)]
+            [t.architectures, Object.entries(session.analysis.architectures).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
+            [t.categories, Object.entries(session.analysis.categories).map(([key, value]) => `${key}: ${value}`).join(" · ") || "--"],
+            [t.chunk_size, formatBytes(session.analysis.chunkSize)],
+            [t.scan_time, `${(session.analysis.timings.scanMs / 1000).toFixed(2)} s`],
+            [t.resolve_time, `${(session.analysis.timings.resolveMs / 1000).toFixed(2)} s`],
+            [t.recursive_time, `${(session.analysis.timings.recursiveMs / 1000).toFixed(2)} s`],
+            [t.total_time, `${(session.analysis.timings.totalMs / 1000).toFixed(2)} s`],
+            [t.interesting_paths, String(session.analysis.interestingPaths.length)]
           ]} />
           {session.analysis.warnings.map((warning, index) => <div className="empty-state warning-state" key={`${warning}-${index}`}>{warning}</div>)}
           {session.analysis.interestingPaths.length > 0 && <details className="firmware-interesting"><summary>{english ? `Interesting expanded paths (${session.analysis.interestingPaths.length})` : `关注的展开路径 (${session.analysis.interestingPaths.length})`}</summary><pre>{session.analysis.interestingPaths.join("\n")}</pre></details>}
         </div>
 
         <div className="tool-panel wide-panel firmware-entropy-panel">
-          <ToolPanelHeader title={english ? "Entropy map" : "熵图"} subtitle={english ? "Click a block to preview its bytes" : "点击区块预览对应字节"} />
-          <div className="firmware-entropy-chart" role="img" aria-label={english ? "Firmware entropy map" : "固件熵图"}>
+          <ToolPanelHeader title={t.entropy_map} subtitle={t.click_a_block_to_preview_its_bytes} />
+          <div className="firmware-entropy-chart" role="img" aria-label={t.firmware_entropy_map}>
             {session.analysis.entropy.map((block, index) => <button key={`${block.offset}-${index}`} type="button" className={`firmware-entropy-bar ${block.classification}`} style={{ height: `${Math.max(3, block.entropy / 8 * 100)}%` }} title={`0x${block.offset.toString(16).toUpperCase()} · ${block.entropy.toFixed(4)} · ${entropyLabel(block.classification, english)}`} onClick={() => void showPreview(block.offset, null)} />)}
           </div>
-          <div className="firmware-entropy-legend"><span>{english ? "0 bits/byte" : "0 bit/字节"}</span><span>{english ? "High / compressed / encrypted candidate" : "高熵 / 压缩 / 加密候选"}</span><span>8 bits/byte</span></div>
+          <div className="firmware-entropy-legend"><span>{t.k_0_bits_byte}</span><span>{t.high_compressed_encrypted_candidate}</span><span>8 bits/byte</span></div>
         </div>
 
         <div className="tool-panel wide-panel firmware-object-panel">
-          <ToolPanelHeader title={english ? "Embedded objects" : "嵌入对象"} subtitle={english ? "Offsets are source-relative for signature hits; expanded entries use virtual paths." : "签名命中的偏移相对源文件；展开条目使用虚拟路径。"} />
-          <input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter type, path, architecture, SHA-256…" : "筛选类型、路径、架构、SHA-256…"} />
-          <div className="table-scroll firmware-object-scroll"><table className="data-table"><thead><tr><th>{english ? "Object" : "对象"}</th><th>{english ? "Offset / path" : "偏移 / 路径"}</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Boundary" : "边界"}</th><th>{english ? "Confidence" : "可信度"}</th><th>{english ? "Architecture" : "架构"}</th><th>SHA-256</th><th>{english ? "Actions" : "操作"}</th></tr></thead><tbody>
+          <ToolPanelHeader title={t.embedded_objects} subtitle={t.offsets_are_source_relative_for_signature_hits_expanded_entries_use_virtual_paths} />
+          <input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_type_path_architecture_sha_256} />
+          <div className="table-scroll firmware-object-scroll"><table className="data-table"><thead><tr><th>{t.object}</th><th>{t.offset_path}</th><th>{t.fileSize}</th><th>{t.boundary}</th><th>{t.identifyConfidence}</th><th>{t.architecture}</th><th>SHA-256</th><th>{t.commandGroupActions}</th></tr></thead><tbody>
             {visibleObjects.slice(0, 5000).map((object) => {
               const actionDisabled = object.size <= 0 || object.size > MAX_ACTION_BYTES || busyObjectId === object.id || (object.origin !== "signature" && !session.retained.has(object.id));
-              return <tr key={object.id} className={selectedId === object.id ? "selected-row" : ""} onClick={() => setSelectedId(object.id)}><td><span style={{ paddingLeft: `${Math.min(8, object.depth) * 14}px` }}>{object.depth ? "↳ " : ""}{object.label}</span><br/><small>{object.origin}</small></td><td>{object.origin === "signature" ? `0x${object.offset.toString(16).toUpperCase()}` : object.virtualPath}</td><td>{formatBytes(object.size)}</td><td title={object.detail}>{object.extent}</td><td>{object.confidence}</td><td>{object.architecture || "--"}</td><td title={object.sha256}>{object.sha256 ? `${object.sha256.slice(0, 14)}…` : "--"}</td><td><div className="button-row compact-buttons"><AButton variant="text" disabled={actionDisabled} onClick={(event) => { event.stopPropagation(); void downloadObject(object); }}>{english ? "Extract" : "提取"}</AButton><AButton variant="text" disabled={actionDisabled || !setActiveTool} onClick={(event) => { event.stopPropagation(); void analyzeObject(object); }}>{english ? `Analyze → ${analyzerTargetLabel(object.analyzer, true)}` : `分析 → ${analyzerTargetLabel(object.analyzer, false)}`}</AButton></div></td></tr>;
+              return <tr key={object.id} className={selectedId === object.id ? "selected-row" : ""} onClick={() => setSelectedId(object.id)}><td><span style={{ paddingLeft: `${Math.min(8, object.depth) * 14}px` }}>{object.depth ? "↳ " : ""}{object.label}</span><br/><small>{object.origin}</small></td><td>{object.origin === "signature" ? `0x${object.offset.toString(16).toUpperCase()}` : object.virtualPath}</td><td>{formatBytes(object.size)}</td><td title={object.detail}>{object.extent}</td><td>{object.confidence}</td><td>{object.architecture || "--"}</td><td title={object.sha256}>{object.sha256 ? `${object.sha256.slice(0, 14)}…` : "--"}</td><td><div className="button-row compact-buttons"><AButton variant="text" disabled={actionDisabled} onClick={(event) => { event.stopPropagation(); void downloadObject(object); }}>{t.extract}</AButton><AButton variant="text" disabled={actionDisabled || !setActiveTool} onClick={(event) => { event.stopPropagation(); void analyzeObject(object); }}>{english ? `Analyze → ${analyzerTargetLabel(object.analyzer, true)}` : `分析 → ${analyzerTargetLabel(object.analyzer, false)}`}</AButton></div></td></tr>;
             })}
           </tbody></table></div>
         </div>
 
         <div className="tool-panel wide-panel firmware-preview-panel">
-          <ToolPanelHeader title={english ? "Hex context" : "十六进制上下文"} subtitle={`0x${previewOffset.toString(16).toUpperCase()}`} />
+          <ToolPanelHeader title={t.hex_context} subtitle={`0x${previewOffset.toString(16).toUpperCase()}`} />
           {selected && <InfoTable rows={[
-            [english ? "Object" : "对象", selected.label],
-            [english ? "Virtual path" : "虚拟路径", selected.virtualPath],
-            [english ? "Analyzer" : "目标分析器", analyzerTargetLabel(selected.analyzer, english)],
-            [english ? "Boundary evidence" : "边界依据", selected.detail]
+            [t.object, selected.label],
+            [t.virtual_path, selected.virtualPath],
+            [t.analyzer, analyzerTargetLabel(selected.analyzer, english)],
+            [t.boundary_evidence, selected.detail]
           ]} />}
-          <pre className="mono-block firmware-hex-preview">{preview || (english ? "Select an object or entropy block." : "选择对象或熵区块。")}</pre>
+          <pre className="mono-block firmware-hex-preview">{preview || (t.select_an_object_or_entropy_block)}</pre>
         </div>
       </>}
     </div>

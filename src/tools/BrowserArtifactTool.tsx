@@ -102,7 +102,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       setFilter("");
       setPage(0);
       setSelectedRecordId("");
-      setError(english ? "No supported browser data file was selected." : "没有选择支持的浏览器数据文件。");
+      setError(t.no_supported_browser_data_file_was_selected);
       return;
     }
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
@@ -116,7 +116,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       setSelectedRecordId("");
       setError(tooLarge
         ? (english ? `${tooLarge.name} exceeds the 128 MiB per-file limit.` : `${tooLarge.name} 超过单文件 128 MiB 限制。`)
-        : (english ? "The selected files exceed the 256 MiB total limit." : "所选文件总大小超过 256 MiB。"));
+        : (t.the_selected_files_exceed_the_256_mib_total_limit));
       return;
     }
     setSelectedFiles(next);
@@ -153,7 +153,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
       if (controller.signal.aborted) return;
-      setProgress(english ? "Parsing browser data" : "正在解析浏览器数据");
+      setProgress(t.parsing_browser_data);
       const result = await runWorkerTask<{ inputs: typeof inputs }, BrowserArtifactAnalysis>({
         createWorker: () => new Worker(new URL("../features/browserArtifacts/browser-artifacts.worker.ts", import.meta.url), { type: "module" }),
         request: { inputs },
@@ -166,7 +166,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         setAnalysis(result);
         workspace.save(persistableBrowserArtifactAnalysis(result));
         publishAnalysisResult("browserartifacts", buildBrowserArtifactEnvelope(result));
-        if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
+        if (!result.records.length) setError(t.files_opened_but_no_supported_browser_records_were_found );
       });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -237,7 +237,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     <div className={`tool-grid browser-artifact-workbench ${analysis ? "has-browser-artifacts" : "empty-browser-artifacts"}`}>
       <section className="tool-panel wide-panel browser-artifact-source-panel">
         <ToolPanelHeader
-          title={english ? "Browser data" : "选择浏览器数据"}
+          title={t.browser_data}
           actions={<AButton variant="text" disabled={!selectedFiles.length && !analysis && !error} onClick={clear}>{t.clear}</AButton>}
         />
         <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
@@ -252,14 +252,14 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
           onDragLeave={() => setDragActive(false)}
           onDrop={(event) => { event.preventDefault(); setDragActive(false); queueFiles(event.dataTransfer.files); }}
         >
-          <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} supported files selected` : `已选择 ${selectedFiles.length} 个文件`) : (english ? "Select browser data files" : "选择浏览器数据文件")}</strong>
+          <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} supported files selected` : `已选择 ${selectedFiles.length} 个文件`) : (t.select_browser_data_files)}</strong>
           <span>{selectedFiles.length ? formatBytes(selectedBytes) : "Chrome / Edge / Firefox: History, Cookies, Login Data, Web Data, Bookmarks, Preferences"}</span>
         </div>
         <div className="button-row">
-          <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{english ? "Select files" : "选择文件"}</AButton>
-          <AButton variant="outlined" onClick={() => folderInputRef.current?.click()}>{english ? "Select profile folder" : "选择 Profile 目录"}</AButton>
-          <AButton variant="filled" disabled={!selectedFiles.length || loading} onClick={() => void analyze()}>{loading ? (english ? "Parsing..." : "正在解析...") : (english ? "Parse data" : "开始解析")}</AButton>
-          {loading && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
+          <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{t.select_files}</AButton>
+          <AButton variant="outlined" onClick={() => folderInputRef.current?.click()}>{t.select_profile_folder}</AButton>
+          <AButton variant="filled" disabled={!selectedFiles.length || loading} onClick={() => void analyze()}>{loading ? (t.parsing) : (t.parse_data)}</AButton>
+          {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div>
         {loading && <><ALinearProgress /><div className="tool-loading-state">{progress}</div></>}
         {error && <div className="empty-state error-state">{error}</div>}
@@ -268,8 +268,8 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       {analysis && (
         <section className="tool-panel wide-panel browser-artifact-results-panel">
           <ToolPanelHeader
-            title={english ? "Parsed browser data" : "解析结果"}
-            subtitle={`${analysis.records.length.toLocaleString()} ${english ? "records" : "条记录"}`}
+            title={t.parsed_browser_data}
+            subtitle={`${analysis.records.length.toLocaleString()} ${t.records}`}
             actions={view !== "overview" && view !== "files" ? <AButton variant="outlined" disabled={!filteredRecords.length} onClick={() => downloadTextFile(`browser-${view}-${Date.now()}.csv`, browserArtifactRecordsToCsv(filteredRecords), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton> : undefined}
           />
           <ASegmentedGroup className="browser-artifact-tabs" value={view} selects="single">
@@ -278,38 +278,38 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
               return <ASegmentedButton key={item} value={item} onClick={() => { setView(item); setSelectedRecordId(""); }}>{viewLabel(item, english)} ({count})</ASegmentedButton>;
             })}
           </ASegmentedGroup>
-          {analysis.files.some((file) => file.truncated) && <div className="pcap-stream-notice" role="status">{english ? "At least one source file reached the 50,000-record limit. Use the original database for a complete export." : "至少一个来源文件达到 50,000 条记录上限。如需完整导出，请使用原始数据库。"}</div>}
-          {analysis.snapshotLimited && <div className="pcap-stream-notice" role="status">{english ? "This restored workspace keeps a bounded record snapshot. Re-open the original files for a complete export." : "当前恢复的工作区只保留了受限记录快照。如需完整导出，请重新打开原始文件。"}</div>}
+          {analysis.files.some((file) => file.truncated) && <div className="pcap-stream-notice" role="status">{t.at_least_one_source_file_reached_the_50_000_record_limit_use_the_original_database_for_a_complete_export}</div>}
+          {analysis.snapshotLimited && <div className="pcap-stream-notice" role="status">{t.this_restored_workspace_keeps_a_bounded_record_snapshot_re_open_the_original_files_for_a_complete_export}</div>}
 
           {view === "overview" && (
             <div className="browser-artifact-overview">
               <InfoTable rows={[
-                [english ? "Browsers" : "浏览器", analysis.browsers.join(", ") || "--"],
-                [english ? "Profiles" : "Profile", analysis.profiles.join(", ") || "--"],
-                [english ? "Parsed files" : "解析文件", `${analysis.files.filter((file) => file.status === "parsed").length}/${analysis.files.length}`],
-                [english ? "Time range" : "时间范围", analysis.firstTime ? `${analysis.firstTime} → ${analysis.lastTime}` : "--"],
-                [english ? "Visits / downloads" : "访问 / 下载", `${analysis.counts.visits} / ${analysis.counts.downloads}`],
-                [english ? "Cookies / logins" : "Cookie / 登录", `${analysis.counts.cookies} / ${analysis.counts.logins}`],
-                [english ? "Autofill / extensions" : "自动填充 / 扩展", `${analysis.counts.autofill} / ${analysis.counts.extensions}`]
+                [t.browsers, analysis.browsers.join(", ") || "--"],
+                [t.profiles, analysis.profiles.join(", ") || "--"],
+                [t.parsed_files, `${analysis.files.filter((file) => file.status === "parsed").length}/${analysis.files.length}`],
+                [t.time_range, analysis.firstTime ? `${analysis.firstTime} → ${analysis.lastTime}` : "--"],
+                [t.visits_downloads, `${analysis.counts.visits} / ${analysis.counts.downloads}`],
+                [t.cookies_logins, `${analysis.counts.cookies} / ${analysis.counts.logins}`],
+                [t.autofill_extensions, `${analysis.counts.autofill} / ${analysis.counts.extensions}`]
               ]} />
             </div>
           )}
 
-          {view === "files" && <div className="table-scroll browser-artifact-table-scroll"><table className="data-table"><thead><tr><th>{english ? "File" : "文件"}</th><th>{english ? "Data type" : "数据类型"}</th><th>{english ? "Browser" : "浏览器"}</th><th>Profile</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Records" : "记录"}</th><th>{english ? "Status" : "状态"}</th></tr></thead><tbody>{analysis.files.map((file) => <tr key={file.path}><td>{file.path}</td><td>{file.artifact}</td><td>{file.browser}</td><td>{file.profile}</td><td>{formatBytes(file.size)}</td><td>{file.records}{file.truncated ? "+" : ""}</td><td title={file.detail}>{file.truncated ? (english ? "Limited" : "已限制") : file.status}</td></tr>)}</tbody></table></div>}
+          {view === "files" && <div className="table-scroll browser-artifact-table-scroll"><table className="data-table"><thead><tr><th>{t.sourceFile}</th><th>{t.data_type}</th><th>{t.browser}</th><th>Profile</th><th>{t.fileSize}</th><th>{t.records_2}</th><th>{t.status}</th></tr></thead><tbody>{analysis.files.map((file) => <tr key={file.path}><td>{file.path}</td><td>{file.artifact}</td><td>{file.browser}</td><td>{file.profile}</td><td>{formatBytes(file.size)}</td><td>{file.records}{file.truncated ? "+" : ""}</td><td title={file.detail}>{file.truncated ? (t.limited) : file.status}</td></tr>)}</tbody></table></div>}
 
           {view !== "overview" && view !== "files" && (
             <>
-              <div className="browser-artifact-toolbar"><input className="text-input" aria-label={english ? "Filter browser records" : "筛选浏览器记录"} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter URL, title, profile, path, or detail" : "筛选 URL、标题、Profile、路径或详情"} /><span>{filteredRecords.length}/{categoryRecords.length}</span></div>
-              <div className="table-scroll browser-artifact-table-scroll"><table className="data-table browser-artifact-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>{english ? "Primary" : "主要字段"}</th><th>{english ? "Secondary" : "次要字段"}</th><th>{english ? "Browser / Profile" : "浏览器 / Profile"}</th><th>{english ? "Source" : "来源"}</th></tr></thead><tbody>{visibleRecords.map((record) => <tr className={record.id === selectedRecordId ? "selected-row" : ""} key={record.id} tabIndex={0} onClick={() => setSelectedRecordId(record.id)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedRecordId(record.id); }}><td>{record.time || "--"}</td><td title={record.primary}>{record.primary || "--"}</td><td title={record.secondary}>{record.secondary || "--"}</td><td>{record.browser}<br /><small>{record.profile}</small></td><td title={record.source}>{record.source}</td></tr>)}</tbody></table></div>
-              {filteredRecords.length > PAGE_SIZE && <div className="browser-artifact-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredRecords.length)} / {filteredRecords.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
+              <div className="browser-artifact-toolbar"><input className="text-input" aria-label={t.filter_browser_records} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_url_title_profile_path_or_detail} /><span>{filteredRecords.length}/{categoryRecords.length}</span></div>
+              <div className="table-scroll browser-artifact-table-scroll"><table className="data-table browser-artifact-table"><thead><tr><th>{t.time}</th><th>{t.primary}</th><th>{t.secondary}</th><th>{t.browser_profile}</th><th>{t.iocSource}</th></tr></thead><tbody>{visibleRecords.map((record) => <tr className={record.id === selectedRecordId ? "selected-row" : ""} key={record.id} tabIndex={0} onClick={() => setSelectedRecordId(record.id)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedRecordId(record.id); }}><td>{record.time || "--"}</td><td title={record.primary}>{record.primary || "--"}</td><td title={record.secondary}>{record.secondary || "--"}</td><td>{record.browser}<br /><small>{record.profile}</small></td><td title={record.source}>{record.source}</td></tr>)}</tbody></table></div>
+              {filteredRecords.length > PAGE_SIZE && <div className="browser-artifact-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredRecords.length)} / {filteredRecords.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{t.next}</AButton></div></div>}
               {selectedRecord && <div className="browser-artifact-detail"><ToolPanelHeader title={selectedRecord.primary || viewLabel(view, english)} subtitle={selectedRecord.time || selectedRecord.source} /><InfoTable rows={[
-                [english ? "Category" : "类型", viewLabel(selectedRecord.category, english)],
-                [english ? "Secondary" : "次要字段", selectedRecord.secondary || "--"],
+                [t.category, viewLabel(selectedRecord.category, english)],
+                [t.secondary, selectedRecord.secondary || "--"],
                 ["URL", selectedRecord.url || "--"],
-                [english ? "Path" : "路径", selectedRecord.path || "--"],
-                [english ? "Browser / Profile" : "浏览器 / Profile", `${selectedRecord.browser} / ${selectedRecord.profile}`],
-                [english ? "Source" : "来源", selectedRecord.source],
-                [english ? "Details" : "详情", selectedRecord.detail || "--"]
+                [t.jsonPath, selectedRecord.path || "--"],
+                [t.browser_profile, `${selectedRecord.browser} / ${selectedRecord.profile}`],
+                [t.iocSource, selectedRecord.source],
+                [t.details, selectedRecord.detail || "--"]
               ]} /></div>}
             </>
           )}

@@ -37,9 +37,7 @@ function isPlistWorkspace(value: unknown): value is PlistWorkspace {
   return Boolean(value && typeof value === "object" && "format" in value && "root" in value && "fileName" in value && "fileSize" in value && Array.isArray((value as PlistWorkspace).stack));
 }
 
-export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
+export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [format, setFormat] = React.useState("");
   const [root, setRoot] = React.useState<PlistValue | undefined>(undefined);
@@ -91,10 +89,10 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     setFormat("");
     setQuery("");
     setStorageNotice(next.size > MAX_PERSISTED_PLIST_BYTES
-      ? (english ? "This file is available for the current session only; files over 8 MiB are not restored automatically." : "当前文件仅在本次打开期间可用；超过 8 MiB 的文件不会自动恢复。")
+      ? (t.this_file_is_available_for_the_current_session_only_files_over_8_mib_are_not_restored_automatically)
       : "");
     setLoading(false);
-    if (next.size > LIMIT) { setError(english ? "Plist exceeds the 64 MiB limit." : "Plist 超过 64 MiB 解析上限。"); return; }
+    if (next.size > LIMIT) { setError(t.plist_exceeds_the_64_mib_limit); return; }
     setLoading(true);
     const controller = new AbortController();
     abortRef.current = controller;
@@ -143,17 +141,17 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   return (
     <div className="tool-grid browser-tool-workbench">
       <div className="tool-panel wide-panel browser-source-panel">
-        <div className="panel-heading-row"><PanelTitle title={english ? "Plist browser" : "Plist 浏览器"} />{root !== undefined && <span className="status-pill">{format.toUpperCase()} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
+        <div className="panel-heading-row"><PanelTitle title={t.plist_browser} />{root !== undefined && <span className="status-pill">{format.toUpperCase()} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
         <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} accept=".plist,.strings,.xml,application/x-plist" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
-        {!current && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{file?.name || (english ? "Open a Plist file" : "打开 Plist 文件")}</strong><span>XML · bplist00</span></div>}
+        {!current && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{file?.name || (t.open_a_plist_file)}</strong><span>XML · bplist00</span></div>}
         <div className="action-row"><AButton variant="filled" disabled={loading} onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="outlined" disabled={root === undefined} onClick={exportData}><DownloadOutlined /> JSON</AButton><AButton variant="text" disabled={!file && root === undefined && !error} onClick={clear}>{t.clear}</AButton></div>
         {loading && <ALinearProgress />}
       {error && <div className="empty-state error-state">{error}</div>}
       {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
       </div>
       {current && <div className="tool-panel wide-panel browser-data-panel">
-        <div className="browser-toolbar"><AButton variant="text" disabled={stack.length <= 1} title={english ? "Back" : "返回"} onClick={() => setStack((items) => items.slice(0, -1))}><ArrowLeftOutlined /></AButton><code className="browser-path">{current.path}</code><ATextField value={query} allowClear placeholder={english ? "Filter current level" : "筛选当前层级"} onChange={(event) => setQuery(event.currentTarget.value)} /></div>
-        {children.length ? <div className="table-scroll"><table className="data-table browser-data-table"><thead><tr><th>{english ? "Key" : "键"}</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Value" : "值"}</th><th /></tr></thead><tbody>{children.map((entry) => { const navigable = entry.type === "dict" || entry.type === "array"; return <tr key={entry.path} className={navigable ? "clickable-row" : ""} onDoubleClick={() => navigable && setStack((items) => [...items, { path: entry.path, value: entry.value }])}><td>{entry.key}</td><td>{entry.type}</td><td className="browser-value-cell">{entry.preview}</td><td>{navigable ? <AButton variant="text" title={english ? "Open" : "打开"} onClick={() => setStack((items) => [...items, { path: entry.path, value: entry.value }])}><RightOutlined /></AButton> : entry.type === "data" ? <AButton variant="text" title={english ? "Download data" : "下载数据"} onClick={() => downloadValue(entry.value, entry.key)}><DownloadOutlined /></AButton> : null}</td></tr>; })}</tbody></table></div> : <div className="empty-state">{english ? "No matching entries" : "没有匹配项"}</div>}
+        <div className="browser-toolbar"><AButton variant="text" disabled={stack.length <= 1} title={t.back} onClick={() => setStack((items) => items.slice(0, -1))}><ArrowLeftOutlined /></AButton><code className="browser-path">{current.path}</code><ATextField value={query} allowClear placeholder={t.filter_current_level} onChange={(event) => setQuery(event.currentTarget.value)} /></div>
+        {children.length ? <div className="table-scroll"><table className="data-table browser-data-table"><thead><tr><th>{t.key}</th><th>{t.componentType}</th><th>{t.httpHeaderValue}</th><th /></tr></thead><tbody>{children.map((entry) => { const navigable = entry.type === "dict" || entry.type === "array"; return <tr key={entry.path} className={navigable ? "clickable-row" : ""} onDoubleClick={() => navigable && setStack((items) => [...items, { path: entry.path, value: entry.value }])}><td>{entry.key}</td><td>{entry.type}</td><td className="browser-value-cell">{entry.preview}</td><td>{navigable ? <AButton variant="text" title={t.open} onClick={() => setStack((items) => [...items, { path: entry.path, value: entry.value }])}><RightOutlined /></AButton> : entry.type === "data" ? <AButton variant="text" title={t.download_data} onClick={() => downloadValue(entry.value, entry.key)}><DownloadOutlined /></AButton> : null}</td></tr>; })}</tbody></table></div> : <div className="empty-state">{t.no_matching_entries}</div>}
         {!children.length && !["dict", "array"].includes(plistType(current.value)) && <pre className="result-box">{plistPreview(current.value)}</pre>}
       </div>}
     </div>

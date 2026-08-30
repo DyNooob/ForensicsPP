@@ -74,9 +74,7 @@ function scaledQrLocation(location: Record<string, unknown>, scaleX: number, sca
 }
 
 export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: QrToolServices; active?: boolean }) {
-  const { classifyQrPayload, detectImageFormat, parseQrPayloadDetails, qrGeometryRows, qrPointRow } = services;
-  const english = t.waiting === "Waiting";
-  const [analysis, setAnalysis] = React.useState<CompactQrAnalysis | null>(null);
+  const { classifyQrPayload, detectImageFormat, parseQrPayloadDetails, qrGeometryRows, qrPointRow } = services;  const [analysis, setAnalysis] = React.useState<CompactQrAnalysis | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [storageNotice, setStorageNotice] = React.useState("");
@@ -98,7 +96,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
       setAnalysis({ ...restored, previewUrl });
       previewUrlRef.current = previewUrl;
       setStorageNotice(restored.size > MAX_PERSISTED_QR_PREVIEW_BYTES && !previewBytes?.byteLength
-        ? (english ? "This image is available for the current session only; reopen it after a refresh." : "当前图片仅在本次打开期间可用，刷新后请重新选择文件。")
+        ? (t.this_image_is_available_for_the_current_session_only_reopen_it_after_a_refresh)
         : "");
       setError("");
     }
@@ -127,14 +125,14 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
     setError("");
     setStorageNotice("");
     try {
-      if (file.size > MAX_QR_FILE_BYTES) throw new Error(english ? "Image is too large (96 MiB maximum)." : "图片过大，最大支持 96 MiB。");
+      if (file.size > MAX_QR_FILE_BYTES) throw new Error(t.image_is_too_large_96_mib_maximum);
       const sampleBytes = new Uint8Array(await file.slice(0, 1024 * 1024).arrayBuffer());
       const previewUrl = URL.createObjectURL(file);
       pendingPreviewUrl = previewUrl;
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const next = new Image();
         next.onload = () => resolve(next);
-        next.onerror = () => reject(new Error(english ? "The image could not be decoded." : "图片无法解码。"));
+        next.onerror = () => reject(new Error(t.the_image_could_not_be_decoded));
         next.src = previewUrl;
       });
       if (!active || requestId !== requestIdRef.current) {
@@ -142,7 +140,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         return;
       }
       const sourcePixels = image.naturalWidth * image.naturalHeight;
-      if (!sourcePixels || sourcePixels > MAX_QR_SOURCE_PIXELS) throw new Error(english ? "Image dimensions are too large (40 megapixels maximum)." : "图片尺寸过大，最大支持 4000 万像素。");
+      if (!sourcePixels || sourcePixels > MAX_QR_SOURCE_PIXELS) throw new Error(t.image_dimensions_are_too_large_40_megapixels_maximum);
       const scale = Math.min(1, MAX_QR_SCAN_EDGE / Math.max(image.naturalWidth, image.naturalHeight), Math.sqrt(MAX_QR_SCAN_PIXELS / sourcePixels));
       const scanWidth = Math.max(1, Math.round(image.naturalWidth * scale));
       const scanHeight = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -209,7 +207,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         geometryRows: qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
       } satisfies Omit<CompactQrAnalysis, "previewUrl">;
       setStorageNotice(file.size > MAX_PERSISTED_QR_PREVIEW_BYTES
-        ? (english ? "This image is available for the current session only; it is not restored automatically." : "当前图片仅在本次打开期间保留，不会自动恢复。")
+        ? (t.this_image_is_available_for_the_current_session_only_it_is_not_restored_automatically)
         : "");
       workspace.save({ analysis: persisted, previewBytes: file.size <= MAX_PERSISTED_QR_PREVIEW_BYTES ? new Uint8Array(await file.arrayBuffer()) : null });
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -240,17 +238,17 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
   };
 
   const infoRows: QrPoint[] = analysis ? [
-    [english ? "Name" : "名称", analysis.name],
+    [t.name, analysis.name],
     [t.fileSize, formatBytes(analysis.size)],
     [t.fileType, `${analysis.mime} / ${analysis.format}`],
     [t.dimensions, `${analysis.width} x ${analysis.height}`],
-    [english ? "Scan size" : "扫描尺寸", `${analysis.scanWidth} x ${analysis.scanHeight}`]
+    [t.scan_size, `${analysis.scanWidth} x ${analysis.scanHeight}`]
   ] : [];
 
   return (
     <div className={`tool-grid qr-workbench ${analysis ? "has-qr" : "empty-qr"}`}>
       <div className="tool-panel wide-panel qr-preview-panel">
-        <PanelTitle title={english ? "QR image" : "二维码图片"} />
+        <PanelTitle title={t.qr_image} />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
@@ -275,7 +273,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
           }}
         >
           <strong>{analysis?.name || t.dropFileTitle}</strong>
-          <span>{analysis ? `${analysis.payload ? analysis.payloadType : (english ? "No QR code" : "未识别二维码")} · ${analysis.width} x ${analysis.height}` : t.dropFileHint}</span>
+          <span>{analysis ? `${analysis.payload ? analysis.payloadType : (t.no_qr_code)} · ${analysis.width} x ${analysis.height}` : t.dropFileHint}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
@@ -286,14 +284,14 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         {error && <pre className="result-box">{error}</pre>}
         {analysis && (analysis.previewUrl
           ? <img className="image-preview" src={analysis.previewUrl} alt={analysis.name} />
-          : <div className="empty-state">{storageNotice ? (english ? "Preview not restored" : "预览未恢复") : "--"}</div>)}
+          : <div className="empty-state">{storageNotice ? (t.preview_not_restored) : "--"}</div>)}
       </div>
 
       {analysis && (
         <>
           <div className="tool-panel wide-panel qr-result-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Decoded content" : "识别结果"} />
+              <PanelTitle title={t.decoded_content} />
               <AButton variant="text" disabled={!analysis.payload} onClick={() => void copyText(analysis.payload)}>{t.copy}</AButton>
             </div>
             <div className="qr-primary-grid">
@@ -301,7 +299,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
               <div className="result-copy-card"><span>{t.qrDecodedBytes}</span><strong>{analysis.decodedBytes}</strong></div>
               <div className="result-copy-card"><span>{t.dimensions}</span><strong>{analysis.width} x {analysis.height}</strong></div>
             </div>
-            <textarea aria-label={english ? "QR code payload" : "二维码内容"} className="single-textarea qr-payload-box" value={analysis.payload || t.qrNoCode} readOnly />
+            <textarea aria-label={t.qr_code_payload} className="single-textarea qr-payload-box" value={analysis.payload || t.qrNoCode} readOnly />
           </div>
 
           {analysis.payload && (
@@ -315,11 +313,11 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
           )}
 
           <details className="image-advanced-shell qr-advanced-shell wide-panel">
-            <summary>{english ? "Image and geometry" : "图片与几何信息"}</summary>
+            <summary>{t.image_and_geometry}</summary>
             <div className="qr-advanced-stack">
               <div className="tool-panel wide-panel"><PanelTitle title={t.qrImageInfo} /><InfoTable rows={infoRows} /></div>
               {analysis.cornerRows.length ? <div className="tool-panel wide-panel"><PanelTitle title={t.qrCorners} /><InfoTable rows={analysis.cornerRows} /></div> : null}
-              {analysis.geometryRows.length ? <div className="tool-panel wide-panel"><PanelTitle title={english ? "Geometry" : "几何信息"} /><InfoTable rows={analysis.geometryRows} /></div> : null}
+              {analysis.geometryRows.length ? <div className="tool-panel wide-panel"><PanelTitle title={t.geometry} /><InfoTable rows={analysis.geometryRows} /></div> : null}
             </div>
           </details>
         </>

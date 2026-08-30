@@ -192,33 +192,33 @@ export function UuidTool({ t, active = true }: { t: Translation; active?: boolea
   return (
     <div className={`tool-grid uuid-workbench uuid-simple-workbench ${hasInput ? "has-uuid" : "empty-uuid"}`}>
       <div className="tool-panel wide-panel uuid-simple-input-panel">
-        <ToolPanelHeader title={english ? "UUID input" : "UUID 输入"} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
-        <textarea className="single-textarea uuid-simple-input" aria-label={english ? "UUID input" : "UUID 输入"} value={value} placeholder={english ? "Paste one or more UUID values" : "粘贴一个或多个 UUID"} onChange={(event) => { setValue(event.currentTarget.value); setSelectedIndex(0); }} />
-        {inputTooLarge && <div className="empty-state error-state" role="alert">{english ? "Input is limited to 2 MiB." : "输入内容不能超过 2 MiB。"}</div>}
-        {tooManyValues && <div className="empty-state error-state" role="alert">{english ? "Batch parsing is limited to 10,000 UUID values." : "批量解析最多支持 10,000 个 UUID。"}</div>}
+        <ToolPanelHeader title={t.uuid_input} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
+        <textarea className="single-textarea uuid-simple-input" aria-label={t.uuid_input} value={value} placeholder={t.paste_one_or_more_uuid_values} onChange={(event) => { setValue(event.currentTarget.value); setSelectedIndex(0); }} />
+        {inputTooLarge && <div className="empty-state error-state" role="alert">{t.input_is_limited_to_2_mib}</div>}
+        {tooManyValues && <div className="empty-state error-state" role="alert">{t.batch_parsing_is_limited_to_10_000_uuid_values}</div>}
         <div className="action-row">
           <AButton variant="filled" onClick={() => replaceWithGenerated(4)}>{t.generate} v4</AButton>
-          <AButton variant="outlined" onClick={() => replaceWithGenerated(7)}>{english ? "Generate v7" : "生成 v7"}</AButton>
+          <AButton variant="outlined" onClick={() => replaceWithGenerated(7)}>{t.generate_v7}</AButton>
           <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.normalized)}>{t.copyOutput}</AButton>
         </div>
       </div>
 
       {hasInput && <div className="tool-panel wide-panel uuid-simple-result-panel">
         <ToolPanelHeader
-          title={english ? "Parsed UUID" : "解析结果"}
+          title={t.parsed_uuid}
           subtitle={analyses.length > 1 ? `${selectedIndex + 1}/${analyses.length}` : undefined}
           actions={<>
             <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.bytes)}>{t.standardBytes}</AButton>
             <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.guidBytes)}>{t.guidBytes}</AButton>
           </>}
         />
-        {selected.valid ? <InfoTable rows={selectedRows} /> : <div className="empty-state error-state">{english ? "Invalid UUID" : "UUID 格式无效"}</div>}
+        {selected.valid ? <InfoTable rows={selectedRows} /> : <div className="empty-state error-state">{t.invalid_uuid}</div>}
       </div>}
 
       {hasInput && analyses.length > 1 && <div className="tool-panel wide-panel uuid-simple-batch-panel">
         <ToolPanelHeader
           title={t.uuidBatch}
-          subtitle={`${analyses.filter((item) => item.valid).length}/${analyses.length} ${english ? "valid" : "有效"}`}
+          subtitle={`${analyses.filter((item) => item.valid).length}/${analyses.length} ${t.valid}`}
           actions={<>
             <AButton variant="outlined" onClick={() => downloadTextFile(`uuid-${Date.now()}.csv`, uuidAnalysesToCsv(analyses), "text/csv;charset=utf-8")}>{t.exportUuidCsv}</AButton>
             <AButton variant="text" onClick={() => void copyText(analyses.filter((item) => item.valid).map((item) => item.normalized).join("\n"))}>{t.copy}</AButton>
@@ -226,11 +226,11 @@ export function UuidTool({ t, active = true }: { t: Translation; active?: boolea
         />
         <div className="uuid-simple-filter-row">
           <input className="text-input" value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={t.uuidSearch} />
-          <ASelect aria-label={english ? "Sort UUIDs" : "UUID 排序"} value={sortMode} onChange={(value) => setSortMode(String(value) as typeof sortMode)} options={[{ value: "input", label: t.uuidSortInput }, { value: "time", label: t.uuidSortTime }, { value: "version", label: t.uuidSortVersion }]} />
+          <ASelect aria-label={t.sort_uuids} value={sortMode} onChange={(value) => setSortMode(String(value) as typeof sortMode)} options={[{ value: "input", label: t.uuidSortInput }, { value: "time", label: t.uuidSortTime }, { value: "version", label: t.uuidSortVersion }]} />
           <ACheckbox className="checkbox-label" checked={timeOnly} onChange={(event) => setTimeOnly(event.target.checked)}>{t.uuidTimeOnly}</ACheckbox>
         </div>
         <div className="table-scroll uuid-simple-scroll">
-          {visible.length ? <table className="data-table uuid-simple-table"><thead><tr><th>#</th><th>UUID</th><th>{english ? "Valid" : "有效"}</th><th>{english ? "Version" : "版本"}</th><th>{english ? "Timestamp" : "时间"}</th><th>{english ? "Node" : "节点"}</th></tr></thead><tbody>{visible.map(({ item, index }) => <tr className={index === selectedIndex ? "selected-row" : ""} key={`${index}-${item.input}`} onClick={() => setSelectedIndex(index)}><td>{index + 1}</td><td><code>{item.normalized}</code></td><td>{item.valid ? (english ? "yes" : "是") : (english ? "no" : "否")}</td><td>{item.version}</td><td>{item.timestamp}</td><td>{item.node}</td></tr>)}</tbody></table> : <div className="empty-state">--</div>}
+          {visible.length ? <table className="data-table uuid-simple-table"><thead><tr><th>#</th><th>UUID</th><th>{t.valid_2}</th><th>{t.version}</th><th>{t.timestamp_2}</th><th>{t.node}</th></tr></thead><tbody>{visible.map(({ item, index }) => <tr className={index === selectedIndex ? "selected-row" : ""} key={`${index}-${item.input}`} onClick={() => setSelectedIndex(index)}><td>{index + 1}</td><td><code>{item.normalized}</code></td><td>{item.valid ? (t.yes_2) : (t.no_2)}</td><td>{item.version}</td><td>{item.timestamp}</td><td>{item.node}</td></tr>)}</tbody></table> : <div className="empty-state">--</div>}
         </div>
       </div>}
     </div>

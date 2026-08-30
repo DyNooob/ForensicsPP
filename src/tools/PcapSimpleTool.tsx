@@ -55,7 +55,7 @@ function readableStreamText(bytes: Uint8Array) {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ".");
 }
 
-function PcapTrafficChart({ timeline, english }: { timeline: PcapInfo["timeline"]; english: boolean }) {
+function PcapTrafficChart({ timeline, english, t }: { timeline: PcapInfo["timeline"]; english: boolean; t: (typeof copy)["zh"] }) {
   if (!timeline.length) return null;
   const maxBytes = Math.max(...timeline.map((b) => b.bytes), 1);
   const totalBytes = timeline.reduce((sum, b) => sum + b.bytes, 0);
@@ -72,10 +72,10 @@ function PcapTrafficChart({ timeline, english }: { timeline: PcapInfo["timeline"
   return (
     <div className="pcap-traffic-chart">
       <div className="pcap-chart-head">
-        <strong>{english ? "Traffic over time" : "流量趋势"}</strong>
+        <strong>{t.traffic_over_time}</strong>
         <span>{english ? `${timeline.reduce((s, b) => s + b.packets, 0)} packets · ${formatBytes(totalBytes)}` : `${timeline.reduce((s, b) => s + b.packets, 0)} 个数据包 · ${formatBytes(totalBytes)}`}</span>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={english ? "Traffic over time" : "流量趋势图"}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t.traffic_over_time}>
         {yTicks.map((value, index) => {
           const y = padTop + chartH - (value / maxBytes) * chartH;
           return <g key={index}><line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="var(--app-line)" strokeDasharray="2,2" /><text x={padLeft - 6} y={y + 3} textAnchor="end" fill="var(--app-muted)" fontSize="9">{formatBytes(Math.round(value))}</text></g>;
@@ -318,11 +318,11 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setStreamSearchIndex(0);
     setHttpDetail(null);
     if (file.size > MAX_PCAP_BYTES) {
-      setError(english ? "The capture exceeds the 128 MiB limit." : "流量包超过 128 MiB 限制。");
+      setError(t.the_capture_exceeds_the_128_mib_limit);
       return;
     }
     if (file.size <= 0) {
-      setError(english ? "The capture file is empty." : "流量包为空。");
+      setError(t.the_capture_file_is_empty);
       return;
     }
     setLoading(true);
@@ -340,7 +340,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         timeoutMs: 180_000
       });
       if (!active || controller.signal.aborted) return;
-      if (next.format === "Unknown") throw new Error(english ? "Unsupported or unrecognized packet capture." : "无法识别该流量包格式。");
+      if (next.format === "Unknown") throw new Error(t.unsupported_or_unrecognized_packet_capture);
       setPcap(next);
       const completedAt = new Date().toISOString();
       const sniValues = Array.from(new Set(next.tlsItems.map((item) => item.sni).filter(Boolean)));
@@ -352,12 +352,12 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         source: [{ name: file.name, size: file.size, type: file.type || "application/vnd.tcpdump.pcap", lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : "" }],
         run: { startedAt, completedAt, parameters: { maxBytes: MAX_PCAP_BYTES, tcpReassembly: true, tlsHandshakeParsing: true } },
         summary: {
-          title: english ? "Packet capture analysis" : "流量取证分析",
+          title: t.packet_capture_analysis,
           text: english
             ? `${next.packets.length} packets, ${next.tcpStreams.length} TCP streams, ${next.httpItems.length} HTTP items, ${next.dnsItems.length} DNS items, ${next.tlsItems.length} TLS handshake items.`
             : `${next.packets.length} 个数据包，${next.tcpStreams.length} 条 TCP 流，${next.httpItems.length} 条 HTTP，${next.dnsItems.length} 条 DNS，${next.tlsItems.length} 条 TLS 握手记录。`,
           metrics: [
-            { label: english ? "Packets" : "数据包", value: String(next.packets.length) },
+            { label: t.packets, value: String(next.packets.length) },
             { label: "TCP streams", value: String(next.tcpStreams.length) },
             { label: "HTTP", value: String(next.httpItems.length) },
             { label: "DNS", value: String(next.dnsItems.length) },
@@ -386,8 +386,8 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           epochMs: Number.isFinite(Date.parse(item.timestamp)) ? Date.parse(item.timestamp) : undefined
         })),
         limitations: [
-          { code: "PCAP_FULL_BUFFER_LIMIT", detail: english ? "The current packet parser reads captures up to 128 MiB into memory; EvidenceReader is now used at the tool boundary for later streaming migration." : "当前流量解析器仍将不超过 128 MiB 的捕获文件读入内存；工具入口已切换至 EvidenceReader，便于后续流式迁移。" },
-          ...(next.tlsItems.length ? [{ code: "TLS_METADATA_ONLY", detail: english ? "TLS analysis parses handshake metadata and certificate fingerprints; encrypted application data is not decrypted." : "TLS 分析仅解析握手元数据与证书指纹，不解密加密后的应用数据。" }] : [])
+          { code: "PCAP_FULL_BUFFER_LIMIT", detail: t.the_current_packet_parser_reads_captures_up_to_128_mib_into_memory_evidencereader_is_now_used_at_the_tool_boundary_for_later_streaming_migration },
+          ...(next.tlsItems.length ? [{ code: "TLS_METADATA_ONLY", detail: t.tls_analysis_parses_handshake_metadata_and_certificate_fingerprints_encrypted_application_data_is_not_decrypted }] : [])
         ],
         data: { format: next.format, packetCount: next.packets.length, tcpStreamCount: next.tcpStreams.length, tlsHandshakeCount: next.tlsItems.length }
       });
@@ -480,7 +480,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       const bytes = new Uint8Array(file.bytes.length);
       bytes.set(file.bytes);
       const result = await hashBytesInWorker(bytes, ["sha256"], { signal: controller.signal });
-      if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
+      if (!result.sha256) throw new Error(t.sha_256_calculation_returned_no_result);
       if (controller.signal.aborted || requestId !== extractedHashRequestRef.current) return;
       setExtractedHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
     } catch (caught) {
@@ -535,9 +535,9 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   return (
     <div className={`tool-grid pcap-workbench ${pcap ? "has-pcap" : "empty-pcap"}`}>
       <section className="tool-panel wide-panel pcap-source-panel">
-        <ToolPanelHeader title={pcap ? (english ? "Packet capture" : "流量包") : (english ? "Open packet capture" : "选择流量包")} actions={<AButton variant="text" disabled={!pcap && !error} onClick={clear}>{t.clear}</AButton>} />
+        <ToolPanelHeader title={pcap ? (t.packet_capture) : (t.open_packet_capture)} actions={<AButton variant="text" disabled={!pcap && !error} onClick={clear}>{t.clear}</AButton>} />
         <input className="hidden-file-input" ref={inputRef} type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
-        {pcap ? <div className="pcap-loaded-source"><div><strong>{pcap.name}</strong><span>{pcap.format} · {pcap.packets.length} {english ? "packets" : "个数据包"} · {formatBytes(pcap.size)} · {storageState === "saved" ? (english ? "saved locally" : "已保留") : storageState === "saving" ? (english ? "saving" : "正在保留") : storageState === "failed" ? (english ? "not saved" : "未保留") : ""}</span></div><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Replace" : "更换文件"}</AButton></div> : <><div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
+        {pcap ? <div className="pcap-loaded-source"><div><strong>{pcap.name}</strong><span>{pcap.format} · {pcap.packets.length} {t.packets_2} · {formatBytes(pcap.size)} · {storageState === "saved" ? (t.saved_locally) : storageState === "saving" ? (t.saving) : storageState === "failed" ? (t.not_saved) : ""}</span></div><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.replace}</AButton></div> : <><div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)}
@@ -547,7 +547,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         </div>
         <div className="action-row">
           <AButton variant="filled" disabled={loading} onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          {loading && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
+          {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div></>}
         {loading && <ALinearProgress />}
         {error && <div className="empty-state error-state">{error}</div>}
@@ -557,58 +557,58 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         <section className="tool-panel wide-panel pcap-workspace-panel">
           <ToolPanelHeader title={t.summary} subtitle={`${pcap.name} · ${pcap.format}`} />
           <div className="pcap-simple-summary">
-            <span><small>{english ? "Packets" : "数据包"}</small><strong>{pcap.summary?.packetCount ?? pcap.packets.length}</strong></span>
-            <span><small>{english ? "Captured" : "捕获字节"}</small><strong>{formatBytes(pcap.summary?.totalCaptured ?? 0)}</strong></span>
-            <span><small>{english ? "Duration" : "持续时间"}</small><strong>{duration ? `${(duration / 1000).toFixed(3)} s` : "--"}</strong></span>
-            <span><small>{english ? "Conversations" : "会话"}</small><strong>{pcap.conversations.length}</strong></span>
+            <span><small>{t.packets}</small><strong>{pcap.summary?.packetCount ?? pcap.packets.length}</strong></span>
+            <span><small>{t.captured}</small><strong>{formatBytes(pcap.summary?.totalCaptured ?? 0)}</strong></span>
+            <span><small>{t.duration}</small><strong>{duration ? `${(duration / 1000).toFixed(3)} s` : "--"}</strong></span>
+            <span><small>{t.conversations}</small><strong>{pcap.conversations.length}</strong></span>
           </div>
           <ASegmentedGroup className="pcap-simple-tabs" value={view} selects="single">
-            <ASegmentedButton value="overview" onClick={() => setView("overview")}>{english ? "Overview" : "概览"}</ASegmentedButton>
+            <ASegmentedButton value="overview" onClick={() => setView("overview")}>{t.overview}</ASegmentedButton>
             <ASegmentedButton value="conversations" onClick={() => setView("conversations")}>{t.conversations} ({pcap.conversations.length})</ASegmentedButton>
-            <ASegmentedButton value="streams" disabled={!pcap.tcpStreams.length} onClick={() => setView("streams")}>{english ? "TCP streams" : "TCP 流"} ({pcap.tcpStreams.length})</ASegmentedButton>
+            <ASegmentedButton value="streams" disabled={!pcap.tcpStreams.length} onClick={() => setView("streams")}>{t.tcp_streams} ({pcap.tcpStreams.length})</ASegmentedButton>
             <ASegmentedButton value="packets" onClick={() => setView("packets")}>{t.packetList} ({pcap.packets.length})</ASegmentedButton>
             <ASegmentedButton value="network" onClick={() => setView("network")}>HTTP / DNS / TLS ({pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length})</ASegmentedButton>
-            <ASegmentedButton value="files" disabled={!pcap.extractedFiles.length} onClick={() => setView("files")}>{english ? "Files" : "文件"} ({pcap.extractedFiles.length})</ASegmentedButton>
+            <ASegmentedButton value="files" disabled={!pcap.extractedFiles.length} onClick={() => setView("files")}>{t.totalFiles} ({pcap.extractedFiles.length})</ASegmentedButton>
           </ASegmentedGroup>
 
           {view === "overview" && <div className="pcap-simple-overview">
-            {(pcap.streamBytesLimited || pcap.extractedBytesLimited) && <div className="pcap-stream-notice" role="status">{english ? "This restored workspace keeps metadata and previews, but not all raw stream or extracted-file bytes. Re-analyze the capture before exporting." : "当前工作区只保留了元数据和预览，未保留全部流及提取文件的原始字节。导出前请重新分析流量包。"}</div>}
-            <InfoTable rows={[[english ? "Format" : "格式", `${pcap.format} ${pcap.version}`.trim()], [english ? "File size" : "文件大小", formatBytes(pcap.size)], [english ? "HTTP / DNS / TLS" : "HTTP / DNS / TLS", `${pcap.httpItems.length} / ${pcap.dnsItems.length} / ${pcap.tlsItems.length}`], [english ? "Extracted files" : "提取文件", String(pcap.extractedFiles.length)], [english ? "Events" : "事件", String(pcap.events.length)]]} />
-            <PcapTrafficChart timeline={pcap.timeline} english={english} />
+            {(pcap.streamBytesLimited || pcap.extractedBytesLimited) && <div className="pcap-stream-notice" role="status">{t.this_restored_workspace_keeps_metadata_and_previews_but_not_all_raw_stream_or_extracted_file_bytes_re_analyze_the_capture_before_exporting}</div>}
+            <InfoTable rows={[[t.format, `${pcap.format} ${pcap.version}`.trim()], [t.file_size, formatBytes(pcap.size)], [english ? "HTTP / DNS / TLS" : "HTTP / DNS / TLS", `${pcap.httpItems.length} / ${pcap.dnsItems.length} / ${pcap.tlsItems.length}`], [t.extracted_files, String(pcap.extractedFiles.length)], [t.events_2, String(pcap.events.length)]]} />
+            <PcapTrafficChart timeline={pcap.timeline} english={english} t={t} />
             <div className="pcap-simple-stat-grid">
-              <section><strong>{english ? "Protocols" : "协议"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Packets" : "数据包"}</th></tr></thead><tbody>{(pcap.summary?.protocols ?? []).map(([name, count]) => <tr key={name}><td>{name}</td><td>{count}</td></tr>)}</tbody></table></div></section>
-              <section><strong>{english ? "Top endpoints" : "主要端点"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Endpoint" : "端点"}</th><th>{english ? "Traffic" : "流量"}</th></tr></thead><tbody>{pcap.endpoints.slice(0, 12).map((item) => <tr key={item.endpoint}><td>{item.endpoint}</td><td>{formatBytes(item.bytesSent + item.bytesReceived)}</td></tr>)}</tbody></table></div></section>
-              <section><strong>{english ? "Top services" : "主要服务"}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{english ? "Port" : "端口"}</th><th>{english ? "Traffic" : "流量"}</th></tr></thead><tbody>{pcap.portStats.slice(0, 12).map((item) => <tr key={`${item.protocol}-${item.port}`}><td>{item.protocol}/{item.port}</td><td>{formatBytes(item.bytes)}</td></tr>)}</tbody></table></div></section>
+              <section><strong>{t.protocols}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{t.protocol}</th><th>{t.packets}</th></tr></thead><tbody>{(pcap.summary?.protocols ?? []).map(([name, count]) => <tr key={name}><td>{name}</td><td>{count}</td></tr>)}</tbody></table></div></section>
+              <section><strong>{t.top_endpoints}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{t.endpoint}</th><th>{t.traffic}</th></tr></thead><tbody>{pcap.endpoints.slice(0, 12).map((item) => <tr key={item.endpoint}><td>{item.endpoint}</td><td>{formatBytes(item.bytesSent + item.bytesReceived)}</td></tr>)}</tbody></table></div></section>
+              <section><strong>{t.top_services}</strong><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{t.port}</th><th>{t.traffic}</th></tr></thead><tbody>{pcap.portStats.slice(0, 12).map((item) => <tr key={`${item.protocol}-${item.port}`}><td>{item.protocol}/{item.port}</td><td>{formatBytes(item.bytes)}</td></tr>)}</tbody></table></div></section>
             </div>
           </div>}
 
-          {view === "conversations" && (pcap.conversations.length ? <><div className="pcap-list-filter"><input className="text-input" value={conversationFilter} onChange={(event) => setConversationFilter(event.currentTarget.value)} placeholder={english ? "Filter protocol or endpoint" : "筛选协议或端点"} aria-label={english ? "Filter conversations" : "筛选会话"} /><span>{conversations.length}/{pcap.conversations.length}</span></div><div className="table-scroll pcap-conversation-scroll"><table className="data-table"><thead><tr><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Endpoint A" : "端点 A"}</th><th>{english ? "Endpoint B" : "端点 B"}</th><th>{english ? "Packets" : "数据包"}</th><th>{english ? "Bytes" : "字节"}</th></tr></thead><tbody>{conversations.map((item) => { const stream = streamByKey.get(item.key); const open = () => { if (stream) { setSelectedStreamKey(stream.key); setView("streams"); } else { setPacketFilter(endpointHost(item.endpointA)); setView("packets"); } }; return <tr key={item.key} tabIndex={0} onClick={open} onKeyDown={(event) => { if (event.key === "Enter") open(); }}><td>{item.protocol}</td><td>{item.endpointA}</td><td>{item.endpointB}</td><td>{item.packets}</td><td>{formatBytes(item.bytes)}</td></tr>; })}</tbody></table></div></> : <div className="empty-state">--</div>)}
+          {view === "conversations" && (pcap.conversations.length ? <><div className="pcap-list-filter"><input className="text-input" value={conversationFilter} onChange={(event) => setConversationFilter(event.currentTarget.value)} placeholder={t.filter_protocol_or_endpoint} aria-label={t.filter_conversations} /><span>{conversations.length}/{pcap.conversations.length}</span></div><div className="table-scroll pcap-conversation-scroll"><table className="data-table"><thead><tr><th>{t.protocol}</th><th>{t.endpoint_a}</th><th>{t.endpoint_b}</th><th>{t.packets}</th><th>{t.bytes}</th></tr></thead><tbody>{conversations.map((item) => { const stream = streamByKey.get(item.key); const open = () => { if (stream) { setSelectedStreamKey(stream.key); setView("streams"); } else { setPacketFilter(endpointHost(item.endpointA)); setView("packets"); } }; return <tr key={item.key} tabIndex={0} onClick={open} onKeyDown={(event) => { if (event.key === "Enter") open(); }}><td>{item.protocol}</td><td>{item.endpointA}</td><td>{item.endpointB}</td><td>{item.packets}</td><td>{formatBytes(item.bytes)}</td></tr>; })}</tbody></table></div></> : <div className="empty-state">--</div>)}
 
           {view === "streams" && <div className="pcap-stream-workspace">
-            <div className="pcap-list-filter"><input className="text-input" value={streamFilter} onChange={(event) => setStreamFilter(event.currentTarget.value)} placeholder={english ? "Filter TCP endpoints" : "筛选 TCP 端点"} aria-label={english ? "Filter TCP streams" : "筛选 TCP 流"} /><span>{streams.length}/{pcap.tcpStreams.length}</span></div>
-            <div className="table-scroll pcap-stream-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Endpoint A" : "端点 A"}</th><th>{english ? "Endpoint B" : "端点 B"}</th><th>{english ? "Packets" : "数据包"}</th><th>{"A -> B"}</th><th>{"B -> A"}</th><th>{english ? "Capture gaps" : "捕获缺口"}</th></tr></thead><tbody>{streams.map((stream) => <tr className={stream.key === selectedStream?.key ? "selected-row" : ""} key={stream.key} tabIndex={0} onClick={() => setSelectedStreamKey(stream.key)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedStreamKey(stream.key); }}><td>{streamIndexByKey.get(stream.key) ?? "--"}</td><td>{stream.endpointA}</td><td>{stream.endpointB}</td><td>{stream.packetCount}</td><td>{formatBytes(stream.bytesAtoB)}</td><td>{formatBytes(stream.bytesBtoA)}</td><td>{formatBytes(stream.gapBytesAtoB + stream.gapBytesBtoA)}</td></tr>)}</tbody></table></div>
+            <div className="pcap-list-filter"><input className="text-input" value={streamFilter} onChange={(event) => setStreamFilter(event.currentTarget.value)} placeholder={t.filter_tcp_endpoints} aria-label={t.filter_tcp_streams} /><span>{streams.length}/{pcap.tcpStreams.length}</span></div>
+            <div className="table-scroll pcap-stream-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.endpoint_a}</th><th>{t.endpoint_b}</th><th>{t.packets}</th><th>{"A -> B"}</th><th>{"B -> A"}</th><th>{t.capture_gaps}</th></tr></thead><tbody>{streams.map((stream) => <tr className={stream.key === selectedStream?.key ? "selected-row" : ""} key={stream.key} tabIndex={0} onClick={() => setSelectedStreamKey(stream.key)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedStreamKey(stream.key); }}><td>{streamIndexByKey.get(stream.key) ?? "--"}</td><td>{stream.endpointA}</td><td>{stream.endpointB}</td><td>{stream.packetCount}</td><td>{formatBytes(stream.bytesAtoB)}</td><td>{formatBytes(stream.bytesBtoA)}</td><td>{formatBytes(stream.gapBytesAtoB + stream.gapBytesBtoA)}</td></tr>)}</tbody></table></div>
             {selectedStream && <div className="pcap-stream-detail">
-              <ToolPanelHeader title={english ? "Follow TCP stream" : "查看 TCP 流"} subtitle={`${selectedStream.endpointA} <-> ${selectedStream.endpointB}`} actions={<><AButton variant="text" disabled={!selectedStreamTranscript} onClick={() => void copyText(selectedStreamTranscript)}>{t.copy}</AButton><AButton variant="text" disabled={!selectedStreamTranscript || Boolean(pcap.streamBytesLimited)} onClick={saveStreamTranscript}>{english ? "Save text" : "保存文本"}</AButton><AButton variant="outlined" disabled={Boolean(pcap.streamBytesLimited) || streamDirection === "both" || (streamDirection === "a-to-b" ? selectedStream.gapBytesAtoB : selectedStream.gapBytesBtoA) > 0 || !(streamDirection === "a-to-b" ? selectedStream.bytesAtoB : selectedStream.bytesBtoA)} onClick={saveStreamBytes}>{english ? "Save raw bytes" : "保存原始字节"}</AButton></>} />
+              <ToolPanelHeader title={t.followTcpStream} subtitle={`${selectedStream.endpointA} <-> ${selectedStream.endpointB}`} actions={<><AButton variant="text" disabled={!selectedStreamTranscript} onClick={() => void copyText(selectedStreamTranscript)}>{t.copy}</AButton><AButton variant="text" disabled={!selectedStreamTranscript || Boolean(pcap.streamBytesLimited)} onClick={saveStreamTranscript}>{t.save_text}</AButton><AButton variant="outlined" disabled={Boolean(pcap.streamBytesLimited) || streamDirection === "both" || (streamDirection === "a-to-b" ? selectedStream.gapBytesAtoB : selectedStream.gapBytesBtoA) > 0 || !(streamDirection === "a-to-b" ? selectedStream.bytesAtoB : selectedStream.bytesBtoA)} onClick={saveStreamBytes}>{t.save_raw_bytes}</AButton></>} />
               <div className="pcap-stream-controls">
-                <ASegmentedGroup value={streamDirection} selects="single"><ASegmentedButton value="both" onClick={() => setStreamDirection("both")}>{english ? "Both" : "双向"}</ASegmentedButton><ASegmentedButton value="a-to-b" onClick={() => setStreamDirection("a-to-b")}>{"A -> B"}</ASegmentedButton><ASegmentedButton value="b-to-a" onClick={() => setStreamDirection("b-to-a")}>{"B -> A"}</ASegmentedButton></ASegmentedGroup>
-                <ASegmentedGroup value={streamFormat} selects="single"><ASegmentedButton value="text" onClick={() => setStreamFormat("text")}>{english ? "Text" : "文本"}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setStreamFormat("hex")}>Hex</ASegmentedButton></ASegmentedGroup>
+                <ASegmentedGroup value={streamDirection} selects="single"><ASegmentedButton value="both" onClick={() => setStreamDirection("both")}>{t.both}</ASegmentedButton><ASegmentedButton value="a-to-b" onClick={() => setStreamDirection("a-to-b")}>{"A -> B"}</ASegmentedButton><ASegmentedButton value="b-to-a" onClick={() => setStreamDirection("b-to-a")}>{"B -> A"}</ASegmentedButton></ASegmentedGroup>
+                <ASegmentedGroup value={streamFormat} selects="single"><ASegmentedButton value="text" onClick={() => setStreamFormat("text")}>{t.text}</ASegmentedButton><ASegmentedButton value="hex" onClick={() => setStreamFormat("hex")}>Hex</ASegmentedButton></ASegmentedGroup>
               </div>
               <div className="pcap-stream-search">
                 <input className="text-input" value={streamSearch} onChange={(event) => setStreamSearch(event.currentTarget.value)} placeholder={t.streamSearch} aria-label={t.streamSearch} />
                 <span className="pcap-stream-search-count">{streamMatches.length ? `${streamSearchIndex + 1}/${streamMatches.length}` : "0"}</span>
-                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(-1)} aria-label={english ? "Previous match" : "上一个匹配"}>↑</AButton>
-                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(1)} aria-label={english ? "Next match" : "下一个匹配"}>↓</AButton>
+                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(-1)} aria-label={t.previous_match}>↑</AButton>
+                <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(1)} aria-label={t.next_match}>↓</AButton>
               </div>
-              <div className="pcap-stream-meta"><span>{english ? "Payload" : "载荷"}: {formatBytes(selectedStream.bytesAtoB + selectedStream.bytesBtoA)}</span><span>{english ? "Retransmitted overlap" : "重传重叠"}: {formatBytes(selectedStream.retransmittedBytes)}</span><span>{english ? "Capture gaps" : "捕获缺口"}: {formatBytes(selectedStream.gapBytesAtoB + selectedStream.gapBytesBtoA)}</span></div>
-              {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <div className="pcap-stream-notice">{english ? "The capture has sequence gaps. Gap markers are shown in the preview; raw export is available only for a complete direction." : "该流存在序列缺口，预览中已标出；只有无缺口的单向数据可以导出原始字节。"}</div> : null}
-              {pcap.streamBytesLimited ? <div className="pcap-stream-notice">{english ? "The restored workspace does not contain all stream bytes. Re-analyze the capture before exporting." : "恢复的工作区未保留全部流字节，导出前请重新分析流量包。"}</div> : null}
-              <textarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={english ? "TCP stream content" : "TCP 流内容"} />
+              <div className="pcap-stream-meta"><span>{t.payload}: {formatBytes(selectedStream.bytesAtoB + selectedStream.bytesBtoA)}</span><span>{t.retransmitted_overlap}: {formatBytes(selectedStream.retransmittedBytes)}</span><span>{t.capture_gaps}: {formatBytes(selectedStream.gapBytesAtoB + selectedStream.gapBytesBtoA)}</span></div>
+              {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <div className="pcap-stream-notice">{t.the_capture_has_sequence_gaps_gap_markers_are_shown_in_the_preview_raw_export_is_available_only_for_a_complete_direction}</div> : null}
+              {pcap.streamBytesLimited ? <div className="pcap-stream-notice">{t.the_restored_workspace_does_not_contain_all_stream_bytes_re_analyze_the_capture_before_exporting}</div> : null}
+              <textarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={t.tcp_stream_content} />
             </div>}
           </div>}
 
           {view === "packets" && <div className="pcap-simple-packets">
             <div className="pcap-packet-toolbar">
-              <input className="text-input pcap-filter" value={packetFilter} onChange={(event) => setPacketFilter(event.currentTarget.value)} placeholder={english ? "Filter protocol, host, port, or text" : "筛选协议、地址、端口或内容"} />
+              <input className="text-input pcap-filter" value={packetFilter} onChange={(event) => setPacketFilter(event.currentTarget.value)} placeholder={t.filter_protocol_host_port_or_text} />
               <div className="pcap-protocol-filters">
                 {protocolOptions.map((protocol) => {
                   const active = protocolFilters.includes(protocol);
@@ -616,17 +616,17 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 })}
               </div>
               <div className="pcap-sort-control">
-                <label>{english ? "Sort" : "排序"}</label>
+                <label>{t.sort}</label>
                 <select className="text-input" value={packetSort} onChange={(event) => setPacketSort(event.target.value as typeof packetSort)}>
-                  <option value="no">{english ? "Packet #" : "包号"}</option>
-                  <option value="time">{english ? "Time" : "时间"}</option>
-                  <option value="size">{english ? "Size" : "大小"}</option>
-                  <option value="protocol">{english ? "Protocol" : "协议"}</option>
+                  <option value="no">{t.packet}</option>
+                  <option value="time">{t.time}</option>
+                  <option value="size">{t.fileSize}</option>
+                  <option value="protocol">{t.protocol}</option>
                 </select>
               </div>
               <span className="pcap-packet-count">{packets.length}/{pcap.packets.length}</span>
             </div>
-            <div className="table-scroll pcap-packet-scroll"><table className="data-table pcap-packet-table"><thead><tr><th>#</th><th>{english ? "Time" : "时间"}</th><th>{english ? "Protocol" : "协议"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>{english ? "Length" : "长度"}</th><th>{english ? "Info" : "信息"}</th></tr></thead><tbody>{visiblePackets.map((packet) => {
+            <div className="table-scroll pcap-packet-scroll"><table className="data-table pcap-packet-table"><thead><tr><th>#</th><th>{t.time}</th><th>{t.protocol}</th><th>{t.iocSource}</th><th>{t.destination}</th><th>{t.stringLength}</th><th>{t.levelInfo}</th></tr></thead><tbody>{visiblePackets.map((packet) => {
               const expanded = expandedPacketNo === packet.no;
               const stream = packet.tcpStreamKey ? streamByKey.get(packet.tcpStreamKey) : null;
               const conversation = pcap.conversations.find((c) => c.key === `${packet.protocol}|${[endpoint(packet.source, packet.sourcePort), endpoint(packet.destination, packet.destinationPort)].sort().join("|")}`);
@@ -646,20 +646,20 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                       <td colSpan={7}>
                         <div className="pcap-packet-detail">
                           <div className="pcap-packet-detail-head">
-                            <strong>{english ? "Packet" : "数据包"} #{packet.no}</strong>
+                            <strong>{t.packet_2} #{packet.no}</strong>
                             <div className="pcap-packet-actions">
-                              {stream && <AButton variant="text" onClick={() => { setSelectedStreamKey(stream.key); setView("streams"); }}>{english ? "Follow stream" : "跟踪 TCP 流"}</AButton>}
-                              {conversation && <AButton variant="text" onClick={() => { setPacketFilter(endpointHost(packet.source) === endpointHost(conversation.endpointA) ? conversation.endpointA : conversation.endpointB); }}>{english ? "Filter conversation" : "筛选会话"}</AButton>}
+                              {stream && <AButton variant="text" onClick={() => { setSelectedStreamKey(stream.key); setView("streams"); }}>{t.follow_stream}</AButton>}
+                              {conversation && <AButton variant="text" onClick={() => { setPacketFilter(endpointHost(packet.source) === endpointHost(conversation.endpointA) ? conversation.endpointA : conversation.endpointB); }}>{t.filter_conversation}</AButton>}
                               <AButton variant="text" onClick={() => void copyText(packet.flow)}>{t.copy} flow</AButton>
                             </div>
                           </div>
                           <InfoTable rows={[
-                            [english ? "Flow" : "流", packet.flow],
-                            [english ? "Timestamp" : "时间", packet.timestamp],
-                            [english ? "Captured / Original" : "捕获 / 原始", `${packet.captured} / ${packet.original}`],
-                            [english ? "Delta" : "相对时间", `${packet.deltaMs.toFixed(3)} ms`],
+                            [t.flow, packet.flow],
+                            [t.timestamp_2, packet.timestamp],
+                            [t.captured_original, `${packet.captured} / ${packet.original}`],
+                            [t.delta, `${packet.deltaMs.toFixed(3)} ms`],
                             ...(packet.tcpFlags ? [["TCP flags", packet.tcpFlags] as [string, string]] : []),
-                            ...(packet.tcpStreamKey ? [[english ? "TCP stream" : "TCP 流", packet.tcpStreamKey] as [string, string]] : [])
+                            ...(packet.tcpStreamKey ? [[t.tcp_stream, packet.tcpStreamKey] as [string, string]] : [])
                           ]} />
                           <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={packet.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={packet.hexPreview || "--"} readOnly /></label></div>
                         </div>
@@ -669,17 +669,17 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 </React.Fragment>
               );
             })}</tbody></table></div>
-            {packets.length > 250 && <div className="pcap-simple-pagination"><AButton variant="outlined" disabled={packetPage === 0} onClick={() => setPacketPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><span>{packetPage + 1} / {packetPageCount}</span><AButton variant="outlined" disabled={packetPage + 1 >= packetPageCount} onClick={() => setPacketPage((value) => Math.min(packetPageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div>}
+            {packets.length > 250 && <div className="pcap-simple-pagination"><AButton variant="outlined" disabled={packetPage === 0} onClick={() => setPacketPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton><span>{packetPage + 1} / {packetPageCount}</span><AButton variant="outlined" disabled={packetPage + 1 >= packetPageCount} onClick={() => setPacketPage((value) => Math.min(packetPageCount - 1, value + 1))}>{t.next}</AButton></div>}
           </div>}
 
           {view === "network" && <div className="pcap-simple-network">
-            <div className="pcap-list-filter"><input className="text-input" value={networkFilter} onChange={(event) => setNetworkFilter(event.currentTarget.value)} placeholder={english ? "Filter HTTP, DNS, or TLS" : "筛选 HTTP、DNS 或 TLS"} aria-label={english ? "Filter HTTP, DNS, and TLS" : "筛选 HTTP、DNS 和 TLS"} /><span>{visibleHttp.length + visibleDns.length + visibleTls.length}/{pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length}</span></div>
+            <div className="pcap-list-filter"><input className="text-input" value={networkFilter} onChange={(event) => setNetworkFilter(event.currentTarget.value)} placeholder={t.filter_http_dns_or_tls} aria-label={t.filter_http_dns_and_tls} /><span>{visibleHttp.length + visibleDns.length + visibleTls.length}/{pcap.httpItems.length + pcap.dnsItems.length + pcap.tlsItems.length}</span></div>
             <section><strong>HTTP</strong>{pcap.httpItems.length ? (
               <div className="pcap-http-groups">
                 {httpGroups.map((group) => (
                   <div className="pcap-http-group" key={group.key}>
                     <div className="pcap-http-group-head">
-                      <span className="pcap-http-group-title">{group.stream ? `${group.stream.endpointA} <-> ${group.stream.endpointB}` : (english ? "Ungrouped HTTP" : "未分组的 HTTP")}</span>
+                      <span className="pcap-http-group-title">{group.stream ? `${group.stream.endpointA} <-> ${group.stream.endpointB}` : (t.ungrouped_http)}</span>
                       {group.stream && <AButton variant="text" onClick={() => { setSelectedStreamKey(group.stream!.key); setView("streams"); }}>{t.followTcpStream}</AButton>}
                     </div>
                     <div className="pcap-http-messages">
@@ -687,7 +687,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                         const title = item.role === "request" ? `${item.method} ${item.path}` : item.line;
                         return (
                           <button type="button" className="pcap-http-message" key={`${item.packetNo}-${index}`} onClick={() => setHttpDetail(item)}>
-                            <span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (english ? "REQ" : "请求") : (english ? "RES" : "响应")}</span>
+                            <span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (t.req) : (t.res)}</span>
                             <span className="pcap-http-title">{title}</span>
                             <span className="pcap-http-meta">{item.host} · {item.contentType || "--"} · {formatBytes(item.bodySize)}</span>
                           </button>
@@ -698,17 +698,17 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 ))}
               </div>
             ) : <div className="empty-state">--</div>}</section>
-            <section><strong>DNS</strong>{pcap.dnsItems.length ? <div className="table-scroll pcap-dns-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th></tr></thead><tbody>{visibleDns.map((item) => <tr key={`${item.packetNo}-${item.name}-${item.type}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.name}</td><td>{item.type}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
-            <section><strong>TLS</strong>{pcap.tlsItems.length ? <div className="table-scroll pcap-tls-scroll"><table className="data-table"><thead><tr><th>{english ? "Handshake" : "握手"}</th><th>{english ? "Source" : "来源"}</th><th>{english ? "Destination" : "目标"}</th><th>SNI</th><th>{english ? "Version" : "版本"}</th><th>ALPN</th><th>JA3 / JA3S</th><th>{english ? "Certificates" : "证书"}</th></tr></thead><tbody>{visibleTls.map((item, index) => <tr key={`${item.streamKey}-${item.direction}-${item.type}-${index}`}><td>{item.type}</td><td>{item.source}</td><td>{item.destination}</td><td>{item.sni || "--"}</td><td>{item.negotiatedVersion || item.recordVersion}</td><td>{item.alpn.join(", ") || "--"}</td><td><code>{item.ja3Hash || item.ja3sHash || "--"}</code></td><td title={item.certificates.map((cert) => cert.sha256).join("\n")}>{item.certificates.length || "--"}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
+            <section><strong>DNS</strong>{pcap.dnsItems.length ? <div className="table-scroll pcap-dns-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.name}</th><th>{t.componentType}</th></tr></thead><tbody>{visibleDns.map((item) => <tr key={`${item.packetNo}-${item.name}-${item.type}`} onClick={() => { setSelectedPacketNo(item.packetNo); setView("packets"); }}><td>{item.packetNo}</td><td>{item.name}</td><td>{item.type}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
+            <section><strong>TLS</strong>{pcap.tlsItems.length ? <div className="table-scroll pcap-tls-scroll"><table className="data-table"><thead><tr><th>{t.handshake}</th><th>{t.iocSource}</th><th>{t.destination}</th><th>SNI</th><th>{t.version}</th><th>ALPN</th><th>JA3 / JA3S</th><th>{t.certificates}</th></tr></thead><tbody>{visibleTls.map((item, index) => <tr key={`${item.streamKey}-${item.direction}-${item.type}-${index}`}><td>{item.type}</td><td>{item.source}</td><td>{item.destination}</td><td>{item.sni || "--"}</td><td>{item.negotiatedVersion || item.recordVersion}</td><td>{item.alpn.join(", ") || "--"}</td><td><code>{item.ja3Hash || item.ja3sHash || "--"}</code></td><td title={item.certificates.map((cert) => cert.sha256).join("\n")}>{item.certificates.length || "--"}</td></tr>)}</tbody></table></div> : <div className="empty-state">--</div>}</section>
           </div>}
 
-          {view === "files" && <div className="table-scroll pcap-files-scroll"><table className="data-table"><thead><tr><th>#</th><th>{english ? "Filename" : "文件名"}</th><th>Host</th><th>{english ? "Path" : "路径"}</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Size" : "大小"}</th><th>SHA-256</th><th /></tr></thead><tbody>{pcap.extractedFiles.map((item, index) => { const key = extractedFileKey(index); const hash = extractedHashes[key]; const bytesAvailable = extractedBytesAvailable(item); return <tr key={`${item.packetNo}-${index}`}><td>{item.packetNo}</td><td>{item.filename}</td><td>{item.host}</td><td>{item.path}</td><td>{item.signature} / {item.contentType}</td><td>{formatBytes(item.size)}</td><td>{hash ? <button type="button" className="pcap-extracted-hash" title={t.copy} onClick={() => void copyText(hash)}>{hash}</button> : <AButton variant="text" disabled={!bytesAvailable || Boolean(extractedHashingKey)} onClick={() => void hashExtractedFile(index)}>{extractedHashingKey === key ? (english ? "Calculating..." : "计算中...") : bytesAvailable ? (english ? "Calculate" : "计算") : (english ? "Re-analyze" : "需重新分析")}</AButton>}</td><td><AButton variant="outlined" disabled={!bytesAvailable} title={!bytesAvailable ? (english ? "Re-analyze the capture before saving" : "请重新分析流量包后保存") : undefined} onClick={() => saveExtracted(index)}>{english ? "Save" : "保存"}</AButton></td></tr>; })}</tbody></table></div>}
+          {view === "files" && <div className="table-scroll pcap-files-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.filename}</th><th>Host</th><th>{t.jsonPath}</th><th>{t.componentType}</th><th>{t.fileSize}</th><th>SHA-256</th><th /></tr></thead><tbody>{pcap.extractedFiles.map((item, index) => { const key = extractedFileKey(index); const hash = extractedHashes[key]; const bytesAvailable = extractedBytesAvailable(item); return <tr key={`${item.packetNo}-${index}`}><td>{item.packetNo}</td><td>{item.filename}</td><td>{item.host}</td><td>{item.path}</td><td>{item.signature} / {item.contentType}</td><td>{formatBytes(item.size)}</td><td>{hash ? <button type="button" className="pcap-extracted-hash" title={t.copy} onClick={() => void copyText(hash)}>{hash}</button> : <AButton variant="text" disabled={!bytesAvailable || Boolean(extractedHashingKey)} onClick={() => void hashExtractedFile(index)}>{extractedHashingKey === key ? (t.calculating) : bytesAvailable ? (t.calculate) : (t.re_analyze)}</AButton>}</td><td><AButton variant="outlined" disabled={!bytesAvailable} title={!bytesAvailable ? (t.re_analyze_the_capture_before_saving) : undefined} onClick={() => saveExtracted(index)}>{t.save}</AButton></td></tr>; })}</tbody></table></div>}
           {extractedHashError && <div className="empty-state error-state">{extractedHashError}</div>}
         </section>
 
         {view === "packets" && selectedPacket && expandedPacketNo !== selectedPacket.no && <section className="tool-panel wide-panel pcap-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected packet" : "当前数据包"} subtitle={`#${selectedPacket.no} · ${selectedPacket.protocol}`} />
-          <InfoTable rows={[["Flow", selectedPacket.flow], [english ? "Timestamp" : "时间", selectedPacket.timestamp], [english ? "Captured / Original" : "捕获 / 原始", `${selectedPacket.captured} / ${selectedPacket.original}`]]} />
+          <ToolPanelHeader title={t.selected_packet} subtitle={`#${selectedPacket.no} · ${selectedPacket.protocol}`} />
+          <InfoTable rows={[["Flow", selectedPacket.flow], [t.timestamp_2, selectedPacket.timestamp], [t.captured_original, `${selectedPacket.captured} / ${selectedPacket.original}`]]} />
           <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={selectedPacket.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={selectedPacket.hexPreview || "--"} readOnly /></label></div>
         </section>}
       </>}
@@ -732,7 +732,7 @@ function HttpMessageModal({ item, t, english, onClose, onFollow }: { item: PcapH
     <div className="image-lightbox pcap-http-modal" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="image-lightbox-inner pcap-http-modal-inner" onClick={(event) => event.stopPropagation()}>
         <div className="image-lightbox-head">
-          <strong><span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (english ? "Request" : "请求") : (english ? "Response" : "响应")}</span> {title}</strong>
+          <strong><span className={`pcap-http-role role-${item.role}`}>{item.role === "request" ? (t.httpRequest) : (t.httpResponse)}</span> {title}</strong>
           <div className="image-lightbox-actions">
             <AButton variant="outlined" onClick={() => void copyText(fullText)}>{t.copyMessage}</AButton>
             <AButton variant="outlined" onClick={downloadMessage}>{t.downloadMessage}</AButton>
@@ -741,18 +741,18 @@ function HttpMessageModal({ item, t, english, onClose, onFollow }: { item: PcapH
           </div>
         </div>
         <div className="pcap-http-modal-meta">
-          <span>{english ? "Host" : "主机"}: {item.host}</span>
-          <span>{english ? "Type" : "类型"}: {item.contentType || "--"}</span>
-          <span>{english ? "Body" : "正文"}: {formatBytes(item.bodySize)}</span>
+          <span>{t.host}: {item.host}</span>
+          <span>{t.componentType}: {item.contentType || "--"}</span>
+          <span>{t.httpMessageBody}: {formatBytes(item.bodySize)}</span>
           <span>#{item.packetNo}</span>
-          {item.streamKey && <span>{english ? "Stream" : "流"}: {item.streamKey}</span>}
+          {item.streamKey && <span>{t.stream}: {item.streamKey}</span>}
         </div>
         {item.headers ? (
           <>
             <div className="pcap-http-section-label">{t.httpHeaders}</div>
             <pre className="pcap-http-headers">{item.headers}</pre>
             <div className="pcap-http-section-label">{t.httpMessageBody}</div>
-            <textarea className="single-textarea pcap-http-body" value={item.bodyPreview || "--"} readOnly aria-label={english ? "HTTP body" : "HTTP 正文"} />
+            <textarea className="single-textarea pcap-http-body" value={item.bodyPreview || "--"} readOnly aria-label={t.http_body} />
           </>
         ) : (
           <div className="pcap-stream-notice">{t.noHeadersCaptured}</div>

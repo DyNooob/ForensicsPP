@@ -85,7 +85,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
     onRestore: (value) => {
       restoredAnalysisRef.current = value.sourceSize > value.previewBytes.length;
       setStorageNotice(value.sourceSize > value.previewBytes.length
-        ? (english ? "Only a preview is restored. Re-open the source file to view byte context." : "当前只恢复了预览数据；如需查看完整字节上下文，请重新选择源文件。")
+        ? (t.only_a_preview_is_restored_re_open_the_source_file_to_view_byte_context)
         : "");
       setSourceName(value.sourceName);
       setSourceSize(value.sourceSize);
@@ -162,7 +162,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
         start: selected.offset,
         end: selected.endOffset,
         hex: "--",
-        text: english ? "Select the source file again to view byte context." : "请重新选择源文件后查看字节上下文。"
+        text: t.select_the_source_file_again_to_view_byte_context
       };
     }
     const start = Math.max(0, selected.offset - 96);
@@ -220,7 +220,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
     setError("");
     setDropActive(false);
     setStorageNotice(file.size > MAX_WORKSPACE_PREVIEW_BYTES
-      ? (english ? "Only a 4 MiB preview is retained across refreshes; the complete source remains available during this session." : "刷新后仅保留 4 MiB 预览；完整源文件仅在本次打开期间可用。")
+      ? (t.only_a_4_mib_preview_is_retained_across_refreshes_the_complete_source_remains_available_during_this_session)
       : "");
     try {
       const nextBytes = new Uint8Array(await file.slice(0, 64 * 1024 * 1024).arrayBuffer());
@@ -258,7 +258,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
 
       <section className="tool-panel wide-panel entropy-simple-source-panel">
         <ToolPanelHeader
-          title={english ? "File or text" : "输入文件或文本"}
+          title={t.file_or_text}
           actions={<AButton variant="text" disabled={!hasInput && !loading} onClick={clear}>{t.clear}</AButton>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
@@ -286,8 +286,8 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
         </div>
         <textarea
           className="single-textarea entropy-simple-input"
-          aria-label={english ? "Text for entropy analysis" : "需要计算熵值的文本"}
-          value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${english ? "loaded" : "已读取"}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
+          aria-label={t.text_for_entropy_analysis}
+          value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${t.loaded}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}
           readOnly={sourceName !== "text input"}
           placeholder={t.textPlaceholder}
           onChange={(event) => handleText(event.target.value)}
@@ -297,13 +297,13 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
       {hasInput && (
         <section className="tool-panel wide-panel entropy-simple-results-panel">
           <ToolPanelHeader
-            title={english ? "Entropy map" : "熵值分布"}
-            subtitle={sourceName === "text input" ? (english ? "Text input" : "文本输入") : sourceName}
-            actions={<AButton variant="outlined" onClick={() => setShowDetails((value) => !value)}>{showDetails ? (english ? "Hide details" : "收起详细数据") : (english ? "Detailed data" : "查看详细数据")}</AButton>}
+            title={t.entropy_map}
+            subtitle={sourceName === "text input" ? (t.text_input) : sourceName}
+            actions={<AButton variant="outlined" onClick={() => setShowDetails((value) => !value)}>{showDetails ? (t.hide_details) : (t.detailed_data)}</AButton>}
           />
 
           <div className="entropy-simple-summary">
-            <span><small>{english ? "Overall entropy" : "整体熵"}</small><strong>{overallEntropy}</strong></span>
+            <span><small>{t.overall_entropy}</small><strong>{overallEntropy}</strong></span>
             <span><small>{t.fileSize}</small><strong>{sourceSize > bytes.length ? `${formatBytes(bytes.length)} / ${formatBytes(sourceSize)}` : formatBytes(sourceSize)}</strong></span>
             <span><small>{t.entropyBlocks}</small><strong>{analysis.blocks.length}</strong></span>
             <span><small>{t.entropyRanges}</small><strong>{analysis.ranges.length}</strong></span>
@@ -316,7 +316,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
               <ASegmentedButton value="ranges" onClick={() => setView("ranges")}>{t.entropyRanges}</ASegmentedButton>
             </ASegmentedGroup>
             {view === "blocks" && (
-              <ASelect aria-label={english ? "Entropy class" : "熵值分类"} value={classFilter} onChange={(value) => setClassFilter(String(value))} options={[{ value: "", label: english ? "All classifications" : "全部类型" }, ...classes.map((item) => ({ value: item, label: item }))]} />
+              <ASelect aria-label={t.entropy_class} value={classFilter} onChange={(value) => setClassFilter(String(value))} options={[{ value: "", label: t.all_classifications }, ...classes.map((item) => ({ value: item, label: item }))]} />
             )}
             <AButton variant="text" onClick={() => downloadTextFile(`entropy-${view}-${Date.now()}.csv`, view === "blocks" ? services.entropyBlocksToCsv(filteredBlocks) : services.entropyRangesToCsv(analysis.ranges), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
           </div>
@@ -324,7 +324,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
           {view === "blocks" ? (
             <div className="table-scroll entropy-simple-table-scroll">
               <table className="data-table entropy-simple-table">
-                <thead><tr><th>{english ? "Offset" : "偏移"}</th><th>{english ? "Size" : "大小"}</th><th>{t.entropy}</th><th>{t.asciiRatio}</th><th>{t.zeroRatio}</th><th>{t.entropyClass}</th></tr></thead>
+                <thead><tr><th>{t.stringOffset}</th><th>{t.fileSize}</th><th>{t.entropy}</th><th>{t.asciiRatio}</th><th>{t.zeroRatio}</th><th>{t.entropyClass}</th></tr></thead>
                 <tbody>
                   {visibleBlocks.map((block) => (
                     <tr className={selected && services.entropyBlockKey(block) === services.entropyBlockKey(selected) ? "selected-row" : ""} key={services.entropyBlockKey(block)} onClick={() => setSelectedKey(services.entropyBlockKey(block))}>
@@ -342,7 +342,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
           ) : (
             <div className="table-scroll entropy-simple-table-scroll">
               <table className="data-table entropy-simple-ranges-table">
-                <thead><tr><th>{english ? "Range" : "范围"}</th><th>{english ? "Size" : "大小"}</th><th>{t.entropyBlocks}</th><th>{english ? "Average entropy" : "平均熵"}</th><th>{t.entropyClass}</th></tr></thead>
+                <thead><tr><th>{t.range}</th><th>{t.fileSize}</th><th>{t.entropyBlocks}</th><th>{t.average_entropy}</th><th>{t.entropyClass}</th></tr></thead>
                 <tbody>
                   {visibleRanges.map((range) => (
                     <tr key={`${range.start}-${range.end}-${range.classification}`}>
@@ -360,9 +360,9 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
 
           {itemCount > PAGE_SIZE && (
             <div className="entropy-simple-pagination">
-              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton>
+              <AButton variant="outlined" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton>
               <span>{page + 1} / {pageCount}</span>
-              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton>
+              <AButton variant="outlined" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{t.next}</AButton>
             </div>
           )}
           </>}
@@ -371,20 +371,20 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
 
       {selected && selectedContext && (
         <section className="tool-panel wide-panel entropy-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected block" : "当前分块"} />
+          <ToolPanelHeader title={t.selected_block} />
           <InfoTable rows={[
-            [english ? "Range" : "范围", `0x${selected.offset.toString(16).toUpperCase()}-0x${selected.endOffset.toString(16).toUpperCase()}`],
-            [english ? "Size" : "大小", formatBytes(selected.size)],
+            [t.range, `0x${selected.offset.toString(16).toUpperCase()}-0x${selected.endOffset.toString(16).toUpperCase()}`],
+            [t.fileSize, formatBytes(selected.size)],
             [t.entropy, `${selected.entropy.toFixed(6)} / 8`],
             [t.asciiRatio, `${(selected.asciiRatio * 100).toFixed(2)}%`],
             [t.zeroRatio, `${(selected.zeroRatio * 100).toFixed(2)}%`],
             [t.entropyClass, selected.classification],
-            [english ? "Dominant byte" : "主要字节", `0x${selected.dominantByte.toString(16).padStart(2, "0").toUpperCase()} (${(selected.dominantRatio * 100).toFixed(2)}%)`],
-            [english ? "Context window" : "上下文范围", `0x${selectedContext.start.toString(16).toUpperCase()}-0x${selectedContext.end.toString(16).toUpperCase()}`]
+            [t.dominant_byte, `0x${selected.dominantByte.toString(16).padStart(2, "0").toUpperCase()} (${(selected.dominantRatio * 100).toFixed(2)}%)`],
+            [t.context_window, `0x${selectedContext.start.toString(16).toUpperCase()}-0x${selectedContext.end.toString(16).toUpperCase()}`]
           ]} />
           <div className="entropy-simple-context">
             <label>Hex<pre>{selectedContext.hex}</pre></label>
-            <label>{english ? "Text" : "文本"}<pre>{selectedContext.text}</pre></label>
+            <label>{t.text}<pre>{selectedContext.text}</pre></label>
           </div>
         </section>
       )}

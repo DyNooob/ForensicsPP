@@ -219,12 +219,12 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
     <div className={`tool-grid password-simple-workbench password-grid ${hasInput ? "has-password" : "empty-password"}`}>
       <div className="tool-panel wide-panel password-simple-main-panel">
         <ToolPanelHeader
-          title={english ? "Password hash" : "密码哈希"}
+          title={t.password_hash}
           actions={<>
             <ASegmentedGroup className="password-simple-mode" value={mode} selects="single">
-              <ASegmentedButton value="generate" onClick={() => setMode("generate")}>{english ? "Generate" : "生成"}</ASegmentedButton>
+              <ASegmentedButton value="generate" onClick={() => setMode("generate")}>{t.generate}</ASegmentedButton>
               <ASegmentedButton value="identify" onClick={() => setMode("identify")}>{t.identifyMode}</ASegmentedButton>
-              <ASegmentedButton value="verify" onClick={() => setMode("verify")}>{english ? "Verify" : "验证"}</ASegmentedButton>
+              <ASegmentedButton value="verify" onClick={() => setMode("verify")}>{t.hashMatch}</ASegmentedButton>
               <ASegmentedButton value="sql" onClick={() => setMode("sql")}>SQL</ASegmentedButton>
             </ASegmentedGroup>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
@@ -235,20 +235,20 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
           <div className="password-simple-section">
             <div className="password-simple-generate-grid">
               <label className="stack-label">{t.passwordValue}<APasswordField className="text-input full-input" value={password} onChange={(event) => { setPassword(event.currentTarget.value); clearGenerated(); }} placeholder={t.passwordValue} /></label>
-              <label className="stack-label">{english ? "Salt" : "盐值"}<input className="text-input full-input" value={salt} onChange={(event) => { setSalt(event.currentTarget.value); clearGenerated(); }} /></label>
-              <label className="stack-label">{english ? "bcrypt rounds" : "bcrypt 轮数"}<AInputNumber min={4} max={14} value={rounds} onChange={(value) => { operationRef.current += 1; setLoading(""); setRounds(Math.min(14, Math.max(4, value ?? 10))); setBcryptHash(""); if (generatedView === "bcrypt") setGeneratedView(""); }} /></label>
-              <label className="stack-label">{english ? "PBKDF2 iterations" : "PBKDF2 迭代"}<AInputNumber min={10000} max={2000000} step={10000} value={pbkdf2Iterations} onChange={(value) => { operationRef.current += 1; setLoading(""); setPbkdf2Iterations(Math.min(2000000, Math.max(10000, value ?? 390000))); setPbkdf2Hash(""); if (generatedView === "pbkdf2") setGeneratedView(""); }} /></label>
+              <label className="stack-label">{t.salt}<input className="text-input full-input" value={salt} onChange={(event) => { setSalt(event.currentTarget.value); clearGenerated(); }} /></label>
+              <label className="stack-label">{t.bcrypt_rounds}<AInputNumber min={4} max={14} value={rounds} onChange={(value) => { operationRef.current += 1; setLoading(""); setRounds(Math.min(14, Math.max(4, value ?? 10))); setBcryptHash(""); if (generatedView === "bcrypt") setGeneratedView(""); }} /></label>
+              <label className="stack-label">{t.pbkdf2_iterations}<AInputNumber min={10000} max={2000000} step={10000} value={pbkdf2Iterations} onChange={(value) => { operationRef.current += 1; setLoading(""); setPbkdf2Iterations(Math.min(2000000, Math.max(10000, value ?? 390000))); setPbkdf2Hash(""); if (generatedView === "pbkdf2") setGeneratedView(""); }} /></label>
             </div>
             <div className="button-row">
-              <AButton variant="filled" disabled={!password || Boolean(loading)} onClick={generateQuickHashes}>{english ? "Generate common hashes" : "生成常用哈希"}</AButton>
+              <AButton variant="filled" disabled={!password || Boolean(loading)} onClick={generateQuickHashes}>{t.generate_common_hashes}</AButton>
               <AButton variant="outlined" disabled={!password || Boolean(loading)} onClick={() => void generateBcrypt()}>{loading === "bcrypt" ? "bcrypt..." : t.generateBcrypt}</AButton>
               <AButton variant="outlined" disabled={!password || !salt || Boolean(loading)} onClick={() => void generatePbkdf2()}>{loading === "pbkdf2" ? "PBKDF2..." : t.generatePbkdf2}</AButton>
-              <AButton variant="text" onClick={() => { setSalt(randomSalt()); clearGenerated(); }}>{english ? "New salt" : "新盐值"}</AButton>
+              <AButton variant="text" onClick={() => { setSalt(randomSalt()); clearGenerated(); }}>{t.new_salt}</AButton>
             </div>
             {!password && <div className="empty-state">{t.passwordGenerateEmpty}</div>}
             {visibleGeneratedHashes.length > 0 && (
               <div className="password-simple-output">
-                <ToolPanelHeader title={english ? "Generated hash" : "生成结果"} actions={<AButton variant="text" onClick={() => void copyText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (english ? "Copy all" : "复制全部") : (english ? "Copy" : "复制")}</AButton>} />
+                <ToolPanelHeader title={t.generated_hash} actions={<AButton variant="text" onClick={() => void copyText(visibleGeneratedHashes.map(([label, value]) => `${label}: ${value}`).join("\n"))}>{visibleGeneratedHashes.length > 1 ? (t.copy_all) : (t.copy)}</AButton>} />
                 <div className="table-scroll"><table className="data-table password-simple-hash-table"><tbody>{visibleGeneratedHashes.map(([label, value]) => <tr key={label}><th>{label}</th><td><button type="button" className="password-simple-value" onClick={() => void copyText(value)}>{value}</button></td></tr>)}</tbody></table></div>
               </div>
             )}
@@ -331,16 +331,16 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
 
         {mode === "verify" && (
           <div className="password-simple-section">
-            <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "Paste the target password hash" : "粘贴目标密码哈希"} /></label>
-            <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={english ? "One candidate password per line" : "每行输入一个候选口令"} /></label>
-            <div className="button-row"><AButton variant="filled" disabled={!targetHash.trim() || !candidates.length || Boolean(loading)} onClick={() => void verify()}>{loading === "verify" ? (english ? "Verifying..." : "正在验证...") : t.verifyCandidates}</AButton></div>
+            <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.paste_the_target_password_hash} /></label>
+            <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.one_candidate_password_per_line} /></label>
+            <div className="button-row"><AButton variant="filled" disabled={!targetHash.trim() || !candidates.length || Boolean(loading)} onClick={() => void verify()}>{loading === "verify" ? (t.verifying) : t.verifyCandidates}</AButton></div>
             {(!targetHash.trim() || !candidates.length) && <div className="empty-state">{t.passwordVerifyEmpty}</div>}
             {verifyRows.length > 0 && (
               <div className="password-simple-output">
-                <ToolPanelHeader title={english ? "Verification results" : "验证结果"} subtitle={`${matchedCount}/${verifyRows.length} MATCH`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`password-verify-${Date.now()}.csv`, passwordRowsToCsv(verifyRows), "text/csv;charset=utf-8")}>{english ? "Export CSV" : "导出 CSV"}</AButton>} />
-                <InfoTable rows={[[english ? "Detected type" : "识别类型", targetType], [english ? "Candidates" : "候选数量", String(verifyRows.length)], [english ? "Matches" : "匹配数量", String(matchedCount)]]} />
-                <div className="table-scroll password-simple-verify-scroll"><table className="data-table password-simple-verify-table"><thead><tr><th>{english ? "Candidate" : "候选口令"}</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Result" : "结果"}</th><th>{english ? "Detail" : "详情"}</th></tr></thead><tbody>{verifyRows.map((row, index) => <tr className={row.matched ? "selected-row" : ""} key={`${index}-${row.candidate}`}><td>{row.candidate}</td><td>{row.hashType}</td><td>{row.matched ? "MATCH" : "NO MATCH"}</td><td>{row.detail}</td></tr>)}</tbody></table></div>
-                {candidates.length > 200 && <span className="inline-note">{english ? "Only the first 200 candidates were checked." : "仅验证前 200 个候选口令。"}</span>}
+                <ToolPanelHeader title={t.verification_results} subtitle={`${matchedCount}/${verifyRows.length} MATCH`} actions={<AButton variant="outlined" onClick={() => downloadTextFile(`password-verify-${Date.now()}.csv`, passwordRowsToCsv(verifyRows), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>} />
+                <InfoTable rows={[[t.detected_type, targetType], [t.candidates, String(verifyRows.length)], [t.matches, String(matchedCount)]]} />
+                <div className="table-scroll password-simple-verify-scroll"><table className="data-table password-simple-verify-table"><thead><tr><th>{t.candidate}</th><th>{t.componentType}</th><th>{t.result}</th><th>{t.detail}</th></tr></thead><tbody>{verifyRows.map((row, index) => <tr className={row.matched ? "selected-row" : ""} key={`${index}-${row.candidate}`}><td>{row.candidate}</td><td>{row.hashType}</td><td>{row.matched ? "MATCH" : "NO MATCH"}</td><td>{row.detail}</td></tr>)}</tbody></table></div>
+                {candidates.length > 200 && <span className="inline-note">{t.only_the_first_200_candidates_were_checked}</span>}
               </div>
             )}
           </div>
@@ -349,12 +349,12 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
         {mode === "sql" && (
           <div className="password-simple-section">
             <div className="password-simple-sql-grid">
-              <label className="stack-label">{english ? "Username" : "用户名"}<input className="text-input" value={username} onChange={(event) => setUsername(event.currentTarget.value)} /></label>
-              <label className="stack-label">{english ? "Table" : "数据表"}<input className="text-input" value={table} onChange={(event) => setTable(event.currentTarget.value)} /></label>
-              <label className="stack-label">{english ? "Password column" : "密码字段"}<input className="text-input" value={column} onChange={(event) => setColumn(event.currentTarget.value)} /></label>
-              <label className="stack-label">{english ? "Where column" : "条件字段"}<input className="text-input" value={whereColumn} onChange={(event) => setWhereColumn(event.currentTarget.value)} /></label>
+              <label className="stack-label">{t.username}<input className="text-input" value={username} onChange={(event) => setUsername(event.currentTarget.value)} /></label>
+              <label className="stack-label">{t.table}<input className="text-input" value={table} onChange={(event) => setTable(event.currentTarget.value)} /></label>
+              <label className="stack-label">{t.password_column}<input className="text-input" value={column} onChange={(event) => setColumn(event.currentTarget.value)} /></label>
+              <label className="stack-label">{t.where_column}<input className="text-input" value={whereColumn} onChange={(event) => setWhereColumn(event.currentTarget.value)} /></label>
             </div>
-            {!password ? <div className="empty-state">{english ? "Generate a password hash first" : "请先在生成页输入口令"}</div> : <div className="password-simple-sql-list">{sqlTemplates.map(([label, value]) => <div className="password-simple-sql-row" key={label}><strong>{label}</strong><code>{value}</code><AButton variant="text" disabled={value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></div>)}</div>}
+            {!password ? <div className="empty-state">{t.generate_a_password_hash_first}</div> : <div className="password-simple-sql-list">{sqlTemplates.map(([label, value]) => <div className="password-simple-sql-row" key={label}><strong>{label}</strong><code>{value}</code><AButton variant="text" disabled={value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></div>)}</div>}
           </div>
         )}
 

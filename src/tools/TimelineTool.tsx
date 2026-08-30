@@ -55,7 +55,7 @@ function timelineJson(source: string, events: TimelineEvent[], sources: Timeline
 export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [input, setInput] = useStoredState("timeline.input.v3", "");
-  const [source, setSource] = useStoredState("timeline.source.v3", english ? "Pasted text" : "粘贴文本");
+  const [source, setSource] = useStoredState("timeline.source.v3", t.pasted_text);
   const [sources, setSources] = React.useState<TimelineSource[]>([]);
   const [query, setQuery] = React.useState("");
   const [format, setFormat] = React.useState("");
@@ -73,7 +73,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     ? sources[0].name
     : sources.length > 1
       ? (english ? `${sources.length} files` : `${sources.length} 个文件`)
-      : (/^(?:pasted text|粘贴文本)$/i.test(source) ? (english ? "Pasted text" : "粘贴文本") : source);
+      : (/^(?:pasted text|粘贴文本)$/i.test(source) ? (t.pasted_text) : source);
   const parsedSources = React.useMemo(() => sources.length
     ? sources
     : input.trim()
@@ -117,7 +117,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     if (parsedSources.some((item) => item.size > MAX_TIMELINE_TEXT_BYTES)) {
       setEvents([]);
       setParsing(false);
-      setError(english ? "Timeline text is limited to 32 MiB." : "时间线文本不能超过 32 MiB。" );
+      setError(t.timeline_text_is_limited_to_32_mib );
       return () => controller.abort();
     }
     setParsing(true);
@@ -172,7 +172,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     requestRef.current += 1;
     setInput("");
     setSources([]);
-    setSource(english ? "Pasted text" : "粘贴文本");
+    setSource(t.pasted_text);
     setError("");
     resetReview();
   };
@@ -194,7 +194,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     }
     const currentBytes = sources.reduce((total, item) => total + item.size, 0);
     if (currentBytes + totalBytes > MAX_TIMELINE_TOTAL_BYTES) {
-      setError(english ? "Selected timeline files exceed the 64 MiB total limit." : "所选时间线文件超过 64 MiB 总限制。");
+      setError(t.selected_timeline_files_exceed_the_64_mib_total_limit);
       return;
     }
     try {
@@ -223,7 +223,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     <div ref={workbenchRef} className={`tool-grid timeline-simple-workbench ${hasInput ? "has-timeline" : "empty-timeline"}`}>
       <div className="tool-panel wide-panel timeline-simple-input-panel">
         <ToolPanelHeader
-          title={english ? "Timeline input" : "时间线输入"}
+          title={t.timeline_input}
           subtitle={sourceLabel}
           actions={<>
             <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{t.uploadTimeline}</AButton>
@@ -252,18 +252,18 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
             void loadFiles(event.dataTransfer.files);
           }}
         >
-          <strong>{english ? "Open one or more log, text, CSV, or JSON files" : "打开一个或多个日志、文本、CSV 或 JSON 文件"}</strong>
-          <span>{english ? "or paste source text below" : "也可以在下方直接粘贴源文本"}</span>
+          <strong>{t.open_one_or_more_log_text_csv_or_json_files}</strong>
+          <span>{t.or_paste_source_text_below}</span>
         </div>
         <label className="stack-label">
-          {english ? "Source text" : "源文本"}
+          {t.source_text}
           <textarea
             className="single-textarea timeline-simple-input"
             value={input}
             onChange={(event) => {
               requestRef.current += 1;
               if (new TextEncoder().encode(event.currentTarget.value).byteLength > MAX_TIMELINE_TEXT_BYTES) {
-                setError(english ? "Timeline text is limited to 32 MiB." : "时间线文本不能超过 32 MiB。" );
+                setError(t.timeline_text_is_limited_to_32_mib );
                 return;
               }
               setSources([]);
@@ -271,7 +271,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
               setError("");
               if (!event.currentTarget.value) setSelectedId("");
             }}
-            placeholder={english ? "Paste logs or tabular text containing timestamps" : "粘贴包含时间字段的日志或表格文本"}
+            placeholder={t.paste_logs_or_tabular_text_containing_timestamps}
           />
         </label>
         {error && <div className="empty-state error-state">{error}</div>}
@@ -281,7 +281,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
         <div className="tool-panel wide-panel timeline-simple-results-panel">
           <ToolPanelHeader
             title={t.timelineEvents}
-            subtitle={`${filteredEvents.length}/${events.length} ${english ? "events" : "条事件"}`}
+            subtitle={`${filteredEvents.length}/${events.length} ${t.events}`}
             actions={<>
               <AButton variant="outlined" disabled={!exportEvents.length} onClick={() => downloadTextFile(`timeline-${Date.now()}.csv`, timelineToCsv(exportEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
               <AButton variant="text" disabled={!exportEvents.length} onClick={() => downloadTextFile(`timeline-${Date.now()}.json`, timelineJson(sourceLabel, exportEvents, parsedSources), "application/json;charset=utf-8")}>{t.exportJson}</AButton>
@@ -290,10 +290,10 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
           {parsing && <ALinearProgress />}
           <div className="timeline-simple-summary">
             <InfoTable rows={[
-              [english ? "Events" : "事件数", String(events.length)],
-              [english ? "First" : "最早时间", firstEvent?.iso ?? "--"],
-              [english ? "Last" : "最晚时间", lastEvent?.iso ?? "--"],
-              [english ? "Span" : "时间跨度", span]
+              [t.events_2, String(events.length)],
+              [t.first, firstEvent?.iso ?? "--"],
+              [t.last, lastEvent?.iso ?? "--"],
+              [t.span, span]
             ]} />
           </div>
           <div className="timeline-simple-toolbar">
@@ -308,7 +308,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
           {visibleEvents.length ? (
             <div className="table-scroll timeline-simple-scroll">
               <table className="data-table timeline-simple-table">
-                <thead><tr><th>ISO</th><th>{english ? "Format" : "格式"}</th><th>{english ? "Line" : "行号"}</th><th>{english ? "Source" : "来源"}</th><th>{t.timelineContext}</th></tr></thead>
+                <thead><tr><th>ISO</th><th>{t.format}</th><th>{t.iocLine}</th><th>{t.iocSource}</th><th>{t.timelineContext}</th></tr></thead>
                 <tbody>
                   {visibleEvents.map((event) => (
                     <tr className={event.id === selectedId ? "selected-row" : ""} key={event.id}>
@@ -322,14 +322,14 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
                 </tbody>
               </table>
             </div>
-          ) : <div className="empty-state">{english ? "No timestamps found" : "未找到可识别的时间"}</div>}
+          ) : <div className="empty-state">{t.no_timestamps_found}</div>}
 
           {filteredEvents.length > PAGE_SIZE && (
             <div className="timeline-simple-pagination">
               <span>{rangeStart}-{rangeEnd} / {filteredEvents.length}</span>
               <div className="button-row compact-buttons">
-                <AButton variant="text" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>{english ? "Previous" : "上一页"}</AButton>
-                <AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>{english ? "Next" : "下一页"}</AButton>
+                <AButton variant="text" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>{t.previous}</AButton>
+                <AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>{t.next}</AButton>
               </div>
             </div>
           )}
@@ -339,16 +339,16 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
       {selectedEvent && (
         <div className="tool-panel wide-panel timeline-simple-detail-panel">
           <ToolPanelHeader
-            title={english ? "Event details" : "事件详情"}
-            subtitle={`${selectedEvent.source} · ${english ? "line" : "第"} ${selectedEvent.line}${english ? "" : " 行"}`}
-            actions={<AButton variant="text" onClick={() => void copyText(selectedEvent.context)}>{english ? "Copy context" : "复制上下文"}</AButton>}
+            title={t.event_details}
+            subtitle={`${selectedEvent.source} · ${t.line} ${selectedEvent.line}${t.s}`}
+            actions={<AButton variant="text" onClick={() => void copyText(selectedEvent.context)}>{t.copy_context}</AButton>}
           />
           <InfoTable rows={[
             ["ISO", selectedEvent.iso],
-            [english ? "Local time" : "本地时间", selectedEvent.local],
-            [english ? "Raw value" : "原始值", selectedEvent.raw],
-            [english ? "Format" : "格式", selectedEvent.format],
-            [english ? "Source" : "来源", selectedEvent.source]
+            [t.local_time, selectedEvent.local],
+            [t.raw_value, selectedEvent.raw],
+            [t.format, selectedEvent.format],
+            [t.iocSource, selectedEvent.source]
           ]} />
           <pre className="result-box timeline-simple-context">{selectedEvent.context}</pre>
         </div>

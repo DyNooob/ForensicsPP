@@ -209,7 +209,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     setInfo(null);clearAnalysisResult("android");
     resetReview();
     if (file.size > MAX_ARCHIVE_SIZE) {
-      setError(english ? "Files larger than 256 MiB are not opened in the browser." : "浏览器内不打开超过 256 MiB 的文件。");
+      setError(t.files_larger_than_256_mib_are_not_opened_in_the_browser);
       return;
     }
     setParsing(true);
@@ -299,7 +299,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
     if (!file || !sourceFile || !repairableApk) return;
     setV4Busy(true);
     try {
-      if (file.size > 32 * 1024 * 1024) throw new Error(english ? ".idsig files larger than 32 MiB are not opened." : "不打开超过 32 MiB 的 .idsig 文件。");
+      if (file.size > 32 * 1024 * 1024) throw new Error(t.idsig_files_larger_than_32_mib_are_not_opened);
       const [apkBuffer, idsigBuffer] = await Promise.all([sourceFile.arrayBuffer(), file.arrayBuffer()]);
       setV4Result(await verifyAndroidV4Idsig(new Uint8Array(apkBuffer), new Uint8Array(idsigBuffer)));
     } catch (caught) {
@@ -316,7 +316,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
   const runGeneratedRepair = async () => {
     if (!sourceFile || !repairableApk) return;
     setRepairBusy(true);
-    setRepairStatus(english ? "Generating a local repair signer and rebuilding the v2 signature…" : "正在生成本地修复签名身份并重建 v2 签名…");
+    setRepairStatus(t.generating_a_local_repair_signer_and_rebuilding_the_v2_signature);
     try {
       const input = new Uint8Array(await sourceFile.arrayBuffer());
       const identity = await createTemporaryRepairIdentity();
@@ -342,7 +342,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
         ? `Re-sign complete and self-verified. ${result.strippedJarSignatures.length} JAR/v1 signature entries removed. A repair bundle containing the APK and new signer material was downloaded.`
         : `重签完成并通过自校验。移除了 ${result.strippedJarSignatures.length} 个 JAR/v1 签名条目；已下载包含 APK 与新签名材料的修复包。`);
     } catch (caught) {
-      setRepairStatus(`${english ? "Repair failed" : "修复失败"}: ${caught instanceof Error ? caught.message : String(caught)}`);
+      setRepairStatus(`${t.repair_failed}: ${caught instanceof Error ? caught.message : String(caught)}`);
     } finally {
       setRepairBusy(false);
     }
@@ -351,7 +351,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
   const runImportedRepair = async () => {
     if (!sourceFile || !repairableApk || !repairKeyFile || !repairCertFile) return;
     setRepairBusy(true);
-    setRepairStatus(english ? "Importing signer and rebuilding the APK v2 signature…" : "正在导入签名身份并重建 APK v2 签名…");
+    setRepairStatus(t.importing_signer_and_rebuilding_the_apk_v2_signature);
     try {
       const [apkBuffer, keyBuffer, certBuffer] = await Promise.all([sourceFile.arrayBuffer(), repairKeyFile.arrayBuffer(), repairCertFile.arrayBuffer()]);
       const identity = await importRepairIdentity(new Uint8Array(keyBuffer), new Uint8Array(certBuffer), repairCertFile.name);
@@ -362,7 +362,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
         ? `Re-sign complete and self-verified with the imported identity. ${result.strippedJarSignatures.length} JAR/v1 signature entries removed.`
         : `已使用导入身份完成重签并通过自校验。移除了 ${result.strippedJarSignatures.length} 个 JAR/v1 签名条目。`);
     } catch (caught) {
-      setRepairStatus(`${english ? "Repair failed" : "修复失败"}: ${caught instanceof Error ? caught.message : String(caught)}`);
+      setRepairStatus(`${t.repair_failed}: ${caught instanceof Error ? caught.message : String(caught)}`);
     } finally {
       setRepairBusy(false);
     }
@@ -374,7 +374,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
 
       <section className="tool-panel wide-panel android-simple-source-panel manifest-input-panel">
         <ToolPanelHeader
-          title={english ? "Open APK or manifest" : "选择 APK 或 Manifest"}
+          title={t.open_apk_or_manifest}
           actions={<AButton variant="text" disabled={!manifestText && !info && !error && !parsing} onClick={clear}>{t.clear}</AButton>}
         />
         <input
@@ -402,16 +402,16 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{info ? sourceName : t.uploadManifest}</strong>
-          <span>{info ? `${info.sourceFormat} · ${formatBytes(info.size)}` : (english ? "APK, XML, or binary AXML" : "支持 APK、XML 和二进制 AXML")}</span>
+          <span>{info ? `${info.sourceFormat} · ${formatBytes(info.size)}` : (t.apk_xml_or_binary_axml)}</span>
         </div>
-        {info ? <details className="android-xml-details"><summary>{english ? "View decoded XML" : "查看解码 XML"}</summary><textarea
+        {info ? <details className="android-xml-details"><summary>{t.view_decoded_xml}</summary><textarea
           className="single-textarea android-simple-editor manifest-textarea"
-          aria-label={english ? "Decoded AndroidManifest XML" : "解码后的 AndroidManifest XML"}
+          aria-label={t.decoded_androidmanifest_xml}
           value={manifestText}
           readOnly
         /></details> : <textarea
           className="single-textarea android-simple-editor manifest-textarea"
-          aria-label={english ? "AndroidManifest XML input" : "AndroidManifest XML 输入"}
+          aria-label={t.androidmanifest_xml_input}
           value={manifestText}
           onChange={(event) => { setManifestText(event.target.value); setSourceName("pasted AndroidManifest.xml"); setInfo(null);clearAnalysisResult("android"); resetReview(); }}
           placeholder="<manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; ...>"
@@ -420,7 +420,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           <AButton variant="filled" disabled={parsing || !manifestText.trim()} onClick={() => parseText()}>{t.parseManifest}</AButton>
           <AButton variant="outlined" disabled={parsing} onClick={() => inputRef.current?.click()}>{t.uploadManifest}</AButton>
           <AButton variant="text" disabled={!manifestText} onClick={() => void copyText(manifestText)}>{t.copy} XML</AButton>
-          <AButton variant="text" disabled={!manifestText} onClick={() => downloadTextFile(`decoded-android-manifest-${Date.now()}.xml`, manifestText, "application/xml;charset=utf-8")}>{english ? "Download XML" : "下载 XML"}</AButton>
+          <AButton variant="text" disabled={!manifestText} onClick={() => downloadTextFile(`decoded-android-manifest-${Date.now()}.xml`, manifestText, "application/xml;charset=utf-8")}>{t.download_xml}</AButton>
         </div>
         {error && <pre className="result-box android-simple-error">{error}</pre>}
       </section>
@@ -437,15 +437,15 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
             <span><small>Version</small><strong>{info.versionName || info.versionCode || "--"}</strong></span>
             <span><small>SDK</small><strong>{info.minSdk || "--"} / {info.targetSdk || "--"}</strong></span>
             <span><small>{t.permissions}</small><strong>{info.permissionRows.length}</strong></span>
-            <span className={permissionSeverityCounts.dangerous ? "android-summary-danger" : ""}><small>{english ? "Dangerous" : "危险权限"}</small><strong>{permissionSeverityCounts.dangerous ?? 0}</strong></span>
+            <span className={permissionSeverityCounts.dangerous ? "android-summary-danger" : ""}><small>{t.dangerous}</small><strong>{permissionSeverityCounts.dangerous ?? 0}</strong></span>
             <span><small>{t.components}</small><strong>{info.components.length}</strong></span>
           </div>
           <ASegmentedGroup className="android-simple-tabs" value={view} selects="single">
-            <ASegmentedButton value="overview" onClick={() => setView("overview")}>{english ? "Overview" : "概览"}</ASegmentedButton>
-            <ASegmentedButton value="signing" disabled={!info.signing?.present} onClick={() => setView("signing")}>{english ? "Signing" : "签名"} ({info.signing?.signers.length ?? 0})</ASegmentedButton>
+            <ASegmentedButton value="overview" onClick={() => setView("overview")}>{t.overview}</ASegmentedButton>
+            <ASegmentedButton value="signing" disabled={!info.signing?.present} onClick={() => setView("signing")}>{t.signing} ({info.signing?.signers.length ?? 0})</ASegmentedButton>
             <ASegmentedButton value="permissions" onClick={() => setView("permissions")}>{t.permissions} ({info.permissionRows.length})</ASegmentedButton>
             <ASegmentedButton value="components" onClick={() => setView("components")}>{t.components} ({info.components.length})</ASegmentedButton>
-            <ASegmentedButton value="entries" disabled={!info.apkEntries.length} onClick={() => setView("entries")}>{english ? "APK entries" : "APK 条目"} ({info.apkEntries.length})</ASegmentedButton>
+            <ASegmentedButton value="entries" disabled={!info.apkEntries.length} onClick={() => setView("entries")}>{t.apk_entries} ({info.apkEntries.length})</ASegmentedButton>
           </ASegmentedGroup>
 
           {view === "overview" && (
@@ -473,16 +473,16 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           {view === "signing" && info.signing && (
             <div className="android-simple-view android-signing-view">
               <InfoTable rows={[
-                [english ? "Signing Block" : "签名块", info.signing.present ? (english ? "Present" : "存在") : "--"],
-                [english ? "Signing Block schemes" : "签名块方案", info.signing.schemes.join(" + ") || "--"],
-                [english ? "Cryptographically checked" : "密码学验证方案", info.signing.verification?.checkedSchemes.map((scheme) => scheme.toUpperCase()).join(" + ") || "--"],
-                [english ? "Signers" : "Signer 数量", String(info.signing.signers.length)],
-                [english ? "Block offset" : "签名块偏移", info.signing.blockOffset == null ? "--" : `0x${info.signing.blockOffset.toString(16).toUpperCase()}`],
-                [english ? "Block size" : "签名块大小", info.signing.blockSize ? formatBytes(info.signing.blockSize) : "--"],
+                [t.signing_block, info.signing.present ? (t.present) : "--"],
+                [t.signing_block_schemes, info.signing.schemes.join(" + ") || "--"],
+                [t.cryptographically_checked, info.signing.verification?.checkedSchemes.map((scheme) => scheme.toUpperCase()).join(" + ") || "--"],
+                [t.signers, String(info.signing.signers.length)],
+                [t.block_offset, info.signing.blockOffset == null ? "--" : `0x${info.signing.blockOffset.toString(16).toUpperCase()}`],
+                [t.block_size, info.signing.blockSize ? formatBytes(info.signing.blockSize) : "--"],
                 [english ? "Central Directory" : "Central Directory", info.signing.centralDirectoryOffset == null ? "--" : `0x${info.signing.centralDirectoryOffset.toString(16).toUpperCase()}`],
-                [english ? "Unknown pair IDs" : "未知 Pair ID", info.signing.unknownPairIds.join(", ") || "--"],
-                [english ? "Integrity verification" : "完整性验证", info.signing.verification?.status === "verified" ? (english ? "Verified" : "验证通过") : info.signing.verification?.status === "failed" ? (english ? "Failed" : "验证失败") : (english ? "Not available" : "未执行")],
-                [english ? "Verification time" : "验证耗时", info.signing.verification ? `${info.signing.verification.durationMs} ms` : "--"]
+                [t.unknown_pair_ids, info.signing.unknownPairIds.join(", ") || "--"],
+                [t.integrity_verification, info.signing.verification?.status === "verified" ? (t.verified) : info.signing.verification?.status === "failed" ? (t.failed) : (t.not_available)],
+                [t.verification_time, info.signing.verification ? `${info.signing.verification.durationMs} ms` : "--"]
               ]} />
               {info.signing.warnings.length > 0 && <div className="forensic-inline-note">{info.signing.warnings.join(" · ")}</div>}
               {info.signing.verification?.errors.length ? <div className="forensic-inline-note error-state">{info.signing.verification.errors.join(" · ")}</div> : null}
@@ -490,64 +490,64 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
               {info.signing.verification?.jarV1?.present ? <div className="tool-panel android-signing-signer">
                 <ToolPanelHeader title="V1 / JAR signer" subtitle={info.signing.verification.jarV1.signerBase || undefined} />
                 <InfoTable rows={[
-                  [english ? "Manifest entries" : "Manifest 条目", `${info.signing.verification.jarV1.verifiedEntries} / ${info.signing.verification.jarV1.manifestEntries}`],
-                  [english ? ".SF manifest digest" : ".SF Manifest 摘要", info.signing.verification.jarV1.sfManifestDigestVerified ? "✓" : "✗"],
-                  [english ? "CMS signature" : "CMS 签名", info.signing.verification.jarV1.cmsSignatureVerified ? "✓" : "✗"],
-                  [english ? "Signer certificate SHA-256" : "Signer 证书 SHA-256", info.signing.verification.jarV1.signerCertificateSha256 || "--"],
-                  [english ? "Result" : "结果", info.signing.verification.jarV1.verified ? (english ? "Verified" : "通过") : (english ? "Failed" : "失败")]
+                  [t.manifest_entries, `${info.signing.verification.jarV1.verifiedEntries} / ${info.signing.verification.jarV1.manifestEntries}`],
+                  [t.sf_manifest_digest, info.signing.verification.jarV1.sfManifestDigestVerified ? "✓" : "✗"],
+                  [t.cms_signature, info.signing.verification.jarV1.cmsSignatureVerified ? "✓" : "✗"],
+                  [t.signer_certificate_sha_256, info.signing.verification.jarV1.signerCertificateSha256 || "--"],
+                  [t.result, info.signing.verification.jarV1.verified ? (t.verified) : (t.failed)]
                 ]} />
               </div> : null}
-              {info.signing.verification?.signerResults.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Signer</th><th>{english ? "Algorithm" : "算法"}</th><th>{english ? "Signed data" : "签名数据"}</th><th>{english ? "APK digest" : "APK 摘要"}</th><th>{english ? "Cert key" : "证书公钥"}</th><th>{english ? "Result" : "结果"}</th></tr></thead><tbody>{info.signing.verification.signerResults.map((result) => <tr key={`verify-${result.scheme}-${result.signerIndex}`}><td>{result.scheme.toUpperCase()} #{result.signerIndex}</td><td>{result.selectedAlgorithm}</td><td>{result.signatureVerified ? "✓" : "✗"}</td><td>{result.contentDigestVerified ? "✓" : "✗"}</td><td>{result.publicKeyMatchesCertificate ? "✓" : "✗"}</td><td>{result.verified ? (english ? "Verified" : "通过") : (english ? "Failed" : "失败")}</td></tr>)}</tbody></table></div> : null}
+              {info.signing.verification?.signerResults.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Signer</th><th>{t.algorithm}</th><th>{t.signed_data}</th><th>{t.apk_digest}</th><th>{t.cert_key}</th><th>{t.result}</th></tr></thead><tbody>{info.signing.verification.signerResults.map((result) => <tr key={`verify-${result.scheme}-${result.signerIndex}`}><td>{result.scheme.toUpperCase()} #{result.signerIndex}</td><td>{result.selectedAlgorithm}</td><td>{result.signatureVerified ? "✓" : "✗"}</td><td>{result.contentDigestVerified ? "✓" : "✗"}</td><td>{result.publicKeyMatchesCertificate ? "✓" : "✗"}</td><td>{result.verified ? (t.verified) : (t.failed)}</td></tr>)}</tbody></table></div> : null}
               {info.signing.signers.map((signer) => <div className="tool-panel android-signing-signer" key={`${signer.scheme}-${signer.index}`}>
                 <ToolPanelHeader title={`${signer.scheme.toUpperCase()} signer ${signer.index}`} subtitle={signer.minSdk == null ? undefined : `SDK ${signer.minSdk}–${signer.maxSdk ?? "?"}`} />
                 <InfoTable rows={[
-                  [english ? "Signature algorithms" : "签名算法", signer.signatures.map((item) => item.name).join(", ") || "--"],
-                  [english ? "Digest algorithms" : "摘要算法", signer.digests.map((item) => item.name).join(", ") || "--"],
-                  [english ? "Public key" : "公钥", `${formatBytes(signer.publicKeySize)} · SHA-256 ${signer.publicKeySha256}`],
-                  [english ? "Additional attributes" : "附加属性", signer.attributes.join(", ") || "--"]
+                  [t.signature_algorithms, signer.signatures.map((item) => item.name).join(", ") || "--"],
+                  [t.digest_algorithms, signer.digests.map((item) => item.name).join(", ") || "--"],
+                  [t.public_key, `${formatBytes(signer.publicKeySize)} · SHA-256 ${signer.publicKeySha256}`],
+                  [t.additional_attributes, signer.attributes.join(", ") || "--"]
                 ]} />
-                {signer.certificates.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>#</th><th>SHA-256</th><th>{english ? "Subject" : "Subject"}</th><th>{english ? "Issuer" : "Issuer"}</th><th>{english ? "Serial" : "序列号"}</th><th>{english ? "Validity" : "有效期"}</th></tr></thead><tbody>{signer.certificates.map((certificate, certIndex) => <tr key={`${certificate.sha256}-${certIndex}`}><td>{certIndex + 1}</td><td><button type="button" className="sqlite-fragment-copy" title={certificate.sha256} onClick={() => void copyText(certificate.sha256)}>{certificate.sha256}</button></td><td>{certificate.subject}</td><td>{certificate.issuer}</td><td>{certificate.serial}</td><td>{certificate.validFrom} → {certificate.validTo}</td></tr>)}</tbody></table></div> : <div className="empty-state">{english ? "No signer certificate parsed." : "未解析到 Signer 证书。"}</div>}
+                {signer.certificates.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>#</th><th>SHA-256</th><th>{english ? "Subject" : "Subject"}</th><th>{english ? "Issuer" : "Issuer"}</th><th>{t.serial}</th><th>{t.validity}</th></tr></thead><tbody>{signer.certificates.map((certificate, certIndex) => <tr key={`${certificate.sha256}-${certIndex}`}><td>{certIndex + 1}</td><td><button type="button" className="sqlite-fragment-copy" title={certificate.sha256} onClick={() => void copyText(certificate.sha256)}>{certificate.sha256}</button></td><td>{certificate.subject}</td><td>{certificate.issuer}</td><td>{certificate.serial}</td><td>{certificate.validFrom} → {certificate.validTo}</td></tr>)}</tbody></table></div> : <div className="empty-state">{t.no_signer_certificate_parsed}</div>}
                 {signer.notes.length > 0 && <div className="forensic-inline-note">{signer.notes.join(" · ")}</div>}
               </div>)}
               <div className="tool-panel android-signing-signer">
-                <ToolPanelHeader title={english ? "V4 companion verification" : "V4 伴随签名验证"} subtitle={english ? "APK Signature Scheme v4 is stored in a separate .idsig file and requires a complementary v2/v3 signer." : "APK Signature Scheme v4 保存在独立 .idsig 文件中，并要求 APK 同时具备 v2/v3 签名。"} />
-                {!repairableApk ? <div className="forensic-inline-note">{english ? "Open a direct .apk file before selecting its .idsig companion." : "请先打开直接的 .apk 文件，再选择对应的 .idsig 伴随文件。"}</div> : null}
+                <ToolPanelHeader title={t.v4_companion_verification} subtitle={t.apk_signature_scheme_v4_is_stored_in_a_separate_idsig_file_and_requires_a_complementary_v2_v3_signer} />
+                {!repairableApk ? <div className="forensic-inline-note">{t.open_a_direct_apk_file_before_selecting_its_idsig_companion}</div> : null}
                 <div className="android-simple-filter-actions">
-                  <label>{english ? "Companion .idsig" : "伴随 .idsig"}<input type="file" accept=".idsig,application/octet-stream" disabled={!repairableApk || v4Busy} onChange={(event) => void runV4Verification(event.currentTarget.files?.[0] ?? null)} /></label>
+                  <label>{t.companion_idsig}<input type="file" accept=".idsig,application/octet-stream" disabled={!repairableApk || v4Busy} onChange={(event) => void runV4Verification(event.currentTarget.files?.[0] ?? null)} /></label>
                   {v4File ? <span className="muted">{v4File.name}</span> : null}
                 </div>
                 {v4Busy ? <ALinearProgress /> : null}
                 {v4Result ? <>
                   <InfoTable rows={[
-                    [english ? "V4 result" : "V4 结果", v4Result.verified ? (english ? "Verified" : "验证通过") : (english ? "Failed" : "验证失败")],
-                    [english ? "Format" : "格式", `v${v4Result.version ?? "?"} · ${v4Result.complete ? (english ? "complete" : "完整") : (english ? "stripped" : "精简")}`],
-                    [english ? "Signature" : "签名", `${v4Result.signatureAlgorithm} · ${v4Result.signatureVerified ? "✓" : "✗"}`],
-                    [english ? "Certificate / public key" : "证书 / 公钥", v4Result.publicKeyMatchesCertificate ? "✓" : "✗"],
-                    [english ? "Merkle root" : "Merkle 根", v4Result.rootHashVerified ? "✓" : "✗"],
-                    [english ? "Merkle tree" : "Merkle 树", v4Result.treeVerified == null ? (english ? "Recalculated (stripped idsig)" : "已重算（精简 idsig）") : v4Result.treeVerified ? "✓" : "✗"],
-                    [english ? "APK digest ↔ v2/v3" : "APK 摘要 ↔ v2/v3", v4Result.apkDigestMatchesV2V3 ? "✓" : "✗"],
-                    [english ? "Signer cert ↔ v2/v3" : "Signer 证书 ↔ v2/v3", v4Result.certificateMatchesV2V3 ? "✓" : "✗"],
-                    [english ? "Signer certificate SHA-256" : "Signer 证书 SHA-256", v4Result.certificateSha256 || "--"]
+                    [t.v4_result, v4Result.verified ? (t.verified) : (t.failed)],
+                    [t.format, `v${v4Result.version ?? "?"} · ${v4Result.complete ? (t.complete) : (t.stripped)}`],
+                    [t.signature, `${v4Result.signatureAlgorithm} · ${v4Result.signatureVerified ? "✓" : "✗"}`],
+                    [t.certificate_public_key, v4Result.publicKeyMatchesCertificate ? "✓" : "✗"],
+                    [t.merkle_root, v4Result.rootHashVerified ? "✓" : "✗"],
+                    [t.merkle_tree, v4Result.treeVerified == null ? (t.recalculated_stripped_idsig) : v4Result.treeVerified ? "✓" : "✗"],
+                    [t.apk_digest_v2_v3, v4Result.apkDigestMatchesV2V3 ? "✓" : "✗"],
+                    [t.signer_cert_v2_v3, v4Result.certificateMatchesV2V3 ? "✓" : "✗"],
+                    [t.signer_certificate_sha_256, v4Result.certificateSha256 || "--"]
                   ]} />
                   {v4Result.errors.length ? <div className="forensic-inline-note error-state">{v4Result.errors.join(" · ")}</div> : null}
                   {v4Result.warnings.length ? <div className="forensic-inline-note">{v4Result.warnings.join(" · ")}</div> : null}
                 </> : null}
               </div>
               <div className="tool-panel android-signing-signer">
-                <ToolPanelHeader title={english ? "Re-sign / signature repair" : "重签 / 签名修复"} subtitle={english ? "Creates a new valid v2 signature; it never restores an unknown original private key." : "生成新的有效 v2 签名；无法恢复未知的原始私钥。"} />
-                {!repairableApk && <div className="forensic-inline-note">{english ? "Re-open a direct .apk file to enable re-signing. APKS/XAPK containers are analyzed but are not rewritten here." : "请重新打开直接的 .apk 文件以启用重签；APKS/XAPK 可分析，但此处不会直接重写容器。"}</div>}
-                <label className="checkbox-row"><input type="checkbox" checked={stripV1OnRepair} onChange={(event) => setStripV1OnRepair(event.currentTarget.checked)} /> <span>{english ? "Remove existing JAR/v1 signature entries before v2 re-signing (recommended when changing signer)" : "v2 重签前移除现有 JAR/v1 签名条目（更换签名者时推荐）"}</span></label>
+                <ToolPanelHeader title={t.re_sign_signature_repair} subtitle={t.creates_a_new_valid_v2_signature_it_never_restores_an_unknown_original_private_key} />
+                {!repairableApk && <div className="forensic-inline-note">{t.re_open_a_direct_apk_file_to_enable_re_signing_apks_xapk_containers_are_analyzed_but_are_not_rewritten_here}</div>}
+                <label className="checkbox-row"><input type="checkbox" checked={stripV1OnRepair} onChange={(event) => setStripV1OnRepair(event.currentTarget.checked)} /> <span>{t.remove_existing_jar_v1_signature_entries_before_v2_re_signing_recommended_when_changing_signer}</span></label>
                 <div className="android-simple-primary-action">
-                  <AButton variant="filled" disabled={!repairableApk || repairBusy} onClick={() => void runGeneratedRepair()}>{english ? "Generate local signer + repair" : "生成本地签名并修复"}</AButton>
+                  <AButton variant="filled" disabled={!repairableApk || repairBusy} onClick={() => void runGeneratedRepair()}>{t.generate_local_signer_repair}</AButton>
                 </div>
                 <div className="android-simple-filter-actions">
-                  <label>{english ? "PKCS#8 private key" : "PKCS#8 私钥"}<input type="file" accept=".pk8,.der,.pem" onChange={(event) => setRepairKeyFile(event.currentTarget.files?.[0] ?? null)} /></label>
-                  <label>{english ? "X.509 certificate" : "X.509 证书"}<input type="file" accept=".cer,.crt,.der,.pem" onChange={(event) => setRepairCertFile(event.currentTarget.files?.[0] ?? null)} /></label>
-                  <AButton variant="outlined" disabled={!repairableApk || !repairKeyFile || !repairCertFile || repairBusy} onClick={() => void runImportedRepair()}>{english ? "Re-sign with imported identity" : "使用导入身份重签"}</AButton>
+                  <label>{t.pkcs_8_private_key}<input type="file" accept=".pk8,.der,.pem" onChange={(event) => setRepairKeyFile(event.currentTarget.files?.[0] ?? null)} /></label>
+                  <label>{t.x_509_certificate}<input type="file" accept=".cer,.crt,.der,.pem" onChange={(event) => setRepairCertFile(event.currentTarget.files?.[0] ?? null)} /></label>
+                  <AButton variant="outlined" disabled={!repairableApk || !repairKeyFile || !repairCertFile || repairBusy} onClick={() => void runImportedRepair()}>{t.re_sign_with_imported_identity}</AButton>
                 </div>
                 {repairBusy && <ALinearProgress />}
                 {repairStatus && <div className="forensic-inline-note">{repairStatus}</div>}
-                <div className="forensic-inline-note">{english ? "Generated repair keys are returned inside the downloaded repair bundle. Keep them only if you intend to sign future builds with the same new identity. ZIP rebuilding used to remove v1 signatures can change entry alignment; production release APKs should still be checked with zipalign/apksigner." : "生成的修复私钥会包含在下载的修复包中；只有计划继续使用这一新身份签名后续版本时才应保存。移除 v1 签名需要重建 ZIP，可能改变条目对齐；生产发布 APK 仍建议使用 zipalign/apksigner 再检查。"}</div>
+                <div className="forensic-inline-note">{t.generated_repair_keys_are_returned_inside_the_downloaded_repair_bundle_keep_them_only_if_you_intend_to_sign_future_builds_with_the_same_new_identity_zip_rebuilding_used_to_remove_v1_signatures_can_change_entry_alignment_production_release_apks_should_still_be_checked_with_zipalign_apksigner}</div>
               </div>
             </div>
           )}
@@ -563,7 +563,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
                       onClick={() => setSeverityFilter("all")}
                     >
                       <span className="android-perm-chip-count">{permissionRows.length}</span>
-                      <span className="android-perm-chip-label">{english ? "All" : "全部"}</span>
+                      <span className="android-perm-chip-label">{t.all}</span>
                     </button>
                     {(Object.keys(PERM_SEVERITY_META) as PermSeverity[])
                       .filter((severity) => (permissionSeverityCounts[severity] ?? 0) > 0)
@@ -584,7 +584,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
                       className="text-input"
                       value={permissionFilter}
                       onChange={(event) => setPermissionFilter(event.target.value)}
-                      placeholder={english ? "Filter by name, description, or category" : "按名称、说明或分类筛选"}
+                      placeholder={t.filter_by_name_description_or_category}
                     />
                     <AButton variant="outlined" disabled={!visiblePermissionRows.length} onClick={() => downloadTextFile(`android-permissions-${Date.now()}.csv`, services.androidPermissionsToCsv(visiblePermissionRows), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
                   </div>
@@ -611,16 +611,16 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
                         </div>
                       ))}
                     </div>
-                  ) : <div className="empty-state">{english ? "No permissions match the filter." : "没有符合筛选条件的权限。"}</div>}
+                  ) : <div className="empty-state">{t.no_permissions_match_the_filter}</div>}
                 </>
-              ) : <div className="empty-state">{english ? "This app declares no permissions." : "该应用未声明任何权限。"}</div>}
+              ) : <div className="empty-state">{t.this_app_declares_no_permissions}</div>}
             </div>
           )}
 
           {view === "components" && (
             <div className="android-simple-view">
               <div className="android-simple-view-actions android-simple-filter-actions">
-                <input className="text-input" value={componentFilter} onChange={(event) => setComponentFilter(event.target.value)} placeholder={english ? "Filter component, action, or permission" : "筛选组件、Action 或权限"} />
+                <input className="text-input" value={componentFilter} onChange={(event) => setComponentFilter(event.target.value)} placeholder={t.filter_component_action_or_permission} />
                 <AButton variant="outlined" disabled={!visibleComponents.length} onClick={() => downloadTextFile(`android-components-${Date.now()}.csv`, services.androidComponentsToCsv(visibleComponents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
               </div>
               {visibleComponents.length ? (
@@ -637,11 +637,11 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           {view === "entries" && (
             <div className="android-simple-view">
               <div className="android-simple-view-actions android-simple-filter-actions">
-                <input className="text-input" value={entryFilter} onChange={(event) => setEntryFilter(event.target.value)} placeholder={english ? "Filter path, extension, or role" : "筛选路径、扩展名或类型"} />
+                <input className="text-input" value={entryFilter} onChange={(event) => setEntryFilter(event.target.value)} placeholder={t.filter_path_extension_or_role} />
                 <AButton variant="outlined" disabled={!visibleEntries.length} onClick={() => downloadTextFile(`android-apk-entries-${Date.now()}.csv`, services.androidApkEntriesToCsv(visibleEntries), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton>
               </div>
               <div className="table-scroll android-simple-table-scroll">
-                <table className="data-table android-simple-entries-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Role" : "类型"}</th><th>{t.fileSize}</th><th>Signature</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr className={selectedEntryName === entry.name ? "selected-row" : ""} key={entry.name} onClick={() => setSelectedEntryName(entry.name)}><td>{entry.name}</td><td>{entry.role}</td><td>{formatBytes(entry.size)}</td><td>{entry.signature}</td></tr>)}</tbody></table>
+                <table className="data-table android-simple-entries-table"><thead><tr><th>{t.name}</th><th>{t.role}</th><th>{t.fileSize}</th><th>Signature</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr className={selectedEntryName === entry.name ? "selected-row" : ""} key={entry.name} onClick={() => setSelectedEntryName(entry.name)}><td>{entry.name}</td><td>{entry.role}</td><td>{formatBytes(entry.size)}</td><td>{entry.signature}</td></tr>)}</tbody></table>
               </div>
             </div>
           )}
@@ -650,7 +650,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
 
       {info && view === "components" && selectedComponent && (
         <section className="tool-panel wide-panel android-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected component" : "当前组件"} />
+          <ToolPanelHeader title={t.selected_component} />
           <InfoTable rows={[
             [t.componentType, selectedComponent.type],
             [t.componentName, selectedComponent.name],
@@ -667,11 +667,11 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
 
       {view === "entries" && selectedEntry && (
         <section className="tool-panel wide-panel android-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected APK entry" : "当前 APK 条目"} />
+          <ToolPanelHeader title={t.selected_apk_entry} />
           <InfoTable rows={[
-            [english ? "Name" : "名称", selectedEntry.name],
-            [english ? "Directory" : "目录", selectedEntry.directory || "--"],
-            [english ? "Role" : "类型", selectedEntry.role],
+            [t.name, selectedEntry.name],
+            [t.directory, selectedEntry.directory || "--"],
+            [t.role, selectedEntry.role],
             [t.fileSize, formatBytes(selectedEntry.size)],
             ["Signature", selectedEntry.signature]
           ]} />

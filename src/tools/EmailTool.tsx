@@ -143,9 +143,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   const abortRef = React.useRef<AbortController | null>(null);
   const attachmentHashAbortRef = React.useRef<AbortController | null>(null);
   const attachmentHashRequestRef = React.useRef(0);
-  const guard = useStaleRunGuard(active);
-  const english = t.waiting === "Waiting";
-  const resetAttachmentHashes = React.useCallback(() => {
+  const guard = useStaleRunGuard(active);  const resetAttachmentHashes = React.useCallback(() => {
     attachmentHashAbortRef.current?.abort();
     attachmentHashAbortRef.current = null;
     attachmentHashRequestRef.current += 1;
@@ -185,7 +183,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     if (!source.trim() || !active) return;
     if (new TextEncoder().encode(source).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
       setParsed(null);
-      setError(english ? "Pasted email text is limited to 16 MiB." : "粘贴的邮件内容不能超过 16 MiB。" );
+      setError(t.pasted_email_text_is_limited_to_16_mib );
       return;
     }
     workspace.clear();
@@ -234,7 +232,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     resetAttachmentHashes();
     setBodyMode("text");
     if (file.size > EMAIL_FILE_LIMIT) {
-      setError(english ? "Email exceeds the 64 MiB browser parsing limit." : "邮件超过 64 MiB 浏览器解析上限。");
+      setError(t.email_exceeds_the_64_mib_browser_parsing_limit);
       setLoading(false);
       abortRef.current = null;
       return;
@@ -351,7 +349,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     try {
       const bytes = attachment.content.slice();
       const result = await hashBytesInWorker(bytes, ["sha256"], { signal: controller.signal });
-      if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
+      if (!result.sha256) throw new Error(t.sha_256_calculation_returned_no_result);
       if (attachmentHashAbortRef.current !== controller || controller.signal.aborted || requestId !== attachmentHashRequestRef.current) return;
       setAttachmentHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
     } catch (caught) {
@@ -390,7 +388,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   return (
     <div className={`tool-grid email-workbench ${parsed ? "has-email" : "empty-email"}`}>
       <div className="tool-panel wide-panel email-source-panel">
-        <PanelTitle title={parsed ? (english ? "Email" : "邮件") : (english ? "Open email" : "打开邮件")} />
+        <PanelTitle title={parsed ? (t.email_2) : (t.open_email)} />
         <input
           className="hidden-file-input"
           ref={inputRef}
@@ -400,7 +398,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
           accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook,text/plain"
           onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }}
         />
-        {parsed ? <div className="email-loaded-source"><div><strong>{emailSummaryValue(parsed, "Subject") || (english ? "Parsed email" : "已解析邮件")}</strong><span>{sourceFormat.toUpperCase()} · {formatBytes(parsed.rawSize)} · {parsed.attachments.length} {t.attachments} · {storageState === "saved" ? (english ? "saved locally" : "已保留") : storageState === "saving" ? (english ? "saving" : "正在保留") : storageState === "failed" ? (english ? "not saved" : "未保留") : ""}</span></div><div className="button-row compact-buttons"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Replace" : "更换文件"}</AButton><AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} title={sourceFormat === "msg" && !sourceBytes ? (english ? "Re-analyze the MSG file to download the original." : "请重新分析 MSG 文件后下载原始文件。") : undefined} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton><AButton variant="text" onClick={clearEmail}>{t.clear}</AButton></div></div> : <><div
+        {parsed ? <div className="email-loaded-source"><div><strong>{emailSummaryValue(parsed, "Subject") || (t.parsed_email)}</strong><span>{sourceFormat.toUpperCase()} · {formatBytes(parsed.rawSize)} · {parsed.attachments.length} {t.attachments} · {storageState === "saved" ? (t.saved_locally) : storageState === "saving" ? (t.saving) : storageState === "failed" ? (t.not_saved) : ""}</span></div><div className="button-row compact-buttons"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.replace}</AButton><AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} title={sourceFormat === "msg" && !sourceBytes ? (t.re_analyze_the_msg_file_to_download_the_original) : undefined} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton><AButton variant="text" onClick={clearEmail}>{t.clear}</AButton></div></div> : <><div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
           role="button"
           tabIndex={0}
@@ -427,19 +425,19 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
-          <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
-          <AButton variant="text" onClick={() => { setInput(EMAIL_SAMPLE); void parseSource(EMAIL_SAMPLE); }}>{english ? "Load sample" : "载入示例"}</AButton>
+          <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{t.parse}</AButton>
+          <AButton variant="text" onClick={() => { setInput(EMAIL_SAMPLE); void parseSource(EMAIL_SAMPLE); }}>{t.load_sample}</AButton>
           <AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>
         <textarea
             className="single-textarea email-source-input"
-            aria-label={english ? "Raw EML source" : "原始 EML 内容"}
+            aria-label={t.raw_eml_source}
             value={input}
             onChange={(event) => {
               const next = event.currentTarget.value;
               if (new TextEncoder().encode(next).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
-                setError(english ? "Pasted email text is limited to 16 MiB." : "粘贴的邮件内容不能超过 16 MiB。" );
+                setError(t.pasted_email_text_is_limited_to_16_mib );
                 return;
               }
               setInput(next);
@@ -462,14 +460,14 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
 
           <div className="tool-panel wide-panel email-auth-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Authentication-Results header" : "邮件头记录的认证结果"} />
+              <PanelTitle title={t.authentication_results_header} />
               <span className="status-pill">{authSummary}</span>
             </div>
             {parsed.authAssessments.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
                   <thead>
-                    <tr><th>{english ? "Mechanism" : "机制"}</th><th>{english ? "Reported result" : "头部记录"}</th><th>{english ? "Domain" : "域名"}</th><th>{english ? "Aligned" : "对齐"}</th></tr>
+                    <tr><th>{t.mechanism}</th><th>{t.reported_result}</th><th>{t.domain}</th><th>{t.aligned}</th></tr>
                   </thead>
                   <tbody>
                     {parsed.authAssessments.map((item) => (
@@ -488,7 +486,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
             {parsed.receivedHops.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>#</th><th>From</th><th>By</th><th>IP</th><th>{english ? "Date" : "时间"}</th></tr></thead>
+                  <thead><tr><th>#</th><th>From</th><th>By</th><th>IP</th><th>{t.date}</th></tr></thead>
                   <tbody>
                     {parsed.receivedHops.map((hop) => (
                       <tr key={`${hop.index}-${hop.raw}`}>
@@ -511,19 +509,19 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
               </div>
             </div>
             {bodyMode === "html" && safeBodyHtml
-              ? <iframe className="email-html-preview" title={english ? "Isolated email HTML preview" : "隔离的邮件 HTML 预览"} sandbox="" srcDoc={safeBodyHtml} />
-              : <textarea aria-label={english ? "Email body preview" : "邮件正文预览"} className="single-textarea email-body-preview" value={limitReportText(bodyText || "--", 20000)} readOnly />}
+              ? <iframe className="email-html-preview" title={t.isolated_email_html_preview} sandbox="" srcDoc={safeBodyHtml} />
+              : <textarea aria-label={t.email_body_preview} className="single-textarea email-body-preview" value={limitReportText(bodyText || "--", 20000)} readOnly />}
           </div>
 
           <div className="tool-panel wide-panel email-attachments-panel">
             <div className="panel-heading-row">
               <PanelTitle title={t.attachments} />
-              <AButton variant="text" disabled={!parsed.attachments.length || parsed.attachments.some((attachment) => !attachmentAvailable(attachment))} title={parsed.attachments.some((attachment) => !attachmentAvailable(attachment)) ? (english ? "Re-analyze the email to download all attachments." : "请重新分析邮件后下载全部附件。") : undefined} onClick={downloadAttachmentsZip}>ZIP</AButton>
+              <AButton variant="text" disabled={!parsed.attachments.length || parsed.attachments.some((attachment) => !attachmentAvailable(attachment))} title={parsed.attachments.some((attachment) => !attachmentAvailable(attachment)) ? (t.re_analyze_the_email_to_download_all_attachments) : undefined} onClick={downloadAttachmentsZip}>ZIP</AButton>
             </div>
             {parsed.attachments.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.emailSignature}</th><th>SHA-256</th><th>{t.emailDownloadAttachment}</th></tr></thead>
+                  <thead><tr><th>{t.name}</th><th>{t.componentType}</th><th>{t.fileSize}</th><th>{t.emailSignature}</th><th>SHA-256</th><th>{t.emailDownloadAttachment}</th></tr></thead>
                   <tbody>
                     {parsed.attachments.map((attachment, index) => (
                       <tr key={`${attachment.filename}-${attachment.size}-${index}`}>
@@ -534,9 +532,9 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
                         <td>
                           {attachmentHashes[attachmentKey(attachment, index)]
                             ? <button type="button" className="email-attachment-hash" title={t.copy} onClick={() => void copyText(attachmentHashes[attachmentKey(attachment, index)])}>{attachmentHashes[attachmentKey(attachment, index)]}</button>
-                            : <AButton variant="text" disabled={!attachmentAvailable(attachment) || Boolean(attachmentHashingKey)} onClick={() => void hashAttachment(attachment, index)}>{!attachmentAvailable(attachment) ? (english ? "Re-analyze" : "需重新分析") : attachmentHashingKey === attachmentKey(attachment, index) ? (english ? "Calculating..." : "计算中...") : (english ? "Calculate" : "计算")}</AButton>}
+                            : <AButton variant="text" disabled={!attachmentAvailable(attachment) || Boolean(attachmentHashingKey)} onClick={() => void hashAttachment(attachment, index)}>{!attachmentAvailable(attachment) ? (t.re_analyze) : attachmentHashingKey === attachmentKey(attachment, index) ? (t.calculating) : (t.calculate)}</AButton>}
                         </td>
-                        <td><AButton variant="text" disabled={!attachmentAvailable(attachment)} title={!attachmentAvailable(attachment) ? (english ? "Re-analyze the email to download this attachment." : "请重新分析邮件后下载此附件。") : undefined} onClick={() => downloadAttachment(attachment)}>{attachmentAvailable(attachment) ? t.emailDownloadAttachment : (english ? "Re-analyze" : "需重新分析")}</AButton></td>
+                        <td><AButton variant="text" disabled={!attachmentAvailable(attachment)} title={!attachmentAvailable(attachment) ? (t.re_analyze_the_email_to_download_this_attachment) : undefined} onClick={() => downloadAttachment(attachment)}>{attachmentAvailable(attachment) ? t.emailDownloadAttachment : (t.re_analyze)}</AButton></td>
                       </tr>
                     ))}
                   </tbody>
@@ -547,14 +545,14 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
           </div>
 
           <details className="image-advanced-shell email-advanced-shell wide-panel">
-            <summary>{english ? "Raw headers and source" : "原始邮件头与源文"}</summary>
+            <summary>{t.raw_headers_and_source}</summary>
             <div className="email-raw-stack">
               <div className="tool-panel wide-panel">
                 <PanelTitle title={t.emailHeaders} />
                 {parsed.headers.length ? (
                   <div className="table-scroll compact-scroll">
                     <table className="data-table">
-                      <thead><tr><th>{english ? "Header" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead>
+                      <thead><tr><th>{t.httpHeaderName}</th><th>{t.httpHeaderValue}</th></tr></thead>
                       <tbody>
                         {parsed.headers.map(([name, value], index) => (
                           <tr key={`${name}-${index}`}><td>{name}</td><td>{value}</td></tr>
@@ -565,7 +563,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
                 ) : <div className="empty-state">--</div>}
               </div>
               <div className="tool-panel wide-panel">
-                <PanelTitle title={sourceFormat === "msg" ? (english ? "MSG properties" : "MSG 属性") : (english ? "Raw EML" : "原始 EML")} />
+                <PanelTitle title={sourceFormat === "msg" ? (t.msg_properties) : (t.raw_eml)} />
                 <pre className="result-box email-raw-source">{input || "--"}</pre>
               </div>
             </div>

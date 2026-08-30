@@ -97,9 +97,7 @@ function mimeForName(name: string) {
   return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
 }
 
-export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [archive, setArchive] = React.useState<ArchiveState | null>(null);
+export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [archive, setArchive] = React.useState<ArchiveState | null>(null);
   const [selectedName, setSelectedName] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [entryType, setEntryType] = React.useState<"all" | "files" | "directories" | "encrypted">("all");
@@ -193,7 +191,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     setEntryHashError("");
     setLoading(false);
     if (file.size > MAX_ARCHIVE_BYTES) {
-      setError(english ? "The archive exceeds the 256 MiB limit." : "压缩包超过 256 MiB 限制。");
+      setError(t.the_archive_exceeds_the_256_mib_limit);
       return;
     }
     setLoading(true);
@@ -202,7 +200,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (!guard.isCurrent(requestId)) return;
       const parsed = parseArchiveEntries(bytes);
-      if (!parsed.entries.length) throw new Error(english ? "No ZIP entries were found." : "未找到 ZIP 条目。");
+      if (!parsed.entries.length) throw new Error(t.no_zip_entries_were_found);
       archiveBytesRef.current = bytes;
       const nextEntries = parsed.entries.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
@@ -269,7 +267,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     if (!bytes || entry.name.endsWith("/") || entry.encrypted || loadingEntry) return null;
     const ratio = entry.compressed > 0 ? entry.uncompressed / entry.compressed : 0;
     if (entry.uncompressed > MAX_ENTRY_BYTES || (ratio > 500 && entry.uncompressed > 16 * 1024 * 1024)) {
-      setError(english ? "This entry is too large or expands too aggressively for browser preview." : "该条目过大或解压倍率过高，无法在浏览器中预览。");
+      setError(t.this_entry_is_too_large_or_expands_too_aggressively_for_browser_preview);
       return null;
     }
     setLoadingEntry(entry.name);
@@ -325,7 +323,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       dataCopy.set(data);
       const result = await hashBytesInWorker(dataCopy, ["sha256"], { signal: controller.signal });
       if (!guard.isCurrent(requestId) || controller.signal.aborted) return;
-      if (!result.sha256) throw new Error(english ? "SHA-256 calculation returned no result." : "SHA-256 计算没有返回结果。");
+      if (!result.sha256) throw new Error(t.sha_256_calculation_returned_no_result);
       setEntryHashes((current) => ({ ...current, [key]: result.sha256 ?? "" }));
     } catch (caught) {
       if (guard.isCurrent(requestId) && !(caught instanceof DOMException && caught.name === "AbortError")) setEntryHashError(caught instanceof Error ? caught.message : String(caught));
@@ -353,7 +351,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
           onDragOver={(event) => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)}
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}>
           <strong>{archive?.name || t.dropFileTitle}</strong>
-          <span>{archive ? `${archive.kind} · ${fileCount} ${english ? "files" : "个文件"}` : t.dropFileHint}</span>
+          <span>{archive ? `${archive.kind} · ${fileCount} ${t.files}` : t.dropFileHint}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
@@ -367,40 +365,40 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
         <div className="tool-panel wide-panel archive-summary-panel">
           <PanelTitle title={t.summary} />
           <InfoTable rows={[
-            [english ? "Type" : "类型", archive.kind],
-            [english ? "Archive size" : "压缩包大小", formatBytes(archive.size)],
-            [english ? "Files" : "文件", String(fileCount)],
-            [english ? "Directories" : "目录", String(directoryCount)],
-            [english ? "Uncompressed size" : "解压后大小", formatBytes(totalUncompressed)],
-            [english ? "Encrypted entries" : "加密条目", String(encryptedCount)],
-            ...(archive.skipped ? [[english ? "Not listed" : "未列出条目", String(archive.skipped)] as [string, string]] : [])
+            [t.componentType, archive.kind],
+            [t.archive_size, formatBytes(archive.size)],
+            [t.totalFiles, String(fileCount)],
+            [t.directories, String(directoryCount)],
+            [t.uncompressed_size, formatBytes(totalUncompressed)],
+            [t.encrypted_entries, String(encryptedCount)],
+            ...(archive.skipped ? [[t.not_listed, String(archive.skipped)] as [string, string]] : [])
           ]} />
         </div>
 
         <div className="archive-browser-layout wide-panel">
           <div className="tool-panel archive-entry-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Files" : "文件"} />
+              <PanelTitle title={t.totalFiles} />
               <span className="status-pill">{visibleEntries.length}/{entries.length}</span>
             </div>
             <div className="archive-list-toolbar">
-              <input className="text-input" aria-label={english ? "Search archive paths" : "搜索压缩包路径"} value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={english ? "Search path" : "搜索路径"} />
-              <ASelect aria-label={english ? "Entry type" : "条目类型"} value={entryType} onChange={(value) => setEntryType(value as typeof entryType)} options={[
-                { value: "all", label: english ? "All" : "全部" },
-                { value: "files", label: english ? "Files" : "文件" },
-                { value: "directories", label: english ? "Directories" : "目录" },
-                { value: "encrypted", label: english ? "Encrypted" : "加密" }
+              <input className="text-input" aria-label={t.search_archive_paths} value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={t.search_path} />
+              <ASelect aria-label={t.entry_type} value={entryType} onChange={(value) => setEntryType(value as typeof entryType)} options={[
+                { value: "all", label: t.all },
+                { value: "files", label: t.totalFiles },
+                { value: "directories", label: t.directories },
+                { value: "encrypted", label: t.encrypted }
               ]} />
-              <ASelect aria-label={english ? "Sort entries" : "条目排序"} value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} options={[
-                { value: "path", label: english ? "Path" : "路径" },
-                { value: "size", label: english ? "Size" : "大小" }
+              <ASelect aria-label={t.sort_entries} value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} options={[
+                { value: "path", label: t.jsonPath },
+                { value: "size", label: t.fileSize }
               ]} />
             </div>
             <div className="archive-file-list">
               {visibleEntries.map((entry) => (
                   <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); setEntryHashError(""); }}>
                   <span>{entry.name}</span>
-                  <small>{entry.name.endsWith("/") ? (english ? "Directory" : "目录") : formatBytes(entry.uncompressed)}</small>
+                  <small>{entry.name.endsWith("/") ? (t.directory) : formatBytes(entry.uncompressed)}</small>
                 </button>
               ))}
               {!visibleEntries.length && <div className="empty-state">--</div>}
@@ -409,27 +407,27 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
 
           <div className="tool-panel archive-preview-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Preview" : "预览"} />
-              <div className="button-row compact-buttons"><AButton variant="filled" disabled={!selected || Boolean(selected.data) || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => selected && void loadEntry(selected)}>{loadingEntry ? (english ? "Loading..." : "正在提取...") : (english ? "Load preview" : "加载预览")}</AButton><AButton variant="outlined" disabled={!selected || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => void downloadEntry()}>{english ? "Save entry" : "保存条目"}</AButton></div>
+              <PanelTitle title={t.preview} />
+              <div className="button-row compact-buttons"><AButton variant="filled" disabled={!selected || Boolean(selected.data) || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => selected && void loadEntry(selected)}>{loadingEntry ? (t.loading) : (t.load_preview)}</AButton><AButton variant="outlined" disabled={!selected || selected.encrypted || selected.name.endsWith("/") || Boolean(loadingEntry)} onClick={() => void downloadEntry()}>{t.save_entry}</AButton></div>
             </div>
             {selected ? <>
               <InfoTable rows={[
-                [english ? "Path" : "路径", selected.name],
-                [english ? "Size" : "大小", formatBytes(selected.uncompressed)],
-                [english ? "Compressed" : "压缩后", formatBytes(selected.compressed)],
-                [english ? "Method" : "方式", methodLabel(selected.method)],
-                [english ? "Encrypted" : "加密", selected.encrypted ? (english ? "Yes" : "是") : (english ? "No" : "否")]
+                [t.jsonPath, selected.name],
+                [t.fileSize, formatBytes(selected.uncompressed)],
+                [t.compressedSize, formatBytes(selected.compressed)],
+                [t.cipherMethod, methodLabel(selected.method)],
+                [t.encrypted, selected.encrypted ? (t.yes) : (t.no)]
               ]} />
               <div className="archive-entry-integrity">
                 <span>SHA-256</span>
                 {entryHashes[selected.name]
                   ? <button type="button" className="archive-entry-hash" title={t.copy} onClick={() => void copyText(entryHashes[selected.name])}>{entryHashes[selected.name]}</button>
-                  : <AButton variant="text" disabled={selected.encrypted || selected.name.endsWith("/") || Boolean(entryHashingKey) || Boolean(loadingEntry)} onClick={() => void hashSelectedEntry()}>{entryHashingKey === selected.name ? (english ? "Calculating..." : "计算中...") : (english ? "Calculate" : "计算")}</AButton>}
+                  : <AButton variant="text" disabled={selected.encrypted || selected.name.endsWith("/") || Boolean(entryHashingKey) || Boolean(loadingEntry)} onClick={() => void hashSelectedEntry()}>{entryHashingKey === selected.name ? (t.calculating) : (t.calculate)}</AButton>}
               </div>
               {entryHashError && <div className="empty-state error-state">{entryHashError}</div>}
               {imageUrl ? <div className="archive-image-preview"><img src={imageUrl} alt={selected.name} /></div> : selected.data ? (
-                <textarea aria-label={english ? "Archive entry preview" : "压缩包条目预览"} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
-              ) : <div className="empty-state">{selected.encrypted ? (english ? "Encrypted entry cannot be previewed." : "加密条目无法预览。") : (english ? "This entry was not extracted for preview." : "该条目未提取预览。")}</div>}
+                <textarea aria-label={t.archive_entry_preview} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
+              ) : <div className="empty-state">{selected.encrypted ? (t.encrypted_entry_cannot_be_previewed) : (t.this_entry_was_not_extracted_for_preview)}</div>}
             </> : <div className="empty-state">--</div>}
           </div>
         </div>

@@ -41,9 +41,7 @@ function safeDecode(value: string) {
   try { return decodeURIComponent(value); } catch { return value; }
 }
 
-export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [input, setInput] = useStoredState("url.input.v4", "");
+export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [input, setInput] = useStoredState("url.input.v4", "");
   const parsed = React.useMemo(() => {
     if (!active) return { url: null as URL | null, normalized: "", error: "" };
     const raw = refang(input);
@@ -69,10 +67,10 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   }, [params, url]);
 
   const outputs: Array<[string, string]> = url ? [
-    [english ? "Normalized" : "规范化", parsed.normalized],
-    [english ? "Defanged" : "去活化", defang(parsed.normalized)],
-    [english ? "Decoded" : "解码", decoded],
-    [english ? "Sorted parameters" : "参数排序", sorted]
+    [t.normalizedUrl, parsed.normalized],
+    [t.defangedUrl, defang(parsed.normalized)],
+    [t.decodedUrl, decoded],
+    [t.sorted_parameters, sorted]
   ] : [];
 
   return (
@@ -81,14 +79,14 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         <PanelTitle title="URL" />
         <textarea
           className="single-textarea url-source-textarea"
-          aria-label={english ? "URL input" : "URL 输入"}
+          aria-label={t.url_input}
           value={input}
           spellCheck={false}
           placeholder="https://example.com/path?key=value"
           onChange={(event) => setInput(event.currentTarget.value)}
         />
         <div className="action-row">
-          <AButton variant="outlined" onClick={() => setInput("https://example.com/download/report.pdf?source=email&lang=zh#page=2")}>{english ? "Example" : "示例"}</AButton>
+          <AButton variant="outlined" onClick={() => setInput("https://example.com/download/report.pdf?source=email&lang=zh#page=2")}>{t.example}</AButton>
           <AButton variant="text" disabled={!input} onClick={() => setInput("")}>{t.clear}</AButton>
         </div>
         {parsed.error && <div className="empty-state error-state">{parsed.error}</div>}
@@ -97,25 +95,25 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
       {url && (
         <>
           <div className="tool-panel wide-panel url-structure-panel">
-            <PanelTitle title={english ? "Structure" : "结构"} />
+            <PanelTitle title={t.structure} />
             <InfoTable rows={[
-              [english ? "Scheme" : "协议", url.protocol.replace(/:$/, "")],
-              [english ? "Username" : "用户名", url.username || "--"],
-              [english ? "Password" : "密码", url.password || "--"],
-              [english ? "Host" : "主机", url.hostname],
-              [english ? "Port" : "端口", url.port || "--"],
-              [english ? "Path" : "路径", url.pathname || "/"],
-              [english ? "Query" : "查询", url.search || "--"],
-              [english ? "Fragment" : "片段", url.hash || "--"]
+              [t.scheme, url.protocol.replace(/:$/, "")],
+              [t.username, url.username || "--"],
+              [t.passwordValue, url.password || "--"],
+              [t.host, url.hostname],
+              [t.port, url.port || "--"],
+              [t.jsonPath, url.pathname || "/"],
+              [t.query, url.search || "--"],
+              [t.fragment, url.hash || "--"]
             ]} />
           </div>
 
           {params.length > 0 && (
             <div className="tool-panel wide-panel url-params-panel">
-              <PanelTitle title={english ? "Query parameters" : "查询参数"} />
+              <PanelTitle title={t.query_parameters} />
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>#</th><th>{english ? "Name" : "名称"}</th><th>{english ? "Value" : "值"}</th></tr></thead>
+                  <thead><tr><th>#</th><th>{t.name}</th><th>{t.httpHeaderValue}</th></tr></thead>
                   <tbody>{params.map(([name, value], index) => (
                     <tr key={`${name}-${index}`}><td>{index + 1}</td><td>{name}</td><td>{value || "--"}</td></tr>
                   ))}</tbody>
@@ -125,7 +123,7 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           )}
 
           <div className="tool-panel wide-panel url-output-panel">
-            <PanelTitle title={english ? "Representations" : "常用形式"} />
+            <PanelTitle title={t.representations} />
             <div className="url-output-list">
               {outputs.map(([label, value]) => (
                 <div className="url-output-row" key={label}>

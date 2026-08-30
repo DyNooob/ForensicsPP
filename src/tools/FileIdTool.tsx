@@ -77,9 +77,7 @@ function isTextLike(bytes: Uint8Array) {
   return zero === 0 && printable / sample.length > 0.88;
 }
 
-export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [result, setResult] = React.useState<FileIdResult | null>(null);
+export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [result, setResult] = React.useState<FileIdResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [isDropActive, setDropActive] = React.useState(false);
@@ -146,27 +144,27 @@ export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; activ
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const detectedType = result?.primary?.label ?? (result?.textLike ? (english ? "Plain text" : "文本文件") : (english ? "Unknown" : "未知"));
+  const detectedType = result?.primary?.label ?? (result?.textLike ? (t.plain_text) : (t.unknown));
   const extensionMatch = result
     ? result.primary && result.extension
-      ? result.primary.extensions.includes(result.extension) ? (english ? "Yes" : "是") : (english ? "No" : "否")
+      ? result.primary.extensions.includes(result.extension) ? (t.yes) : (t.no)
       : "--"
     : "--";
 
   const summaryRows: Array<[string, string]> = result ? [
-    [english ? "Name" : "名称", result.name],
+    [t.name, result.name],
     [t.fileSize, formatBytes(result.size)],
-    [english ? "Detected type" : "识别类型", detectedType],
-    [english ? "Extension" : "扩展名", result.extension ? `.${result.extension}` : "--"],
-    [english ? "Extension match" : "扩展名匹配", extensionMatch],
+    [t.detected_type, detectedType],
+    [t.extension, result.extension ? `.${result.extension}` : "--"],
+    [t.extension_match, extensionMatch],
     ["MIME", result.mime],
-    [english ? "Last modified" : "最后修改", result.modified]
+    [t.last_modified, result.modified]
   ] : [];
 
   return (
     <div className={`tool-grid fileid-workbench ${result ? "has-fileid" : "empty-fileid"}`}>
       <div className="tool-panel wide-panel fileid-source-panel">
-        <PanelTitle title={english ? "Open file" : "选择文件"} />
+        <PanelTitle title={t.open_file} />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleFile(file); }} />
         <div
           className={`desktop-drop-zone ${isDropActive ? "active" : ""}`}
@@ -213,7 +211,7 @@ export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; activ
             {result.matches.length ? (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>{english ? "Signature" : "签名"}</th><th>{english ? "Offset" : "偏移"}</th><th>{english ? "Extensions" : "扩展名"}</th></tr></thead>
+                  <thead><tr><th>{t.signature}</th><th>{t.stringOffset}</th><th>{t.extensions}</th></tr></thead>
                   <tbody>
                     {result.matches.map((signature) => (
                       <tr key={`${signature.label}-${signature.offset ?? 0}`}>
@@ -223,15 +221,15 @@ export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; activ
                   </tbody>
                 </table>
               </div>
-            ) : <div className="empty-state">{result.textLike ? (english ? "No binary signature; content appears to be text." : "未匹配二进制签名，内容看起来是文本。") : (english ? "No known signature matched." : "未匹配已知文件签名。")}</div>}
+            ) : <div className="empty-state">{result.textLike ? (t.no_binary_signature_content_appears_to_be_text) : (t.no_known_signature_matched)}</div>}
           </div>
 
           <div className="tool-panel wide-panel fileid-header-panel">
             <div className="panel-heading-row">
-              <PanelTitle title={english ? "Header bytes" : "文件头字节"} />
+              <PanelTitle title={t.header_bytes} />
               <AButton variant="text" onClick={() => void copyText(result.headerHex)}>{t.copy}</AButton>
             </div>
-            <textarea aria-label={english ? "File header bytes" : "文件头字节"} className="single-textarea compact-textarea" value={result.headerHex || "--"} readOnly />
+            <textarea aria-label={t.file_header_bytes} className="single-textarea compact-textarea" value={result.headerHex || "--"} readOnly />
           </div>
         </>
       )}

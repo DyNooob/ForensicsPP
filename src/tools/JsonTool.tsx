@@ -77,7 +77,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
     }
     if (new TextEncoder().encode(analyzedInput).byteLength > MAX_JSON_BYTES) {
       setBasicResult(analyzeBasicJson(""));
-      setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
+      setError(t.json_input_exceeds_the_16_mib_processing_limit);
       setAnalyzing(false);
       return;
     }
@@ -140,7 +140,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
     setTypeFilter("");
     setSelectedPath("");
     if (file.size > MAX_JSON_BYTES) {
-      setError(english ? "JSON file exceeds the 16 MiB processing limit." : "JSON 文件超过 16 MiB 处理上限。");
+      setError(t.json_file_exceeds_the_16_mib_processing_limit);
       return;
     }
     try {
@@ -166,7 +166,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
   const analyze = () => {
     if (!active) return;
     if (new TextEncoder().encode(input).byteLength > MAX_JSON_BYTES) {
-      setError(english ? "JSON input exceeds the 16 MiB processing limit." : "JSON 输入超过 16 MiB 处理上限。");
+      setError(t.json_input_exceeds_the_16_mib_processing_limit);
       return;
     }
     setAnalyzedInput(input);
@@ -184,14 +184,14 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
           title={t.json}
           actions={<>
             <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.jsonOpenFile}</AButton>
-            <AButton variant="filled" disabled={!input.trim()} onClick={analyze}>{english ? "Process JSON" : "处理 JSON"}</AButton>
+            <AButton variant="filled" disabled={!input.trim()} onClick={analyze}>{t.process_json}</AButton>
             <AButton variant="text" disabled={!input && !hasInput} onClick={clear}>{t.clear}</AButton>
           </>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openFile(file); }} />
         {error && <div className="empty-state error-state">{error}</div>}
-        {analyzing && <div className="empty-state" role="status">{english ? "Processing JSON…" : "正在处理 JSON…"}</div>}
-        <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={english ? "JSON operation" : "JSON 操作"}>
+        {analyzing && <div className="empty-state" role="status">{t.processing_json}</div>}
+        <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={t.json_operation}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>
           <ASegmentedButton value="minify" onClick={() => setStoredMode("minify")}>{t.minifyJson}</ASegmentedButton>
           <ASegmentedButton value="jsonl" onClick={() => setStoredMode("jsonl")}>JSONL</ASegmentedButton>
@@ -200,42 +200,42 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton></div>
-          <textarea className="json-simple-textarea" aria-label={english ? "JSON input" : "JSON 输入"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
+          <textarea className="json-simple-textarea" aria-label={t.json_input} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title">
             <strong>{t.outputText}</strong>
             <div className="mini-actions">
-              {parsed.ok && mode !== "escape" && mode !== "unescape" && <span className="status-pill">{parsed.kind} · {paths.length} {english ? "paths" : "路径"}</span>}
+              {parsed.ok && mode !== "escape" && mode !== "unescape" && <span className="status-pill">{parsed.kind} · {paths.length} {t.paths}</span>}
               <AButton variant="text" disabled={!output} onClick={() => void copyText(output)}>{t.copyOutput}</AButton>
-              <AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`json-output-${Date.now()}.${outputExtension}`, output, "text/plain;charset=utf-8")}>{english ? "Save" : "保存"}</AButton>
+              <AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`json-output-${Date.now()}.${outputExtension}`, output, "text/plain;charset=utf-8")}>{t.save}</AButton>
             </div>
           </div>
-          <textarea className="json-simple-textarea" aria-label={english ? "JSON output" : "JSON 输出"} value={output} readOnly />
+          <textarea className="json-simple-textarea" aria-label={t.json_output} value={output} readOnly />
         </div>
       </div>
 
       {parsed.ok && <div className="tool-panel wide-panel json-simple-path-panel">
         <ToolPanelHeader
           title={t.jsonPaths}
-          subtitle={paths.length >= 5000 ? (english ? "First 5,000 paths" : "显示前 5,000 条路径") : `${paths.length} ${english ? "paths" : "条路径"}`}
+          subtitle={paths.length >= 5000 ? (t.first_5_000_paths) : `${paths.length} ${t.paths}`}
           actions={<AButton variant="outlined" disabled={!visiblePaths.length} onClick={() => downloadTextFile(`json-paths-${Date.now()}.csv`, pathsToCsv(visiblePaths), "text/csv;charset=utf-8")}>{t.exportPathsCsv}</AButton>}
         />
         <div className="json-simple-filter-row">
-          <input className="text-input" aria-label={english ? "Filter JSON paths or values" : "筛选 JSON 路径或值"} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter path or value" : "筛选路径或值"} />
-          <ASelect aria-label={english ? "JSON value type" : "JSON 值类型"} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.jsonTypeAll }, ...pathTypes.map((type) => ({ value: type, label: type }))]} />
+          <input className="text-input" aria-label={t.filter_json_paths_or_values} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_path_or_value} />
+          <ASelect aria-label={t.json_value_type} value={typeFilter} onChange={(value) => setTypeFilter(String(value))} options={[{ value: "", label: t.jsonTypeAll }, ...pathTypes.map((type) => ({ value: type, label: type }))]} />
         </div>
         <div className="table-scroll json-simple-path-scroll">
           {visiblePaths.length ? <table className="data-table json-simple-path-table">
-            <thead><tr><th>{t.jsonPath}</th><th>{t.jsonType}</th><th>{english ? "Length" : "长度"}</th><th>{t.jsonValue}</th><th>{t.copy}</th></tr></thead>
+            <thead><tr><th>{t.jsonPath}</th><th>{t.jsonType}</th><th>{t.stringLength}</th><th>{t.jsonValue}</th><th>{t.copy}</th></tr></thead>
             <tbody>{visiblePaths.slice(0, 1000).map((row) => <tr className={selected?.path === row.path ? "selected-row" : ""} key={row.path} onClick={() => setSelectedPath(row.path)}>
               <td><code>{row.path}</code></td><td>{row.type}</td><td>{row.length}</td><td className="json-path-value">{row.value || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(row.value); }}>{t.copy}</AButton></td>
             </tr>)}</tbody>
           </table> : <div className="empty-state">--</div>}
         </div>
         {selected && <div className="json-simple-selected">
-          <InfoTable rows={[[t.jsonPath, selected.path], [t.jsonType, selected.type], [english ? "Length" : "长度", String(selected.length)]]} />
+          <InfoTable rows={[[t.jsonPath, selected.path], [t.jsonType, selected.type], [t.stringLength, String(selected.length)]]} />
           <div className="result-box"><div className="text-panel-title"><strong>{t.jsonValue}</strong><AButton variant="text" onClick={() => void copyText(selected.value)}>{t.copy}</AButton></div><pre>{selected.value || "--"}</pre></div>
         </div>}
       </div>}

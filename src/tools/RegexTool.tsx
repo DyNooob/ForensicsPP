@@ -81,7 +81,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
     }
     if (sourceTooLarge) {
       setAnalyzing(false);
-      setResult({ matches: [], replaced: source, error: english ? "Source text is limited to 16 MiB." : "源文本不能超过 16 MiB。", flags: "" });
+      setResult({ matches: [], replaced: source, error: t.source_text_is_limited_to_16_mib, flags: "" });
       return () => controller.abort();
     }
     if (!pattern.trim()) {
@@ -127,7 +127,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
     setSelectedKey("");
     setFilter("");
     if (file.size > MAX_REGEX_FILE_BYTES) {
-      setFileError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      setFileError(t.the_file_exceeds_the_16_mib_limit);
       return;
     }
     try {
@@ -167,46 +167,46 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".log,.txt,.csv,.json,.xml,.html,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className="regex-simple-controls">
-          <label className="stack-label regex-pattern-field">{t.pattern}<input className="text-input full-input" value={pattern} onChange={(event) => { setPattern(event.currentTarget.value); setSelectedKey(""); }} placeholder={english ? "Regular expression" : "输入正则表达式"} /></label>
+          <label className="stack-label regex-pattern-field">{t.pattern}<input className="text-input full-input" value={pattern} onChange={(event) => { setPattern(event.currentTarget.value); setSelectedKey(""); }} placeholder={t.regular_expression} /></label>
           <label className="stack-label">{t.flags}<input className="text-input full-input" value={flags} onChange={(event) => setFlags(event.currentTarget.value)} placeholder="gim" /></label>
-          <label className="stack-label">{t.regexExamples}<ASelect aria-label={t.regexExamples} value={preset} onChange={(value) => applyPreset(String(value))} options={[{ value: "", label: english ? "Choose preset" : "选择常用表达式" }, ...presets.map((item) => ({ value: item.label, label: item.label }))]} /></label>
+          <label className="stack-label">{t.regexExamples}<ASelect aria-label={t.regexExamples} value={preset} onChange={(value) => applyPreset(String(value))} options={[{ value: "", label: t.choose_preset }, ...presets.map((item) => ({ value: item.label, label: item.label }))]} /></label>
         </div>
-        <label className="stack-label">{english ? "Source text" : "源文本"}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
+        <label className="stack-label">{t.source_text}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
         {fileError && <div className="empty-state error-state">{fileError}</div>}
-        {(analyzing || result.error) && <div className={`empty-state ${result.error ? "error-state" : ""}`} role={result.error ? "alert" : "status"}>{analyzing ? (english ? "Matching…" : "正在匹配…") : result.error}</div>}
+        {(analyzing || result.error) && <div className={`empty-state ${result.error ? "error-state" : ""}`} role={result.error ? "alert" : "status"}>{analyzing ? (t.matching) : result.error}</div>}
       </div>
 
       {hasInput && <div className="tool-panel wide-panel regex-simple-results-panel">
         <ToolPanelHeader
           title={t.matches}
-          subtitle={result.matches.length >= 1000 ? (english ? "First 1,000 matches" : "显示前 1,000 条") : `${result.matches.length} ${english ? "matches" : "个匹配"}`}
+          subtitle={result.matches.length >= 1000 ? (t.first_1_000_matches) : `${result.matches.length} ${t.matches_2}`}
           actions={<>
-            <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => void copyText(visibleMatches.map((match) => match.value).join("\n"))}>{english ? "Copy matches" : "复制匹配"}</AButton>
+            <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => void copyText(visibleMatches.map((match) => match.value).join("\n"))}>{t.copy_matches}</AButton>
             <AButton variant="outlined" disabled={!visibleMatches.length} onClick={() => downloadTextFile(`regex-matches-${Date.now()}.csv`, matchesToCsv(visibleMatches), "text/csv;charset=utf-8")}>{t.exportMatchesCsv}</AButton>
           </>}
         />
-        <input className="text-input regex-simple-filter" aria-label={english ? "Filter regex matches" : "筛选正则匹配结果"} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter matches" : "筛选匹配结果"} />
+        <input className="text-input regex-simple-filter" aria-label={t.filter_regex_matches} value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_matches} />
         <div className="table-scroll regex-simple-table-scroll">
           {visibleMatches.length ? <table className="data-table regex-simple-table">
-            <thead><tr><th>#</th><th>{english ? "Match" : "匹配内容"}</th><th>{english ? "Line" : "行"}</th><th>{english ? "Range" : "位置"}</th><th>{english ? "Groups" : "分组"}</th><th>{t.copy}</th></tr></thead>
+            <thead><tr><th>#</th><th>{t.match}</th><th>{t.iocLine}</th><th>{t.range}</th><th>{t.groups}</th><th>{t.copy}</th></tr></thead>
             <tbody>{visibleMatches.map((match) => {
               const key = `${match.order}:${match.index}`;
               return <tr className={selectedMatch && key === `${selectedMatch.order}:${selectedMatch.index}` ? "selected-row" : ""} key={key} onClick={() => setSelectedKey(key)}>
                 <td>{match.order}</td><td className="regex-match-value">{match.value || "--"}</td><td>{match.line}</td><td>{match.index}-{match.end}</td><td>{match.groups.length + Object.keys(match.namedGroups).length || "--"}</td><td><AButton variant="text" onClick={(event) => { event.stopPropagation(); void copyText(match.value); }}>{t.copy}</AButton></td>
               </tr>;
             })}</tbody>
-          </table> : <div className="empty-state">{result.error || (english ? "No matches" : "没有匹配结果")}</div>}
+          </table> : <div className="empty-state">{result.error || (t.no_matches)}</div>}
         </div>
       </div>}
 
       {selectedMatch && <div className="tool-panel wide-panel regex-simple-detail-panel">
-        <ToolPanelHeader title={english ? "Selected match" : "当前匹配"} actions={<AButton variant="outlined" onClick={() => void copyText(selectedMatch.value)}>{t.copy}</AButton>} />
+        <ToolPanelHeader title={t.selected_match} actions={<AButton variant="outlined" onClick={() => void copyText(selectedMatch.value)}>{t.copy}</AButton>} />
         <InfoTable rows={[
-          [english ? "Value" : "内容", selectedMatch.value || "--"],
-          [english ? "Line" : "行号", String(selectedMatch.line)],
-          [english ? "Range" : "位置", `${selectedMatch.index}-${selectedMatch.end}`],
-          [english ? "Length" : "长度", String(selectedMatch.length)],
-          [english ? "Groups" : "捕获组", selectedMatch.groups.length ? selectedMatch.groups.map((value, index) => `$${index + 1}=${value}`).join(" | ") : "--"],
+          [t.httpHeaderValue, selectedMatch.value || "--"],
+          [t.iocLine, String(selectedMatch.line)],
+          [t.range, `${selectedMatch.index}-${selectedMatch.end}`],
+          [t.stringLength, String(selectedMatch.length)],
+          [t.groups, selectedMatch.groups.length ? selectedMatch.groups.map((value, index) => `$${index + 1}=${value}`).join(" | ") : "--"],
           [t.regexNamedGroups, Object.keys(selectedMatch.namedGroups).length ? Object.entries(selectedMatch.namedGroups).map(([key, value]) => `${key}=${value}`).join(" | ") : "--"]
         ]} />
         <div className="result-box regex-simple-context"><strong>{t.regexContext}</strong><span>{selectedMatch.context || "--"}</span></div>
@@ -215,7 +215,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
       {hasInput && <div className="tool-panel wide-panel regex-simple-replace-panel">
         <ToolPanelHeader title={t.regexReplaceOutput} actions={<AButton variant="outlined" disabled={!source} onClick={() => void copyText(result.replaced)}>{t.copyOutput}</AButton>} />
         <label className="stack-label">{t.regexReplacement}<input className="text-input full-input" value={replacement} onChange={(event) => setReplacement(event.currentTarget.value)} /></label>
-        <textarea aria-label={english ? "Replacement result" : "替换结果"} className="single-textarea regex-simple-output" value={result.replaced} readOnly />
+        <textarea aria-label={t.replacement_result} className="single-textarea regex-simple-output" value={result.replaced} readOnly />
       </div>}
     </div>
   );

@@ -40,9 +40,7 @@ export type YaraToolServices = {
   yaraBatchRowsToCsv: (rows: YaraBatchRow[]) => string;
 };
 
-export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: YaraToolServices; active?: boolean }) {
-  const english = t.waiting === "Waiting";
-  const [rules, setRules] = useStoredState("yara.rules.v2", "");
+export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: YaraToolServices; active?: boolean }) {  const [rules, setRules] = useStoredState("yara.rules.v2", "");
   const [sample, setSample] = useStoredState("yara.sample.v3", "");
   const [sampleName, setSampleName] = React.useState("text sample");
   const [sampleBytes, setSampleBytes] = React.useState<Uint8Array>(() => new TextEncoder().encode(sample));
@@ -91,12 +89,12 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
   const runTextScan = async () => {
     if (!active) return;
     if (new TextEncoder().encode(rules).byteLength > MAX_YARA_RULE_BYTES) {
-      setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" );
+      setError(t.yara_rules_are_limited_to_2_mib );
       return;
     }
     const bytes = sampleName === "text sample" ? new TextEncoder().encode(sample) : sampleBytes;
     if (bytes.byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) {
-      setError(english ? "Text samples are limited to 32 MiB." : "文本样本不能超过 32 MiB。" );
+      setError(t.text_samples_are_limited_to_32_mib );
       return;
     }
     setSampleBytes(bytes);
@@ -125,7 +123,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
   const handleFiles = async (files?: FileList | null) => {
     if (!active || !files?.length) return;
     if (new TextEncoder().encode(rules).byteLength > MAX_YARA_RULE_BYTES) {
-      setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" );
+      setError(t.yara_rules_are_limited_to_2_mib );
       return;
     }
     setScanning(true);
@@ -168,7 +166,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
       setBatchRows(rows);
       setResult(firstResult);
       setSelectedRule(firstResult?.results.find((item) => item.matched)?.rule.name ?? "");
-      if (files.length > selectedFiles.length) setError(english ? "Only the first 25 files were scanned." : "仅扫描前 25 个文件。");
+      if (files.length > selectedFiles.length) setError(t.only_the_first_25_files_were_scanned);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -217,20 +215,20 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
 
       <section className="tool-panel wide-panel yara-simple-input-panel">
         <ToolPanelHeader
-          title={english ? "YARA scan" : "YARA 扫描"}
+          title={t.yara_scan}
           actions={<AButton variant="text" disabled={!sample && !result} onClick={clear}>{t.clear}</AButton>}
         />
 
         <div className="yara-simple-section-heading">
           <strong>{t.yaraRules}</strong>
-          <AButton variant="text" onClick={loadDemo}>{english ? "Load demo" : "载入示例"}</AButton>
+          <AButton variant="text" onClick={loadDemo}>{t.load_demo}</AButton>
         </div>
         <div className="button-row yara-simple-templates">
           {services.yaraRuleTemplates.map((template) => (
             <AButton key={template.id} variant="outlined" onClick={() => { setRules(template.rule); invalidate(); }}>{template.label}</AButton>
           ))}
         </div>
-        <textarea className="single-textarea yara-simple-editor" aria-label={english ? "YARA rules" : "YARA 规则"} value={rules} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_RULE_BYTES) { setError(english ? "YARA rules are limited to 2 MiB." : "YARA 规则不能超过 2 MiB。" ); return; } setRules(next); invalidate(); }} placeholder={english ? "Paste one or more YARA rules" : "粘贴一条或多条 YARA 规则"} />
+        <textarea className="single-textarea yara-simple-editor" aria-label={t.yara_rules} value={rules} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_RULE_BYTES) { setError(t.yara_rules_are_limited_to_2_mib ); return; } setRules(next); invalidate(); }} placeholder={t.paste_one_or_more_yara_rules} />
 
         <div className="yara-simple-divider" />
         <div className="yara-simple-section-heading"><strong>{t.yaraSample}</strong></div>
@@ -250,14 +248,14 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
           onDragLeave={() => setDropActive(false)}
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void handleFiles(event.dataTransfer.files); }}
         >
-          <strong>{sampleName === "text sample" ? (english ? "Text sample" : "文本样本") : sampleName}</strong>
-          <span>{sampleBytes.length ? formatBytes(sampleBytes.length) : (english ? "Drop up to 25 files" : "拖入最多 25 个文件")}</span>
+          <strong>{sampleName === "text sample" ? (t.text_sample) : sampleName}</strong>
+          <span>{sampleBytes.length ? formatBytes(sampleBytes.length) : (t.drop_up_to_25_files)}</span>
         </div>
-        <textarea className="single-textarea yara-simple-sample" aria-label={english ? "YARA text sample" : "YARA 文本样本"} value={sample} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) { setError(english ? "Text samples are limited to 32 MiB." : "文本样本不能超过 32 MiB。" ); return; } setSampleName("text sample"); setSample(next); invalidate(); }} placeholder={t.textPlaceholder} />
+        <textarea className="single-textarea yara-simple-sample" aria-label={t.yara_text_sample} value={sample} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) { setError(t.text_samples_are_limited_to_32_mib ); return; } setSampleName("text sample"); setSample(next); invalidate(); }} placeholder={t.textPlaceholder} />
         <div className="yara-simple-primary-action">
           <AButton variant="filled" disabled={scanning || !rules.trim() || !sample.trim()} onClick={() => void runTextScan()}>{t.run}</AButton>
           <AButton variant="outlined" disabled={scanning || !rules.trim()} onClick={() => inputRef.current?.click()}>{t.uploadSample}</AButton>
-          {scanning && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
+          {scanning && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div>
       </section>
 
@@ -265,28 +263,28 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
         <section className="tool-panel wide-panel yara-simple-results-panel">
           <ToolPanelHeader
             title={t.ruleMatches}
-            subtitle={sampleName === "text sample" ? (english ? "Text sample" : "文本样本") : sampleName}
+            subtitle={sampleName === "text sample" ? (t.text_sample) : sampleName}
             actions={<>
-              <AButton variant="outlined" disabled={!result.results.length} onClick={() => downloadTextFile(`yara-hits-${Date.now()}.csv`, services.yaraHitsToCsv(result.results), "text/csv;charset=utf-8")}>{english ? "Hits CSV" : "命中 CSV"}</AButton>
-              <AButton variant="text" disabled={!batchRows.length} onClick={() => downloadTextFile(`yara-batch-${Date.now()}.csv`, services.yaraBatchRowsToCsv(batchRows), "text/csv;charset=utf-8")}>{english ? "Batch CSV" : "批量 CSV"}</AButton>
+              <AButton variant="outlined" disabled={!result.results.length} onClick={() => downloadTextFile(`yara-hits-${Date.now()}.csv`, services.yaraHitsToCsv(result.results), "text/csv;charset=utf-8")}>{t.hits_csv}</AButton>
+              <AButton variant="text" disabled={!batchRows.length} onClick={() => downloadTextFile(`yara-batch-${Date.now()}.csv`, services.yaraBatchRowsToCsv(batchRows), "text/csv;charset=utf-8")}>{t.batch_csv}</AButton>
             </>}
           />
 
           <div className="yara-simple-summary">
-            <span><small>{english ? "Rules" : "规则"}</small><strong>{result.results.length}</strong></span>
+            <span><small>{t.yaraRules}</small><strong>{result.results.length}</strong></span>
             <span><small>{t.matched}</small><strong>{matchedResults.length}</strong></span>
-            <span><small>{english ? "String hits" : "字符串命中"}</small><strong>{totalStringHits}</strong></span>
-            <span><small>{english ? "Files" : "文件"}</small><strong>{batchRows.length || 1}</strong></span>
+            <span><small>{t.string_hits}</small><strong>{totalStringHits}</strong></span>
+            <span><small>{t.totalFiles}</small><strong>{batchRows.length || 1}</strong></span>
           </div>
 
           <div className="table-scroll yara-simple-rule-scroll">
             <table className="data-table yara-simple-rule-table">
-              <thead><tr><th>{english ? "Rule" : "规则"}</th><th>{english ? "Matched" : "命中"}</th><th>{english ? "Tags" : "标签"}</th><th>{english ? "Strings" : "字符串"}</th><th>{english ? "Condition" : "条件"}</th><th>{english ? "Errors" : "错误"}</th></tr></thead>
+              <thead><tr><th>{t.rule}</th><th>{t.matched}</th><th>{t.tags}</th><th>{t.strings_2}</th><th>{t.condition}</th><th>{t.errors}</th></tr></thead>
               <tbody>
                 {result.results.map((item) => (
                   <tr className={selectedResult?.rule.name === item.rule.name ? "selected-row" : ""} key={item.rule.name} onClick={() => setSelectedRule(item.rule.name)}>
                     <td>{item.rule.name}</td>
-                    <td>{item.matched ? (english ? "Yes" : "是") : (english ? "No" : "否")}</td>
+                    <td>{item.matched ? (t.yes) : (t.no)}</td>
                     <td>{item.rule.tags.join(", ") || "--"}</td>
                     <td>{item.hits.filter((hit) => hit.count).length}/{item.hits.length}</td>
                     <td className="yara-simple-condition">{item.condition}</td>
@@ -303,13 +301,13 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
         <section className="tool-panel wide-panel yara-simple-hits-panel">
           <ToolPanelHeader
             title={t.stringMatches}
-            subtitle={selectedResult ? selectedResult.rule.name : (english ? "All matched rules" : "全部命中规则")}
+            subtitle={selectedResult ? selectedResult.rule.name : (t.all_matched_rules)}
           />
-          <input className="text-input yara-simple-hit-filter" aria-label={english ? "Filter YARA hits" : "筛选 YARA 命中"} value={hitFilter} onChange={(event) => setHitFilter(event.target.value)} placeholder={english ? "Filter ID, pattern, or context" : "筛选 ID、模式或上下文"} />
+          <input className="text-input yara-simple-hit-filter" aria-label={t.filter_yara_hits} value={hitFilter} onChange={(event) => setHitFilter(event.target.value)} placeholder={t.filter_id_pattern_or_context} />
           {visibleHits.length ? (
             <div className="table-scroll yara-simple-hit-scroll">
               <table className="data-table yara-simple-hit-table">
-                <thead><tr><th>{english ? "Rule" : "规则"}</th><th>ID</th><th>{english ? "Pattern" : "模式"}</th><th>{english ? "Count" : "次数"}</th><th>{t.offsets}</th><th>{t.regexContext}</th></tr></thead>
+                <thead><tr><th>{t.rule}</th><th>ID</th><th>{t.pattern}</th><th>{t.iocCount}</th><th>{t.offsets}</th><th>{t.regexContext}</th></tr></thead>
                 <tbody>
                   {visibleHits.map(({ item, hit }) => (
                     <tr key={`${item.rule.name}-${hit.id}`}>
@@ -324,30 +322,30 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
                 </tbody>
               </table>
             </div>
-          ) : <div className="empty-state">{english ? "No string hits" : "没有字符串命中"}</div>}
+          ) : <div className="empty-state">{t.no_string_hits}</div>}
         </section>
       )}
 
       {selectedResult && (
         <section className="tool-panel wide-panel yara-simple-detail-panel">
-          <ToolPanelHeader title={english ? "Selected rule" : "当前规则"} />
+          <ToolPanelHeader title={t.selected_rule} />
           <InfoTable rows={[
-            [english ? "Rule" : "规则", selectedResult.rule.name],
-            [english ? "Matched" : "命中", selectedResult.matched ? (english ? "Yes" : "是") : (english ? "No" : "否")],
-            [english ? "Tags" : "标签", selectedResult.rule.tags.join(", ") || "--"],
-            [english ? "Condition" : "条件", selectedResult.condition],
+            [t.rule, selectedResult.rule.name],
+            [t.matched, selectedResult.matched ? (t.yes) : (t.no)],
+            [t.tags, selectedResult.rule.tags.join(", ") || "--"],
+            [t.condition, selectedResult.condition],
             ["Meta", selectedResult.rule.meta.map(([key, value]) => `${key}=${value}`).join(", ") || "--"],
-            [english ? "Errors" : "错误", selectedResult.errors.join("; ") || "--"]
+            [t.errors, selectedResult.errors.join("; ") || "--"]
           ]} />
         </section>
       )}
 
       {batchRows.length > 1 && (
         <section className="tool-panel wide-panel yara-simple-batch-panel">
-          <ToolPanelHeader title={t.yaraBatch} subtitle={`${batchRows.length} ${english ? "files" : "个文件"}`} />
+          <ToolPanelHeader title={t.yaraBatch} subtitle={`${batchRows.length} ${t.files}`} />
           <div className="table-scroll yara-simple-batch-scroll">
             <table className="data-table">
-              <thead><tr><th>{english ? "Name" : "名称"}</th><th>{t.fileSize}</th><th>{t.matched}</th><th>{english ? "Rules" : "规则"}</th><th>{english ? "String hits" : "字符串命中"}</th><th>{english ? "Notes" : "说明"}</th></tr></thead>
+              <thead><tr><th>{t.name}</th><th>{t.fileSize}</th><th>{t.matched}</th><th>{t.yaraRules}</th><th>{t.string_hits}</th><th>{t.entryRisk}</th></tr></thead>
               <tbody>
                 {batchRows.map((row) => (
                   <tr key={`${row.name}-${row.size}`}>

@@ -59,10 +59,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
   React.useEffect(() => {
     if (active) return;
     requestRef.current += 1;
-  }, [active]);
-  const english = t.waiting === "Waiting";
-
-  const formats: CodecFormat[] = [
+  }, [active]);  const formats: CodecFormat[] = [
     { id: "url", label: "URL", forward: "urle", reverse: "urld", group: "basic" },
     { id: "base64", label: "Base64", forward: "b64e", reverse: "b64d", group: "basic" },
     { id: "base64url", label: "Base64URL", forward: "b64ue", reverse: "b64ud", group: "basic" },
@@ -102,7 +99,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
   const run = (nextOperation: string) => {
     if (new TextEncoder().encode(input).byteLength > MAX_CODEC_INPUT_BYTES) {
       setOutput("");
-      setError(english ? "Input is limited to 2 MiB for this operation." : "此操作最多处理 2 MiB 输入。");
+      setError(t.input_is_limited_to_2_mib_for_this_operation);
       return;
     }
     try {
@@ -121,7 +118,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
     setOutput("");
     setError("");
     if (file.size > MAX_CODEC_FILE_BYTES) {
-      setError(english ? "The file exceeds the 16 MiB limit." : "文件超过 16 MiB 限制。");
+      setError(t.the_file_exceeds_the_16_mib_limit);
       return;
     }
     try {
@@ -147,15 +144,15 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
   const directGroupLabel = (group: DirectOperation["group"]) => {
     if (group === "detect") return t.codecFormat;
     if (group === "charset") return t.codecCharset;
-    if (group === "text") return english ? "Text operations" : "文本操作";
-    return english ? "Text operations" : "文本操作";
+    if (group === "text") return t.text_operations;
+    return t.text_operations;
   };
 
   return (
     <div className={`tool-grid codec-workbench codec-simple-workbench ${hasContent ? "has-codec" : "empty-codec"}`}>
       <div className="tool-panel wide-panel codec-simple-panel">
         <ToolPanelHeader
-          title={english ? "Encode / Decode" : "编码解码"}
+          title={t.encode_decode}
           actions={<>
             <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.codecOpenFile}</AButton>
             <AButton variant="outlined" disabled={!output} onClick={swap}>{t.swapText}</AButton>
@@ -166,9 +163,9 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
 
         <div className="codec-simple-controls">
           <section className="codec-simple-operation-row">
-            <label className="stack-label">{english ? "Format" : "转换格式"}
+            <label className="stack-label">{t.format}
               <ASelect
-                aria-label={english ? "Format" : "转换格式"}
+                aria-label={t.format}
                 value={activeFormat.id}
                 onChange={(value) => setSelectedFormat(String(value))}
                 options={(["basic", "text"] as CodecFormat["group"][]).map((group) => ({
@@ -184,9 +181,9 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
           </section>
 
           <section className="codec-simple-operation-row secondary">
-            <label className="stack-label">{english ? "Other operation" : "其他操作"}
+            <label className="stack-label">{t.other_operation}
               <ASelect
-                aria-label={english ? "Other operation" : "其他操作"}
+                aria-label={t.other_operation}
                 value={directOperation}
                 onChange={(value) => setDirectOperation(String(value))}
                 options={(["detect", "charset", "text"] as DirectOperation["group"][]).map((group) => ({
@@ -195,18 +192,18 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
                 }))}
               />
             </label>
-            <AButton variant="outlined" disabled={!input} onClick={() => run(directOperation)}>{english ? "Run" : "执行"}</AButton>
+            <AButton variant="outlined" disabled={!input} onClick={() => run(directOperation)}>{t.run}</AButton>
           </section>
         </div>
 
         <div className="text-panel codec-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton></div></div>
-          <textarea className="codec-simple-textarea" aria-label={english ? "Input text" : "输入文本"} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
+          <textarea className="codec-simple-textarea" aria-label={t.input_text} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
         </div>
         {error && <div className="empty-state error-state">{error}</div>}
         <div className="text-panel codec-simple-text-panel">
           <div className="text-panel-title"><strong>{t.outputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!output} onClick={() => void copyText(output)}>{t.copyOutput}</AButton><AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`codec-output-${Date.now()}.txt`, output, "text/plain;charset=utf-8")}>{t.download}</AButton><AButton variant="text" disabled={!output} onClick={() => { setInput(output); setOutput(""); setError(""); }}>{t.codecApplyCandidate}</AButton></div></div>
-          <textarea className="codec-simple-textarea" aria-label={english ? "Output text" : "输出文本"} value={output} readOnly />
+          <textarea className="codec-simple-textarea" aria-label={t.output_text} value={output} readOnly />
         </div>
       </div>
     </div>

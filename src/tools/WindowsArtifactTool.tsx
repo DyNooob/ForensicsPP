@@ -147,18 +147,18 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   }, [analysis, pathFilter]);
   const textAvailable = Boolean(analysis?.textPreview && /Zone\.Identifier|Registry Export/i.test(analysis.artifactType));
   const views = React.useMemo(() => analysis ? [
-    { id: "overview" as const, label: english ? "Overview" : "概览", count: 0 },
-    { id: "fields" as const, label: english ? "Fields" : "字段", count: detailRows.length },
-    ...(analysis.timeline.length ? [{ id: "timestamps" as const, label: english ? "Timestamps" : "时间", count: analysis.timeline.length }] : []),
-    ...(analysis.records?.length ? [{ id: "records" as const, label: english ? "Records" : "记录", count: analysis.records.length }] : []),
-    ...(analysis.strings.length ? [{ id: "paths" as const, label: english ? "Paths" : "路径", count: analysis.strings.length }] : []),
-    ...(textAvailable ? [{ id: "text" as const, label: english ? "Text" : "文本", count: 0 }] : [])
+    { id: "overview" as const, label: t.overview, count: 0 },
+    { id: "fields" as const, label: t.fields, count: detailRows.length },
+    ...(analysis.timeline.length ? [{ id: "timestamps" as const, label: t.timestamps, count: analysis.timeline.length }] : []),
+    ...(analysis.records?.length ? [{ id: "records" as const, label: t.records_2, count: analysis.records.length }] : []),
+    ...(analysis.strings.length ? [{ id: "paths" as const, label: t.paths_2, count: analysis.strings.length }] : []),
+    ...(textAvailable ? [{ id: "text" as const, label: t.text, count: 0 }] : [])
   ] : [], [analysis, detailRows.length, english, textAvailable]);
 
   return (
     <div className={`tool-grid windows-artifact-workbench ${analysis ? "has-windows" : "empty-windows"}`}>
       <div className="tool-panel wide-panel windows-source-panel">
-        <PanelTitle title={english ? "Windows file" : "选择 Windows 文件"} />
+        <PanelTitle title={t.windows_file} />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".lnk,.pf,.reg,.txt,.mft,.j,*/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div
           className={`desktop-drop-zone ${dropActive ? "active" : ""}`}
@@ -176,7 +176,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
           onDrop={(event) => { event.preventDefault(); setDropActive(false); void loadFile(event.dataTransfer.files?.[0]); }}
         >
           <strong>{analysis?.name || t.dropFileTitle}</strong>
-          <span>{analysis ? `${analysis.artifactType} · ${formatBytes(analysis.size)}` : (english ? "LNK, Prefetch, $MFT, $UsnJrnl, Zone.Identifier, or REG" : "支持 LNK、Prefetch、$MFT、$UsnJrnl、Zone.Identifier 和 REG")}</span>
+          <span>{analysis ? `${analysis.artifactType} · ${formatBytes(analysis.size)}` : (t.lnk_prefetch_mft_usnjrnl_zone_identifier_or_reg)}</span>
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
@@ -195,24 +195,24 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
 
             {view === "overview" &&
             <InfoTable rows={[
-              [english ? "Name" : "名称", analysis.name],
-              [english ? "Type" : "类型", analysis.artifactType],
+              [t.name, analysis.name],
+              [t.componentType, analysis.artifactType],
               [t.fileSize, formatBytes(analysis.size)],
-              [english ? "Parsed fields" : "解析字段", String(detailRows.length)],
-              [english ? "Timestamps" : "时间记录", String(analysis.timeline.length)],
-              [english ? "Records" : "结构化记录", String(analysis.records?.length ?? 0)],
-              [english ? "Paths" : "路径", String(analysis.strings.length)]
+              [t.parsed_fields, String(detailRows.length)],
+              [t.timestamps, String(analysis.timeline.length)],
+              [t.records_2, String(analysis.records?.length ?? 0)],
+              [t.paths_2, String(analysis.strings.length)]
             ]} />
             }
 
             {view === "fields" &&
-            <InfoTable rows={detailRows.length ? detailRows : [[english ? "Result" : "结果", "--"]]} />
+            <InfoTable rows={detailRows.length ? detailRows : [[t.result, "--"]]} />
             }
 
             {view === "timestamps" && (
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>UTC</th><th>{english ? "Format" : "格式"}</th><th>{english ? "Context" : "说明"}</th></tr></thead>
+                  <thead><tr><th>UTC</th><th>{t.format}</th><th>{t.regexContext}</th></tr></thead>
                   <tbody>{analysis.timeline.map((event) => (
                     <tr key={event.id}><td>{event.iso}</td><td>{event.format}</td><td>{event.context}</td></tr>
                   ))}</tbody>
@@ -222,7 +222,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
 
             {view === "records" && analysis.records?.length ? (
               <div className="table-scroll compact-scroll">
-                <table className="data-table"><thead><tr><th>#</th><th>{english ? "Kind" : "类型"}</th><th>{english ? "Record" : "记录"}</th></tr></thead><tbody>{analysis.records.slice(0, 20000).map((record, index) => (
+                <table className="data-table"><thead><tr><th>#</th><th>{t.kind}</th><th>{t.record}</th></tr></thead><tbody>{analysis.records.slice(0, 20000).map((record, index) => (
                   <tr key={record.id}><td>{index + 1}</td><td>{record.kind}</td><td>{Object.entries(record.fields).map(([key, value]) => <div key={key}><strong>{key}:</strong> {value}</div>)}</td></tr>
                 ))}</tbody></table>
               </div>
@@ -230,10 +230,10 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
 
             {view === "paths" && (
               <>
-              <div className="windows-path-filter"><input className="text-input" value={pathFilter} onChange={(event) => setPathFilter(event.currentTarget.value)} placeholder={english ? "Filter paths" : "筛选路径"} aria-label={english ? "Filter paths" : "筛选路径"} /><span>{visiblePaths.length}/{analysis.strings.length}</span></div>
+              <div className="windows-path-filter"><input className="text-input" value={pathFilter} onChange={(event) => setPathFilter(event.currentTarget.value)} placeholder={t.filter_paths} aria-label={t.filter_paths} /><span>{visiblePaths.length}/{analysis.strings.length}</span></div>
               <div className="table-scroll compact-scroll">
                 <table className="data-table">
-                  <thead><tr><th>{english ? "Offset" : "偏移"}</th><th>{english ? "Value" : "值"}</th></tr></thead>
+                  <thead><tr><th>{t.stringOffset}</th><th>{t.httpHeaderValue}</th></tr></thead>
                   <tbody>{visiblePaths.map((item) => (
                     <tr key={item.id}><td>0x{item.offset.toString(16).toUpperCase()}</td><td>{item.value}</td></tr>
                   ))}</tbody>

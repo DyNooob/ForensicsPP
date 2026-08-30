@@ -117,7 +117,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       setSigmaMatches([]);
       setSigmaErrors([]);
       setView("overview");
-      setError(english ? "Select one or more .evtx files." : "请选择一个或多个 .evtx 文件。");
+      setError(t.select_one_or_more_evtx_files);
       return;
     }
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
@@ -131,7 +131,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
       setView("overview");
       setError(tooLarge
         ? (english ? `${tooLarge.name} exceeds 256 MiB.` : `${tooLarge.name} 超过 256 MiB。`)
-        : (english ? "Selected files exceed 512 MiB in total." : "所选文件总大小超过 512 MiB。"));
+        : (t.selected_files_exceed_512_mib_in_total));
       return;
     }
     setSelectedFiles(next);
@@ -234,7 +234,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setSigmaMatches([]);
     if (file.size > MAX_SIGMA_FILE_BYTES) {
       setSigmaText("");
-      setSigmaErrors([english ? "Sigma rule file exceeds 2 MiB." : "Sigma 规则文件超过 2 MiB。"]);
+      setSigmaErrors([t.sigma_rule_file_exceeds_2_mib]);
       return;
     }
     try {
@@ -287,56 +287,56 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   return (
     <div className={`tool-grid evtx-workbench ${parsedFiles.length ? "has-evtx" : "empty-evtx"}`}>
       <section className="tool-panel wide-panel">
-        <ToolPanelHeader title={english ? "Windows event logs" : "Windows 事件日志"} actions={<AButton variant="text" disabled={!selectedFiles.length && !parsedFiles.length} onClick={clear}>{t.clear}</AButton>} />
+        <ToolPanelHeader title={t.windows_event_logs} actions={<AButton variant="text" disabled={!selectedFiles.length && !parsedFiles.length} onClick={clear}>{t.clear}</AButton>} />
         <input className="hidden-file-input" ref={inputRef} type="file" accept=".evtx" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
         <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); queueFiles(event.dataTransfer.files); }}>
-          <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} EVTX file(s)` : `已选择 ${selectedFiles.length} 个 EVTX 文件`) : (english ? "Select EVTX files" : "选择 EVTX 文件")}</strong>
+          <strong>{selectedFiles.length ? (english ? `${selectedFiles.length} EVTX file(s)` : `已选择 ${selectedFiles.length} 个 EVTX 文件`) : (t.select_evtx_files)}</strong>
           <span>{selectedFiles.length ? formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0)) : ".evtx"}</span>
         </div>
         <div className="button-row">
-          <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{english ? "Select files" : "选择文件"}</AButton>
-          <AButton variant="filled" disabled={!selectedFiles.length || loading} onClick={() => void analyze()}>{english ? "Parse logs" : "解析日志"}</AButton>
-          {loading && <AButton variant="outlined" onClick={cancel}>{english ? "Cancel" : "取消"}</AButton>}
+          <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.select_files}</AButton>
+          <AButton variant="filled" disabled={!selectedFiles.length || loading} onClick={() => void analyze()}>{t.parse_logs}</AButton>
+          {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div>
         {loading && <><ALinearProgress /><div className="tool-loading-state">{progress}</div></>}
         {error && <div className="empty-state error-state">{error}</div>}
       </section>
 
       {parsedFiles.length > 0 && <section className="tool-panel wide-panel evtx-results-panel">
-        <ToolPanelHeader title={english ? "Event log results" : "事件日志结果"} subtitle={`${events.length.toLocaleString()} ${english ? "events" : "条事件"}`} actions={view === "events" ? <AButton variant="outlined" disabled={!filteredEvents.length} onClick={() => downloadTextFile(`evtx-events-${Date.now()}.csv`, evtxEventsToCsv(filteredEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton> : undefined} />
+        <ToolPanelHeader title={t.event_log_results} subtitle={`${events.length.toLocaleString()} ${t.events}`} actions={view === "events" ? <AButton variant="outlined" disabled={!filteredEvents.length} onClick={() => downloadTextFile(`evtx-events-${Date.now()}.csv`, evtxEventsToCsv(filteredEvents), "text/csv;charset=utf-8")}>{t.exportCsv}</AButton> : undefined} />
         <ASegmentedGroup className="evtx-tabs" value={view} selects="single">{views.map((item) => <ASegmentedButton key={item} value={item} onClick={() => setView(item)}>{labels[item][english ? 1 : 0]}{item === "events" ? ` (${events.length})` : item === "sigma" && sigmaMatches.length ? ` (${sigmaMatches.length})` : ""}</ASegmentedButton>)}</ASegmentedGroup>
 
         {view === "overview" && <InfoTable rows={[
-          [english ? "Parsed files" : "已解析文件", `${analyses.length}/${parsedFiles.length}`],
-          [english ? "Events" : "事件", events.length.toLocaleString()],
-          [english ? "Time range" : "时间范围", firstEvent ? `${firstEvent.timestamp} → ${lastEvent.timestamp}` : "--"],
-          [english ? "Providers" : "提供程序", providers.size.toLocaleString()],
-          [english ? "Channels" : "通道", channels.size.toLocaleString()],
-          [english ? "Skipped records" : "跳过记录", String(analyses.reduce((sum, file) => sum + file.skippedRecords, 0))],
-          [english ? "Record limit" : "记录上限", analyses.some((file) => file.truncated) ? (english ? `${MAX_RECORDS_PER_FILE.toLocaleString()} per file (reached)` : `每文件 ${MAX_RECORDS_PER_FILE.toLocaleString()}（已达到）`) : (english ? `${MAX_RECORDS_PER_FILE.toLocaleString()} per file` : `每文件 ${MAX_RECORDS_PER_FILE.toLocaleString()}`)]
+          [t.parsed_files, `${analyses.length}/${parsedFiles.length}`],
+          [t.events_2, events.length.toLocaleString()],
+          [t.time_range, firstEvent ? `${firstEvent.timestamp} → ${lastEvent.timestamp}` : "--"],
+          [t.providers, providers.size.toLocaleString()],
+          [t.channels_2, channels.size.toLocaleString()],
+          [t.skipped_records, String(analyses.reduce((sum, file) => sum + file.skippedRecords, 0))],
+          [t.record_limit, analyses.some((file) => file.truncated) ? (english ? `${MAX_RECORDS_PER_FILE.toLocaleString()} per file (reached)` : `每文件 ${MAX_RECORDS_PER_FILE.toLocaleString()}（已达到）`) : (english ? `${MAX_RECORDS_PER_FILE.toLocaleString()} per file` : `每文件 ${MAX_RECORDS_PER_FILE.toLocaleString()}`)]
         ]} />}
 
-        {view === "files" && <div className="table-scroll"><table className="data-table"><thead><tr><th>{english ? "File" : "文件"}</th><th>{english ? "Size" : "大小"}</th><th>{english ? "Version" : "版本"}</th><th>{english ? "Chunks" : "块"}</th><th>{english ? "Events" : "事件"}</th><th>{english ? "Status" : "状态"}</th></tr></thead><tbody>{parsedFiles.map((file) => <tr key={file.source}><td>{file.source}</td><td>{formatBytes(file.size)}</td>{isAnalysis(file) ? <><td>{file.version}</td><td>{file.chunkCount}</td><td>{file.parsedRecords}{file.truncated ? "+" : ""}</td><td>{file.dirty ? (english ? "Dirty log" : "未正常关闭") : (english ? "Parsed" : "已解析")}</td></> : <><td>--</td><td>--</td><td>0</td><td title={file.error}>{file.error}</td></>}</tr>)}</tbody></table></div>}
+        {view === "files" && <div className="table-scroll"><table className="data-table"><thead><tr><th>{t.sourceFile}</th><th>{t.fileSize}</th><th>{t.version}</th><th>{t.chunks}</th><th>{t.events_2}</th><th>{t.status}</th></tr></thead><tbody>{parsedFiles.map((file) => <tr key={file.source}><td>{file.source}</td><td>{formatBytes(file.size)}</td>{isAnalysis(file) ? <><td>{file.version}</td><td>{file.chunkCount}</td><td>{file.parsedRecords}{file.truncated ? "+" : ""}</td><td>{file.dirty ? (t.dirty_log) : (t.parsed)}</td></> : <><td>--</td><td>--</td><td>0</td><td title={file.error}>{file.error}</td></>}</tr>)}</tbody></table></div>}
 
         {view === "events" && <>
           <div className="evtx-filter-row">
-            <input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={english ? "Filter provider, message, computer, or event data" : "筛选提供程序、内容、计算机或事件数据"} aria-label={english ? "Filter events" : "筛选事件"} />
+            <input className="text-input" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} placeholder={t.filter_provider_message_computer_or_event_data} aria-label={t.filter_events} />
             <input className="text-input evtx-event-id-filter" value={eventIdFilter} onChange={(event) => setEventIdFilter(event.currentTarget.value.replace(/\D/g, ""))} placeholder="Event ID" aria-label="Event ID" />
-            <ASelect value={levelFilter} onChange={(value) => setLevelFilter(String(value))} options={[{ value: "all", label: english ? "All levels" : "全部级别" }, ...[1, 2, 3, 4, 5].map((level) => ({ value: String(level), label: `${level} · ${["", "Critical", "Error", "Warning", "Information", "Verbose"][level]}` }))]} />
+            <ASelect value={levelFilter} onChange={(value) => setLevelFilter(String(value))} options={[{ value: "all", label: t.all_levels }, ...[1, 2, 3, 4, 5].map((level) => ({ value: String(level), label: `${level} · ${["", "Critical", "Error", "Warning", "Information", "Verbose"][level]}` }))]} />
             <span>{filteredEvents.length.toLocaleString()}/{events.length.toLocaleString()}</span>
           </div>
-          <div className="table-scroll evtx-event-table-scroll"><table className="data-table evtx-event-table"><thead><tr><th>{english ? "Time" : "时间"}</th><th>Event ID</th><th>{english ? "Provider" : "提供程序"}</th><th>{english ? "Level" : "级别"}</th><th>{english ? "Computer" : "计算机"}</th><th>{english ? "Summary" : "摘要"}</th></tr></thead><tbody>{visibleEvents.map((event) => <tr key={event.id} className={selectedEventId === event.id ? "selected-row" : ""} onClick={() => setSelectedEventId(event.id)}><td>{event.timestamp || "--"}</td><td>{event.eventId ?? "--"}</td><td title={event.provider}>{event.provider || "--"}</td><td>{event.levelName}</td><td>{event.computer || "--"}</td><td title={event.message}>{event.message || "--"}</td></tr>)}</tbody></table></div>
-          {filteredEvents.length > PAGE_SIZE && <div className="evtx-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredEvents.length)} / {filteredEvents.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{english ? "Previous" : "上一页"}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{english ? "Next" : "下一页"}</AButton></div></div>}
-          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" disabled={!selectedEvent.xml} onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>{selectedEvent.xml ? (english ? "Save XML" : "保存 XML") : (english ? "Re-analyze for XML" : "需重新分析 XML")}</AButton>} /><InfoTable rows={[[english ? "Time" : "时间", selectedEvent.timestamp || "--"], [english ? "Channel" : "通道", selectedEvent.channel || "--"], [english ? "Computer" : "计算机", selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{english ? "Field" : "字段"}</th><th>{english ? "Value" : "值"}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<details className="evtx-xml-details"><summary>{english ? "Raw XML" : "原始 XML"}</summary>{selectedEvent.xml ? <textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /> : <div className="empty-state">{english ? "Raw XML was not kept in the workspace snapshot. Re-analyze the file to retrieve it." : "工作区快照未保留原始 XML，请重新分析文件后查看。"}</div>}</details></div>}
+          <div className="table-scroll evtx-event-table-scroll"><table className="data-table evtx-event-table"><thead><tr><th>{t.time}</th><th>Event ID</th><th>{t.provider}</th><th>{t.level}</th><th>{t.computer}</th><th>{t.summary}</th></tr></thead><tbody>{visibleEvents.map((event) => <tr key={event.id} className={selectedEventId === event.id ? "selected-row" : ""} onClick={() => setSelectedEventId(event.id)}><td>{event.timestamp || "--"}</td><td>{event.eventId ?? "--"}</td><td title={event.provider}>{event.provider || "--"}</td><td>{event.levelName}</td><td>{event.computer || "--"}</td><td title={event.message}>{event.message || "--"}</td></tr>)}</tbody></table></div>
+          {filteredEvents.length > PAGE_SIZE && <div className="evtx-pagination"><span>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, filteredEvents.length)} / {filteredEvents.length}</span><div className="button-row compact-buttons"><AButton variant="text" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{t.previous}</AButton><AButton variant="text" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{t.next}</AButton></div></div>}
+          {selectedEvent && <div className="evtx-event-detail"><ToolPanelHeader title={`${selectedEvent.provider || "Event"} · ${selectedEvent.eventId ?? "--"}`} subtitle={`#${selectedEvent.recordId} · ${selectedEvent.source}`} actions={<AButton variant="outlined" disabled={!selectedEvent.xml} onClick={() => downloadTextFile(`event-${selectedEvent.recordId || Date.now()}.xml`, selectedEvent.xml, "application/xml;charset=utf-8")}>{selectedEvent.xml ? (t.save_xml) : (t.re_analyze_for_xml)}</AButton>} /><InfoTable rows={[[t.time, selectedEvent.timestamp || "--"], [t.channel, selectedEvent.channel || "--"], [t.computer, selectedEvent.computer || "--"], ["User / Process / Thread", `${selectedEvent.userId || "--"} / ${selectedEvent.processId || "--"} / ${selectedEvent.threadId || "--"}`]]} />{Object.keys(selectedEvent.data).length > 0 && <div className="table-scroll evtx-data-table"><table className="data-table"><thead><tr><th>{t.field}</th><th>{t.httpHeaderValue}</th></tr></thead><tbody>{Object.entries(selectedEvent.data).map(([key, value]) => <tr key={key}><td>{key}</td><td>{value}</td></tr>)}</tbody></table></div>}<details className="evtx-xml-details"><summary>{t.raw_xml}</summary>{selectedEvent.xml ? <textarea className="single-textarea mono-textarea evtx-xml" readOnly value={selectedEvent.xml} aria-label="Event XML" /> : <div className="empty-state">{t.raw_xml_was_not_kept_in_the_workspace_snapshot_re_analyze_the_file_to_retrieve_it}</div>}</details></div>}
         </>}
 
         {view === "sigma" && <div className="evtx-sigma-workspace">
           <input className="hidden-file-input" ref={sigmaInputRef} type="file" accept=".yml,.yaml,text/yaml" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openSigmaFile(file); }} />
-          <ToolPanelHeader title={english ? "Local Sigma matcher" : "本地 Sigma 匹配"} subtitle={sigmaRules.length ? `${sigmaRules.length} ${english ? "rule(s) loaded" : "条规则"}` : undefined} actions={<><AButton variant="outlined" onClick={() => sigmaInputRef.current?.click()}>{english ? "Open rules" : "打开规则"}</AButton><AButton variant="outlined" disabled={!sigmaText.trim() || sigmaLoading} onClick={loadSigma}>{english ? "Validate" : "校验"}</AButton><AButton variant="filled" disabled={!sigmaText.trim() || !events.length || sigmaLoading} onClick={runSigma}>{sigmaLoading ? (english ? "Running..." : "正在运行...") : (english ? "Run rules" : "运行规则")}</AButton></>} />
+          <ToolPanelHeader title={t.local_sigma_matcher} subtitle={sigmaRules.length ? `${sigmaRules.length} ${t.rule_s_loaded}` : undefined} actions={<><AButton variant="outlined" onClick={() => sigmaInputRef.current?.click()}>{t.open_rules}</AButton><AButton variant="outlined" disabled={!sigmaText.trim() || sigmaLoading} onClick={loadSigma}>{t.validate}</AButton><AButton variant="filled" disabled={!sigmaText.trim() || !events.length || sigmaLoading} onClick={runSigma}>{sigmaLoading ? (t.running) : (t.run_rules)}</AButton></>} />
           {sigmaLoading && <ALinearProgress />}
-          <textarea className="single-textarea mono-textarea evtx-sigma-editor" value={sigmaText} onChange={(event) => { sigmaFileRef.current += 1; setSigmaText(event.currentTarget.value); }} placeholder={english ? "Paste one or more Sigma YAML rules" : "粘贴一条或多条 Sigma YAML 规则"} />
+          <textarea className="single-textarea mono-textarea evtx-sigma-editor" value={sigmaText} onChange={(event) => { sigmaFileRef.current += 1; setSigmaText(event.currentTarget.value); }} placeholder={t.paste_one_or_more_sigma_yaml_rules} />
           {sigmaErrors.length > 0 && <div className="empty-state error-state">{sigmaErrors.join("\n")}</div>}
-          {sigmaMatches.length > 0 ? <div className="table-scroll evtx-sigma-matches"><table className="data-table"><thead><tr><th>{english ? "Rule" : "规则"}</th><th>{english ? "Level" : "级别"}</th><th>{english ? "Time" : "时间"}</th><th>Event ID</th><th>{english ? "Provider" : "提供程序"}</th><th>{english ? "Summary" : "摘要"}</th></tr></thead><tbody>{sigmaMatches.slice(0, 10_000).map((match, index) => <tr key={`${match.ruleId}:${match.event.id}:${index}`}><td>{match.ruleTitle}</td><td>{match.level || "--"}</td><td>{match.event.timestamp}</td><td>{match.event.eventId ?? "--"}</td><td>{match.event.provider}</td><td>{match.event.message || "--"}</td></tr>)}</tbody></table></div> : sigmaRules.length > 0 && <div className="empty-state">{english ? "No rule matches." : "没有规则匹配。"}</div>}
+          {sigmaMatches.length > 0 ? <div className="table-scroll evtx-sigma-matches"><table className="data-table"><thead><tr><th>{t.rule}</th><th>{t.level}</th><th>{t.time}</th><th>Event ID</th><th>{t.provider}</th><th>{t.summary}</th></tr></thead><tbody>{sigmaMatches.slice(0, 10_000).map((match, index) => <tr key={`${match.ruleId}:${match.event.id}:${index}`}><td>{match.ruleTitle}</td><td>{match.level || "--"}</td><td>{match.event.timestamp}</td><td>{match.event.eventId ?? "--"}</td><td>{match.event.provider}</td><td>{match.event.message || "--"}</td></tr>)}</tbody></table></div> : sigmaRules.length > 0 && <div className="empty-state">{t.no_rule_matches}</div>}
         </div>}
       </section>}
     </div>

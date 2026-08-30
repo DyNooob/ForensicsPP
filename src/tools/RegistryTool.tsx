@@ -89,11 +89,11 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
     setQuery("");
     setValueFilter("");
     setStorageNotice(next.size > MAX_PERSISTED_REGISTRY_BYTES
-      ? (english ? "This file is available for the current session only; files over 8 MiB are not restored automatically." : "当前文件仅在本次打开期间可用；超过 8 MiB 的文件不会自动恢复。")
+      ? (t.this_file_is_available_for_the_current_session_only_files_over_8_mib_are_not_restored_automatically)
       : "");
     setLoading(false);
     if (next.size > LIMIT) {
-      setError(english ? "Hive exceeds the 256 MiB limit." : "Hive 超过 256 MiB 解析上限。");
+      setError(t.hive_exceeds_the_256_mib_limit);
       return;
     }
     setLoading(true);
@@ -148,9 +148,9 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
 
   return <div className="tool-grid browser-tool-workbench registry-browser-workbench">
     <section className="tool-panel wide-panel browser-source-panel">
-      <div className="panel-heading-row"><PanelTitle title={english ? "Registry Hive browser" : "注册表 Hive 浏览器"} />{hive && <span className="status-pill">{hive.keys.length} {english ? "keys" : "个键"} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
+      <div className="panel-heading-row"><PanelTitle title={t.registry_hive_browser} />{hive && <span className="status-pill">{hive.keys.length} {t.keys} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
       <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
-      {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{english ? "Open a Registry Hive" : "打开 Registry Hive"}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
+      {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{t.open_a_registry_hive}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
       <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="text" disabled={!file && !hive} onClick={clear}>{t.clear}</AButton></div>
       {loading && <ALinearProgress />}
       {error && <div className="empty-state error-state">{error}</div>}
@@ -160,18 +160,18 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
 
     {hive && selected && <>
       <section className="tool-panel browser-tree-panel">
-        <ToolPanelHeader title={english ? "Keys" : "键"} subtitle={query.trim() ? `${searchResults.length}${searchResults.length === 300 ? "+" : ""}` : `${children.length}`} />
-        <ATextField allowClear value={query} placeholder={english ? "Search keys and values" : "搜索键和值"} onChange={(event) => setQuery(event.currentTarget.value)} />
+        <ToolPanelHeader title={t.keys_2} subtitle={query.trim() ? `${searchResults.length}${searchResults.length === 300 ? "+" : ""}` : `${children.length}`} />
+        <ATextField allowClear value={query} placeholder={t.search_keys_and_values} onChange={(event) => setQuery(event.currentTarget.value)} />
         {query.trim() ? <div className="browser-key-list">{searchResults.map((key) => <button type="button" key={key.id} onClick={() => selectKey(key.id)}><span>{key.name}</span><small>{key.path}</small></button>)}</div> : <>
-          <div className="browser-toolbar"><AButton variant="text" disabled={selected.parentId == null} title={english ? "Up" : "上一级"} onClick={() => selected.parentId != null && selectKey(selected.parentId)}><ArrowLeftOutlined /></AButton><code className="browser-path" title={selected.path}>{selected.path}</code></div>
-          <div className="browser-key-list">{children.map((key) => <button type="button" key={key.id} onClick={() => selectKey(key.id)}><span>{key.name}</span><small>{key.values.length} {english ? "values" : "个值"}</small><RightOutlined /></button>)}{!children.length && <div className="empty-state">{english ? "No subkeys" : "没有子键"}</div>}</div>
+          <div className="browser-toolbar"><AButton variant="text" disabled={selected.parentId == null} title={t.up} onClick={() => selected.parentId != null && selectKey(selected.parentId)}><ArrowLeftOutlined /></AButton><code className="browser-path" title={selected.path}>{selected.path}</code></div>
+          <div className="browser-key-list">{children.map((key) => <button type="button" key={key.id} onClick={() => selectKey(key.id)}><span>{key.name}</span><small>{key.values.length} {t.values}</small><RightOutlined /></button>)}{!children.length && <div className="empty-state">{t.no_subkeys}</div>}</div>
         </>}
       </section>
 
       <section className="tool-panel browser-detail-panel">
         <ToolPanelHeader title={selected.name} subtitle={selected.lastWrite} actions={<AButton variant="outlined" onClick={exportCurrentKey}><DownloadOutlined /> JSON</AButton>} />
-        <InfoTable rows={[[english ? "Path" : "路径", selected.path], [english ? "Subkeys" : "子键", String(selected.children.length)], [english ? "Values" : "值", String(selected.values.length)]]} />
-        {selected.values.length ? <><ATextField className="browser-value-filter" allowClear value={valueFilter} placeholder={english ? "Filter current values" : "筛选当前值"} onChange={(event) => setValueFilter(event.currentTarget.value)} /><div className="table-scroll browser-value-table-scroll"><table className="data-table browser-data-table"><thead><tr><th>{english ? "Name" : "名称"}</th><th>{english ? "Type" : "类型"}</th><th>{english ? "Data" : "数据"}</th></tr></thead><tbody>{visibleValues.map((value, index) => <tr key={`${value.name}-${index}`}><td>{value.name}</td><td>{value.type}</td><td className="browser-value-cell">{value.value || "--"}</td></tr>)}</tbody></table></div></> : <div className="empty-state">{english ? "This key has no values" : "当前键没有值"}</div>}
+        <InfoTable rows={[[t.jsonPath, selected.path], [t.subkeys, String(selected.children.length)], [t.values_2, String(selected.values.length)]]} />
+        {selected.values.length ? <><ATextField className="browser-value-filter" allowClear value={valueFilter} placeholder={t.filter_current_values} onChange={(event) => setValueFilter(event.currentTarget.value)} /><div className="table-scroll browser-value-table-scroll"><table className="data-table browser-data-table"><thead><tr><th>{t.name}</th><th>{t.componentType}</th><th>{t.data}</th></tr></thead><tbody>{visibleValues.map((value, index) => <tr key={`${value.name}-${index}`}><td>{value.name}</td><td>{value.type}</td><td className="browser-value-cell">{value.value || "--"}</td></tr>)}</tbody></table></div></> : <div className="empty-state">{t.this_key_has_no_values}</div>}
       </section>
     </>}
   </div>;

@@ -121,7 +121,7 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
     <div className={`tool-grid crypto-simple-workbench ${hasInput || hasResult ? "has-crypto" : "empty-crypto"}`}>
       <section className="tool-panel wide-panel crypto-simple-input-panel">
         <ToolPanelHeader
-          title={english ? "Classical cipher" : "古典密码转换"}
+          title={t.classical_cipher}
           actions={<AButton variant="text" disabled={!hasInput && !hasResult} onClick={clear}>{t.clear}</AButton>}
         />
 
@@ -161,11 +161,11 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
       {hasResult && (
         <section className="tool-panel wide-panel crypto-simple-result-panel">
           <ToolPanelHeader
-            title={english ? "Result" : "转换结果"}
+            title={t.result}
             subtitle={selectedOperation.label}
             actions={<>
               <AButton variant="outlined" onClick={() => void copyText(output)}>{t.copyOutput}</AButton>
-              {operation !== "caesar-all" && <AButton variant="text" onClick={useResultAsInput}>{english ? "Use as input" : "作为新输入"}</AButton>}
+              {operation !== "caesar-all" && <AButton variant="text" onClick={useResultAsInput}>{t.use_as_input}</AButton>}
             </>}
           />
           {operation === "caesar-all" ? (
@@ -177,14 +177,14 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
                     <tr key={row.shift}>
                       <td>{row.shift}</td>
                       <td className="mono-cell">{row.value}</td>
-                      <td><AButton variant="text" onClick={() => { setInput(row.value); setOutput(""); setOperation("caesar"); setShift(row.shift); }}>{english ? "Use" : "使用"}</AButton></td>
+                      <td><AButton variant="text" onClick={() => { setInput(row.value); setOutput(""); setOperation("caesar"); setShift(row.shift); }}>{t.sourceRole}</AButton></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <textarea aria-label={english ? "Cipher result" : "密码结果"} className="single-textarea crypto-simple-output" value={output} readOnly />
+            <textarea aria-label={t.cipher_result} className="single-textarea crypto-simple-output" value={output} readOnly />
           )}
         </section>
       )}

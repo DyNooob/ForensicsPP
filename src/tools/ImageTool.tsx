@@ -741,12 +741,12 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
-      {lightbox && <ImageLightbox src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} onClose={() => setLightbox(null)} />}
+      {lightbox && <ImageLightbox src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} t={t} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
 
-function ImageLightbox({ src, label, name, english, onClose }: { src: string; label: string; name: string; english: boolean; onClose: () => void }) {
+function ImageLightbox({ src, label, name, english, t, onClose }: { src: string; label: string; name: string; english: boolean; t: (typeof copy)["zh"]; onClose: () => void }) {
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -758,8 +758,8 @@ function ImageLightbox({ src, label, name, english, onClose }: { src: string; la
         <div className="image-lightbox-head">
           <strong>{label}</strong>
           <div className="image-lightbox-actions">
-            <AButton variant="outlined" onClick={() => downloadChannelImage(name, label, src)}>{english ? "Download" : "下载"}</AButton>
-            <AButton variant="text" onClick={onClose}>{english ? "Close" : "关闭"}</AButton>
+            <AButton variant="outlined" onClick={() => downloadChannelImage(name, label, src)}>{t.download}</AButton>
+            <AButton variant="text" onClick={onClose}>{t.close}</AButton>
           </div>
         </div>
         <img className="image-lightbox-img" src={src} alt={label} />
