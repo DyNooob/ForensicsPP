@@ -41,6 +41,7 @@ import { currentAnalysisResult, subscribeAnalysisResult } from "./features/analy
 import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/result";
 import { useStaleVersion } from "./app/useStaleVersion";
 import { useAppearance } from "./app/useAppearance";
+import { useShellLayout } from "./app/useShellLayout";
 import { useServiceWorker } from "./app/useServiceWorker";
 import { useLegalConsent } from "./app/useLegalConsent";
 import { useCacheClear } from "./app/useCacheClear";
@@ -60,7 +61,7 @@ export function App() {
   const [routeTool, setRouteTool] = React.useState<ToolId | null>(() => toolIdFromHash());
   const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
   const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
-  const [query, setQuery] = useStoredState("app.query", "", isStringValue);
+  const { query, setQuery, sidebarCollapsed, setSidebarCollapsed, isNarrowShell, detailsExpanded, setDetailsExpanded } = useShellLayout();
   const { themeMode, setThemeMode, resolvedThemeColor, appliedTheme, displayThemeColor, applyThemeColor, resetThemeAppearance } = useAppearance();
   const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -81,12 +82,6 @@ export function App() {
 
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false, isBooleanValue);
-  const [isNarrowShell, setIsNarrowShell] = React.useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(max-width: 900px)").matches;
-  });
-  const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const t = copy[lang];
   const toolTitle = React.useCallback((tool: ToolDefinition) => getToolTitle(tool, lang), [lang]);
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
@@ -375,17 +370,6 @@ export function App() {
   React.useEffect(() => {
     setDetailsExpanded(false);
   }, [activeTool]);
-
-  React.useEffect(() => {
-    const media = window.matchMedia("(max-width: 900px)");
-    const handleChange = () => {
-      setIsNarrowShell(media.matches);
-      if (media.matches) setSidebarCollapsed(true);
-    };
-    handleChange();
-    media.addEventListener("change", handleChange);
-    return () => media.removeEventListener("change", handleChange);
-  }, []);
 
   React.useEffect(() => {
     if (!toolLinkMessage) return undefined;
