@@ -23,6 +23,9 @@ import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ALinearProgress, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import { analyzeIocs, iocRecordsToStixBundle } from "../features/ioc/analyzer";
+import { buildIocEnvelope } from "../features/ioc/envelope";
+import { useStaleRunGuard } from "../core/runtime";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { copy } from "../i18n";
 import type { IocAnalysis, IocRecord } from "../models";
 import { downloadTextFile, formatBytes } from "../utils/files";
@@ -83,6 +86,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const fileReadRef = React.useRef(0);
+  const guard = useStaleRunGuard(active);
   const hasInput = analyzedText.trim().length > 0;
   const [analysis, setAnalysis] = React.useState<IocAnalysis>(() => analyzeIocs("", "pasted text"));
   const types = React.useMemo(() => Object.keys(analysis.grouped).sort(), [analysis.grouped]);
@@ -184,6 +188,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
 
   const clear = () => {
     fileReadRef.current += 1;
+    guard.next();
     cancelAnalysis();
     setLoading(false);
     setText("");
@@ -205,6 +210,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
       return;
     }
     cancelAnalysis();
+    const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current = controller;
     const nextText = text;
@@ -218,11 +224,14 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         signal: controller.signal,
         timeoutMs: 60_000
       });
-      if (!active || controller.signal.aborted) return;
+      if (!active || controller.signal.aborted || !guard.isCurrent(requestId)) return;
       setAnalyzedText(nextText);
       setAnalyzedSource(nextSource);
-      setAnalysis(result);
-      resetReview();
+      guard.commit(requestId, () => {
+        setAnalysis(result);
+        publishAnalysisResult("ioc", buildIocEnvelope(result, { sourceName: nextSource, sourceSize: new TextEncoder().encode(nextText).length }));
+        resetReview();
+      });
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {

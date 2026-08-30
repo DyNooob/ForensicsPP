@@ -25,6 +25,9 @@ import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
+import { buildImageEnvelope } from "../features/image/envelope";
+import { useStaleRunGuard } from "../core/runtime";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { downloadBlob, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
@@ -167,6 +170,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const analysisIdRef = React.useRef(0);
   const abortRef = React.useRef<AbortController | null>(null);
+  const guard = useStaleRunGuard(active);
   const channelTimerRef = React.useRef<number | null>(null);
   const restoreStartedRef = React.useRef(false);
   const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
@@ -235,6 +239,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     }
     const analysisId = analysisIdRef.current + 1;
     analysisIdRef.current = analysisId;
+    const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
@@ -277,7 +282,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       const { analysis, exif } = workerResult;
       sourceRef.current = { file, bytes, image, exif, rawDataUrl, format: detectedFormat };
       if (analysisId !== analysisIdRef.current) return;
-      setImageInfo({
+      const nextImageInfo: ImageInfo = {
         name: file.name,
         size: file.size,
         type: `${file.type || "unknown"} / ${detectedFormat}`,
@@ -303,6 +308,10 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         repairPreviewItems: [],
         autoRevealPreviews: [],
         channelDataUrls: emptyImageChannels(placeholderDataUrl)
+      };
+      guard.commit(requestId, () => {
+        setImageInfo(nextImageInfo);
+        publishAnalysisResult("image", buildImageEnvelope(nextImageInfo));
       });
       if (persist) {
         if (file.size <= MAX_PERSISTED_IMAGE_BYTES) {
@@ -530,6 +539,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   };
   const clearImage = () => {
     restoreStartedRef.current = true;
+    guard.next();
     setRestoredSource(null);
     workspace.clear();
     analysisIdRef.current += 1;

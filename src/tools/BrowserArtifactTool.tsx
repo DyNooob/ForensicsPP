@@ -29,6 +29,9 @@ import {
   type BrowserArtifactInput,
   type BrowserArtifactRecord
 } from "../features/browserArtifacts/analyzer";
+import { buildBrowserArtifactEnvelope } from "../features/browserArtifacts/envelope";
+import { useStaleRunGuard } from "../core/runtime";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
@@ -68,6 +71,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const guard = useStaleRunGuard(active);
   const directoryProps = { webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & Record<string, string>;
   const workspace = useToolWorkspace<BrowserArtifactAnalysis>({
     id: "browser-artifacts",
@@ -126,6 +130,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
 
   const analyze = async () => {
     if (!active || !selectedFiles.length || loading) return;
+    const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -157,9 +162,12 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         timeoutMs: 120_000
       });
       if (abortRef.current !== controller || controller.signal.aborted) return;
-      setAnalysis(result);
-      workspace.save(persistableBrowserArtifactAnalysis(result));
-      if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
+      guard.commit(requestId, () => {
+        setAnalysis(result);
+        workspace.save(persistableBrowserArtifactAnalysis(result));
+        publishAnalysisResult("browserartifacts", buildBrowserArtifactEnvelope(result));
+        if (!result.records.length) setError(english ? "Files opened, but no supported browser records were found." : "文件已打开，但未找到支持的浏览器记录。" );
+      });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       if (abortRef.current === controller && active) {
@@ -183,6 +191,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   };
 
   const clear = () => {
+    guard.next();
     workspace.clear();
     cancel();
     setSelectedFiles([]);

@@ -27,7 +27,10 @@ import {
   emailAttachmentPreferredExtension,
   emailSummaryValue,
 } from "../features/email/workbench";
+import { buildEmailEnvelope } from "../features/email/envelope";
 import { isMsgFile } from "../features/email/msg";
+import { useStaleRunGuard } from "../core/runtime";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { copy } from "../i18n";
 import type { EmailAnalysis } from "../models";
 import { downloadBlob, downloadTextFile, formatBytes, limitReportText } from "../utils/files";
@@ -122,6 +125,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   const abortRef = React.useRef<AbortController | null>(null);
   const attachmentHashAbortRef = React.useRef<AbortController | null>(null);
   const attachmentHashRequestRef = React.useRef(0);
+  const guard = useStaleRunGuard(active);
   const english = t.waiting === "Waiting";
   const resetAttachmentHashes = React.useCallback(() => {
     attachmentHashAbortRef.current?.abort();
@@ -167,6 +171,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
       return;
     }
     workspace.clear();
+    const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -175,9 +180,12 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     try {
       const next = await parseInWorker({ format: "eml", source }, controller.signal);
       if (abortRef.current !== controller || controller.signal.aborted) return;
-      setParsed(next.analysis);
-      setError("");
-      workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: next.analysis }));
+      guard.commit(requestId, () => {
+        setParsed(next.analysis);
+        setError("");
+        workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: next.analysis }));
+        publishAnalysisResult("email", buildEmailEnvelope(next.analysis, { sourceName: "pasted email", sourceSize: new TextEncoder().encode(source).length, format: "eml" }));
+      });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       if (abortRef.current === controller && active) {
@@ -195,6 +203,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   const handleFile = async (file: File | undefined) => {
     if (!file || !active) return;
     workspace.clear();
+    const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
@@ -220,21 +229,27 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
         const workerBytes = bytes.slice();
         const result = await parseInWorker({ format: "msg", bytes: workerBytes.buffer }, controller.signal, [workerBytes.buffer]);
         if (abortRef.current !== controller || controller.signal.aborted) return;
-        setInput(result.source);
-        setSourceBytes(bytes);
-        setSourceFormat("msg");
-        setParsed(result.analysis);
-        setError("");
-        workspace.save(persistableEmailWorkspace({ input: result.source, sourceFormat: "msg", sourceBytes: bytes, parsed: result.analysis }));
+        guard.commit(requestId, () => {
+          setInput(result.source);
+          setSourceBytes(bytes);
+          setSourceFormat("msg");
+          setParsed(result.analysis);
+          setError("");
+          workspace.save(persistableEmailWorkspace({ input: result.source, sourceFormat: "msg", sourceBytes: bytes, parsed: result.analysis }));
+          publishAnalysisResult("email", buildEmailEnvelope(result.analysis, { sourceName: file.name, sourceSize: file.size, format: "msg" }));
+        });
       } else {
         const source = new TextDecoder().decode(bytes);
         const result = await parseInWorker({ format: "eml", source }, controller.signal);
         if (abortRef.current !== controller || controller.signal.aborted) return;
-        setInput(source);
-        setSourceBytes(null);
-        setSourceFormat("eml");
-        setParsed(result.analysis);
-        workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: result.analysis }));
+        guard.commit(requestId, () => {
+          setInput(source);
+          setSourceBytes(null);
+          setSourceFormat("eml");
+          setParsed(result.analysis);
+          workspace.save(persistableEmailWorkspace({ input: source, sourceFormat: "eml", sourceBytes: null, parsed: result.analysis }));
+          publishAnalysisResult("email", buildEmailEnvelope(result.analysis, { sourceName: file.name, sourceSize: file.size, format: "eml" }));
+        });
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -252,6 +267,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   };
 
   const clearEmail = () => {
+    guard.next();
     workspace.clear();
     abortRef.current?.abort();
     abortRef.current = null;
