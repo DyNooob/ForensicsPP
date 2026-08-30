@@ -109,6 +109,24 @@ function sanitizeEmailHtml(value: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${baseStyle}</style></head><body>${document.body.innerHTML}</body></html>`;
 }
 
+const EMAIL_SAMPLE = `Received: from mail.spam.example (mail.spam.example [203.0.113.9])
+\tby mx.victim.example with ESMTPS id ABC123
+\tfor <user@victim.example>; Mon, 14 Mar 2026 08:21:11 +0000
+From: "IT Support" <it-support@spam.example>
+To: user@victim.example
+Subject: Account verification required
+Date: Mon, 14 Mar 2026 08:21:11 +0000
+Message-ID: <20260314082111@spam.example>
+Authentication-Results: mx.victim.example; spf=fail (sender IP 203.0.113.9 not authorized) smtp.mailfrom=spam.example; dkim=fail (signature did not verify) header.d=spam.example; dmarc=fail (policy=reject)
+
+Dear user,
+
+Please verify your account by visiting:
+http://203.0.113.9/verify?token=abc123
+
+Attachment: invoice.js
+`;
+
 export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const [input, setInput] = React.useState("");
   const [sourceFormat, setSourceFormat] = React.useState<"eml" | "msg">("eml");
@@ -410,6 +428,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="outlined" disabled={!input.trim() || loading || sourceFormat === "msg"} onClick={() => void parseSource()}>{english ? "Parse" : "解析"}</AButton>
+          <AButton variant="text" onClick={() => { setInput(EMAIL_SAMPLE); void parseSource(EMAIL_SAMPLE); }}>{english ? "Load sample" : "载入示例"}</AButton>
           <AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>

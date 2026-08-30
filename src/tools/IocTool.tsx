@@ -68,6 +68,13 @@ function serializableRecords(records: IocRecord[]) {
   }));
 }
 
+const IOC_SAMPLE = `2026-03-14 08:21:11 连接 185.220.101.47:4444 尝试登录
+恶意域名 callback.evil-c2.example 解析到 185.220.101.47
+下载 http://185.220.101.47/payload.exe 后写入 C:\\\\Temp\\\\svchost.bin
+样本 MD5 44d8869d6b6a0a33d9c6b8d2e2f0a1b2 SHA256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+可疑发件人 attacker@spam.example 附件 invoice.js
+`;
+
 export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {
   const english = t.waiting === "Waiting";
   const [text, setText] = useStoredState("ioc.text.v2", "");
@@ -283,6 +290,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         </div>
         <div className="ioc-simple-source-actions">
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadIocText}</AButton>
+          <AButton variant="text" onClick={() => handleText(IOC_SAMPLE)}>{english ? "Load sample" : "载入示例"}</AButton>
           <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={() => void analyze()}>{analyzing ? (english ? "Extracting..." : "正在提取...") : (english ? "Extract indicators" : "提取 IOC")}</AButton>
         </div>
         <textarea className="single-textarea ioc-simple-input" aria-label={english ? "Text to scan for IOCs" : "需要提取 IOC 的文本"} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
