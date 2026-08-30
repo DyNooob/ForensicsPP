@@ -346,6 +346,9 @@ export type CaseNote = {
   contentSha256?: string;
   evidenceFiles?: CaseEvidenceFile[];
   timelineEvents?: CaseTimelineEvent[];
+  findings?: import("./features/analysis/result").AnalysisFinding[];
+  indicators?: import("./features/analysis/result").AnalysisIndicator[];
+  artifacts?: import("./features/analysis/result").AnalysisArtifact[];
   createdAt: string;
 };
 

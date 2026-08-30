@@ -21,6 +21,7 @@
 
 import type { CaseEvidenceFile, CaseTimelineEvent } from "../../models";
 import type { ToolId } from "../../config/app";
+import type { Translation } from "../../i18n";
 
 export type AnalysisFinding = {
   id?: string;
@@ -102,23 +103,91 @@ export type AnalysisEnvelope<T = unknown> = {
   data: T;
 };
 
-export function analysisResultText(result: AnalysisEnvelope) {
+export function analysisResultText(result: AnalysisEnvelope, t?: Translation) {
+  const L = {
+    findings: t?.findingsSection ?? "Findings",
+    artifacts: t?.artifactsSection ?? "Artifacts",
+    limitations: t?.limitationsSection ?? "Limitations"
+  };
   const lines = [result.summary.title, result.summary.text];
   if (result.summary.metrics?.length) {
     lines.push("", ...result.summary.metrics.map((metric) => `${metric.label}: ${metric.value}`));
   }
   if (result.findings.length) {
-    lines.push("", "Findings:", ...result.findings.map((finding) => `[${finding.level}] ${finding.title}: ${finding.detail}`));
+    lines.push("", `${L.findings}:`, ...result.findings.map((finding) => `[${finding.level}] ${finding.title}: ${finding.detail}`));
   }
   if (result.artifacts.length) {
-    lines.push("", "Artifacts:", ...result.artifacts.slice(0, 100).map((artifact) => {
+    lines.push("", `${L.artifacts}:`, ...result.artifacts.slice(0, 100).map((artifact) => {
       const offset = artifact.offset == null ? "" : ` @ 0x${artifact.offset.toString(16).toUpperCase()}`;
       const size = artifact.size == null ? "" : ` (${artifact.size} bytes)`;
       return `${artifact.label}${offset}${size}`;
     }));
   }
   if (result.limitations.length) {
-    lines.push("", "Limitations:", ...result.limitations.map((item) => `${item.code}: ${item.detail}`));
+    lines.push("", `${L.limitations}:`, ...result.limitations.map((item) => `${item.code}: ${item.detail}`));
   }
   return lines.filter((line, index) => line || index > 0).join("\n").trim();
+}
+
+function markdownEscapeCell(value: unknown) {
+  return String(value ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function findingLevelLabel(level: AnalysisFinding["level"], t: Translation) {
+  if (level === "critical") return t.levelCritical;
+  if (level === "error") return t.levelError;
+  if (level === "warn") return t.levelWarn;
+  return t.levelInfo;
+}
+
+/**
+ * Render an AnalysisEnvelope as report markdown with its findings/artifacts as
+ * tables (instead of a raw ```text block), so structured results are visibly
+ * reviewable in the exported report.
+ */
+export function envelopeReportMarkdown(result: AnalysisEnvelope, t: Translation) {
+  const sections: string[] = [
+    `## ${result.summary.title}`,
+    "",
+    result.summary.text
+  ];
+  if (result.summary.metrics?.length) {
+    sections.push(
+      "",
+      "| Metric | Value |",
+      "| --- | --- |",
+      ...result.summary.metrics.map((metric) => `| ${markdownEscapeCell(metric.label)} | ${markdownEscapeCell(metric.value)} |`)
+    );
+  }
+  if (result.findings.length) {
+    sections.push(
+      "",
+      `### ${t.findingsSection}`,
+      "",
+      "| Level | Code | Finding | Detail |",
+      "| --- | --- | --- | --- |",
+      ...result.findings.map((finding) => `| ${markdownEscapeCell(findingLevelLabel(finding.level, t))} | ${markdownEscapeCell(finding.code ?? finding.category ?? "")} | ${markdownEscapeCell(finding.title)} | ${markdownEscapeCell(finding.detail)} |`)
+    );
+  }
+  if (result.artifacts.length) {
+    sections.push(
+      "",
+      `### ${t.artifactsSection}`,
+      "",
+      "| Label | Kind | Offset | Size |",
+      "| --- | --- | --- | --- |",
+      ...result.artifacts.slice(0, 200).map((artifact) => `| ${markdownEscapeCell(artifact.label)} | ${markdownEscapeCell(artifact.kind)} | ${artifact.offset == null ? "--" : `0x${artifact.offset.toString(16).toUpperCase()}`} | ${artifact.size == null ? "--" : `${artifact.size}`} |`)
+    );
+  }
+  if (result.limitations.length) {
+    sections.push(
+      "",
+      `### ${t.limitationsSection}`,
+      "",
+      "| Code | Detail |",
+      "| --- | --- |",
+      ...result.limitations.map((item) => `| ${markdownEscapeCell(item.code)} | ${markdownEscapeCell(item.detail)} |`)
+    );
+  }
+  return sections.join("\n");
 }

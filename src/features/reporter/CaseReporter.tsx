@@ -323,8 +323,35 @@ export function buildReportMarkdown(notes: CaseNote[], t: Translation, meta?: Ca
       "",
       note.markdown || ["```text", note.content, "```"].join("\n"),
       ""
-    ])
+    ]),
+    "",
+    ...reportIndicatorsAppendix(notes, t)
   ].join("\n");
+}
+
+function reportIndicatorsAppendix(notes: CaseNote[], t: Translation): string[] {
+  const seen = new Set<string>();
+  const rows = notes
+    .flatMap((note) => note.indicators ?? [])
+    .filter((indicator) => {
+      const key = `${indicator.type}|${indicator.normalized ?? indicator.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.type.localeCompare(b.type) || a.value.localeCompare(b.value));
+  return [
+    `## ${t.indicatorsSection}`,
+    "",
+    rows.length
+      ? [
+          "| Type | Indicator | Source |",
+          "| --- | --- | --- |",
+          ...rows.map((indicator) => `| ${markdownEscapeCell(indicator.type)} | ${markdownEscapeCell(indicator.value)} | ${markdownEscapeCell(indicator.source ?? "--")} |`)
+        ].join("\n")
+      : `_${t.reportNoIndicators}_`,
+    ""
+  ];
 }
 
 function reportHtmlEscape(value: unknown) {

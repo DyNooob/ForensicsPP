@@ -39,7 +39,7 @@ import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./mo
 import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFiles } from "./features/reporter/evidence";
 import { rememberedTimelineEvents } from "./features/reporter/timeline";
 import { currentAnalysisResult } from "./features/analysis/resultStore";
-import { analysisResultText } from "./features/analysis/result";
+import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/result";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
 const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
@@ -226,13 +226,16 @@ export function App() {
         content,
         summary: structuredResult?.summary.text || content.replace(/\s+/g, " ").slice(0, 420),
         markdown: structuredResult
-          ? [`## ${structuredResult.summary.title}`, "", structuredResult.summary.text, "", "```text", content, "```"].join("\n")
+          ? envelopeReportMarkdown(structuredResult, t)
           : ["```text", content, "```"].join("\n"),
         description: t[active.desc],
         route: `#${activeTool}`,
         sourceUrl: window.location.href,
         ...(evidenceFiles.length ? { evidenceFiles } : {}),
         ...(timelineEvents.length ? { timelineEvents } : {}),
+        ...(structuredResult?.findings.length ? { findings: structuredResult.findings } : {}),
+        ...(structuredResult?.indicators.length ? { indicators: structuredResult.indicators } : {}),
+        ...(structuredResult?.artifacts.length ? { artifacts: structuredResult.artifacts } : {}),
         createdAt
       };
       setCaseNotes((current) => [note, ...current].slice(0, 40));

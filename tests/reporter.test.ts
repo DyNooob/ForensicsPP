@@ -27,6 +27,8 @@ import { normalizeCaseBundle } from "../src/features/reporter/importer";
 import { verifyEvidenceRegister } from "../src/features/reporter/verification";
 import { copy } from "../src/i18n";
 import { evidenceFileKey, fingerprintEvidenceFiles } from "../src/features/reporter/evidence";
+import type { CaseNote } from "../src/models";
+import { envelopeReportMarkdown, type AnalysisEnvelope } from "../src/features/analysis/result";
 
 describe("report evidence registration", () => {
   it("does not promote ordinary evidence text to a review item", () => {
@@ -196,5 +198,63 @@ describe("report evidence registration", () => {
     expect(result.mismatchCount).toBe(1);
     expect(result.unregisteredCount).toBe(1);
     expect(result.rows.map((row) => row.status)).toEqual(["match", "mismatch"]);
+  });
+});
+
+describe("report structured findings and IOC appendix (D)", () => {
+  const t = copy.zh;
+
+  const sampleEnvelope: AnalysisEnvelope = {
+    schemaVersion: "1",
+    id: "email/run1",
+    analyzer: { id: "email", version: "1.0.0" },
+    source: [],
+    run: { startedAt: "2026-07-14T10:00:00.000Z", completedAt: "2026-07-14T10:00:01.000Z" },
+    summary: { title: "邮件分析", text: "SPF/ DKIM 校验结果" },
+    findings: [{ level: "warn", code: "email.spf_fail", title: "SPF 校验失败", detail: "domain example.com" }],
+    indicators: [{ type: "domain", value: "evil.example", source: "Received" }],
+    artifacts: [{ id: "a1", label: "attachment", kind: "email-attachment", offset: 16, size: 2048 }],
+    timeline: [],
+    limitations: [{ code: "email.truncated", detail: "邮件被截断" }],
+    data: {}
+  };
+
+  it("envelopeReportMarkdown renders findings/artifacts/limitations as tables", () => {
+    const md = envelopeReportMarkdown(sampleEnvelope, t);
+    expect(md).toContain("| Level | Code | Finding | Detail |");
+    expect(md).toContain("email.spf_fail");
+    expect(md).toContain("| Label | Kind | Offset | Size |");
+    expect(md).toContain("0x10");
+    expect(md).toContain("| Code | Detail |");
+    expect(md).toContain("email.truncated");
+  });
+
+  it("report appends an IOC section from note.indicators and passes through the envelope markdown", () => {
+    const note: CaseNote = {
+      id: "n1",
+      tool: "邮件解析",
+      title: "邮件分析",
+      content: "fallback text",
+      createdAt: "2026-07-14T10:00:00.000Z",
+      markdown: envelopeReportMarkdown(sampleEnvelope, t),
+      indicators: sampleEnvelope.indicators,
+      findings: sampleEnvelope.findings
+    };
+    const md = buildReportMarkdown([note], t);
+    expect(md).toContain("| Level | Code | Finding | Detail |");
+    expect(md).toContain(`## ${t.indicatorsSection}`);
+    expect(md).toContain("evil.example");
+  });
+
+  it("deduplicates indicators across notes by type + value", () => {
+    const base = { id: "x", tool: "t", title: "s", content: "c", createdAt: "2026-07-14T10:00:00.000Z" } as const;
+    const notes: CaseNote[] = [
+      { ...base, id: "a", indicators: [{ type: "ipv4", value: "1.2.3.4" }] },
+      { ...base, id: "b", indicators: [{ type: "ipv4", value: "1.2.3.4" }] },
+      { ...base, id: "c", indicators: [{ type: "ipv4", value: "5.6.7.8" }] }
+    ];
+    const md = buildReportMarkdown(notes, t);
+    expect(md.split("1.2.3.4").length - 1).toBe(1);
+    expect(md.split("5.6.7.8").length - 1).toBe(1);
   });
 });
