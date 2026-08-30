@@ -173,6 +173,22 @@ export function Topbar({
       width={420}
       styles={{ body: { whiteSpace: "pre-wrap", lineHeight: 1.7 } }}
     >
+      {active.tier && (
+        <div className="help-meta">
+          <span className="help-meta-label">{t.tierLabel}</span>
+          <span className={`tier-chip tier-${active.tier}`}>
+            {active.tier === "workbench" ? t.tierWorkbench : active.tier === "utility" ? t.tierUtility : t.tierFeatured}
+          </span>
+        </div>
+      )}
+      {active.maturity && (
+        <div className="help-meta">
+          <span className="help-meta-label">{t.maturityLabel}</span>
+          <span className={`maturity-chip maturity-${active.maturity}`}>
+            {active.maturity === "validated" ? t.maturityValidated : active.maturity === "stable" ? t.maturityStable : active.maturity === "triage" ? t.maturityTriage : t.maturityExperimental}
+          </span>
+        </div>
+      )}
       {active.help?.[lang]}
     </Drawer>
     </>

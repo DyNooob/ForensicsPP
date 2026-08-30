@@ -1,0 +1,30 @@
+{
+  "sqliteDeletedRecord": {
+    "fixture": "sqlite-deleted-record.sqlite",
+    "parser": "inspectSqliteDatabase",
+    "expected": {
+      "recoveredRecordsAtLeast": 1,
+      "deletedUsernameRecovered": "bob",
+      "envelopeFindingCategory": "sqlite-recovery",
+      "limitationCode": "SQLITE_RECOVERY_HEURISTIC"
+    }
+  },
+  "binaryCarving": {
+    "fixture": "embedded-signatures.bin",
+    "parser": "scanCarvableObjects",
+    "expected": [
+      {
+        "label": "PNG",
+        "offset": 64
+      },
+      {
+        "label": "ZIP",
+        "offset": 768
+      },
+      {
+        "label": "ELF",
+        "offset": 2048
+      }
+    ]
+  }
+}

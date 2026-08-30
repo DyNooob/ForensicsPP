@@ -1798,6 +1798,74 @@ details.tool-panel:not([open]) > :not(summary) {
   font-weight: 800;
 }
 
+.tier-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+  border: 1px solid color-mix(in srgb, var(--app-line) 80%, transparent);
+  background: color-mix(in srgb, var(--app-surface) 60%, transparent);
+}
+.tier-badge.tier-workbench {
+  color: var(--app-accent, #245F73);
+  border-color: color-mix(in srgb, var(--app-accent, #245F73) 40%, transparent);
+}
+.tier-badge.tier-utility {
+  color: var(--app-muted);
+}
+.tier-badge.tier-featured {
+  color: var(--app-muted);
+  border-style: dashed;
+}
+
+.help-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.help-meta-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--app-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tier-chip,
+.maturity-chip {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid color-mix(in srgb, var(--app-line) 70%, transparent);
+}
+.maturity-chip.maturity-validated {
+  color: #1E6B4B;
+  border-color: color-mix(in srgb, #1E6B4B 45%, transparent);
+  background: color-mix(in srgb, #1E6B4B 12%, transparent);
+}
+.maturity-chip.maturity-stable {
+  color: #1769AA;
+  border-color: color-mix(in srgb, #1769AA 45%, transparent);
+  background: color-mix(in srgb, #1769AA 12%, transparent);
+}
+.maturity-chip.maturity-triage {
+  color: #8A5A00;
+  border-color: color-mix(in srgb, #8A5A00 45%, transparent);
+  background: color-mix(in srgb, #8A5A00 12%, transparent);
+}
+.maturity-chip.maturity-experimental {
+  color: #8F4A51;
+  border-color: color-mix(in srgb, #8F4A51 45%, transparent);
+  background: color-mix(in srgb, #8F4A51 12%, transparent);
+}
+
 .home-catalog,
 .home-directory {
   display: grid;

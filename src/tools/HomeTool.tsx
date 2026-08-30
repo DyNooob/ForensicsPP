@@ -47,8 +47,10 @@ const defaultQuickToolIds: ToolId[] = ["firmware", "sqlite", "pcap", "android"];
 export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps) {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<"all" | "featured" | "analysis" | "transform" | "network">("all");
+  const [tier, setTier] = React.useState<"all" | "workbench" | "utility" | "featured">("all");
   const directoryRef = React.useRef<HTMLElement | null>(null);
   const categories = ["all", "featured", "analysis", "transform", "network"] as const;
+  const tiers = ["all", "workbench", "utility", "featured"] as const;
   const searchableTools = visibleTools.filter((tool) => tool.id !== "home");
   const titleFor = (tool: (typeof visibleTools)[number]) => getToolTitle(tool, lang, t);
 
@@ -64,6 +66,7 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
   const filteredDirectoryTools = searchableTools.filter((tool) => {
     const normalizedQuery = query.trim().toLowerCase();
     if (category !== "all" && tool.category !== category) return false;
+    if (tier !== "all" && (tool.tier ?? "featured") !== tier) return false;
     if (!normalizedQuery) return true;
     return [titleFor(tool), t[tool.desc], t[tool.category], ...(tool.capabilities ?? []), ...(tool.accepts ?? [])].join(" ").toLowerCase().includes(normalizedQuery);
   });
@@ -106,6 +109,7 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
               <button className="directory-item home-quick-item" type="button" key={tool.id} onClick={() => setActiveTool(tool.id)}>
                 <strong>{titleFor(tool)}</strong>
                 <span className="directory-meta">{t[tool.category]}</span>
+                {tool.tier && <span className={`tier-badge tier-${tool.tier}`}>{tool.tier === "workbench" ? t.tierWorkbench : tool.tier === "utility" ? t.tierUtility : t.tierFeatured}</span>}
                 <em>{t[tool.desc]}</em>
               </button>
             ))}
@@ -132,6 +136,11 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
           <ASegmentedGroup className="home-category-tabs" value={category} selects="single" aria-label={t.category}>
             {categories.map((item) => (
               <ASegmentedButton key={item} value={item} onClick={() => setCategory(item)}>{categoryLabel(item)}</ASegmentedButton>
+            ))}
+          </ASegmentedGroup>
+          <ASegmentedGroup className="home-tier-tabs" value={tier} selects="single" aria-label={t.tierLabel}>
+            {tiers.map((item) => (
+              <ASegmentedButton key={item} value={item} onClick={() => setTier(item)}>{item === "all" ? (lang === "zh" ? "全部" : "All") : item === "workbench" ? t.tierWorkbench : item === "utility" ? t.tierUtility : t.tierFeatured}</ASegmentedButton>
             ))}
           </ASegmentedGroup>
         </div>

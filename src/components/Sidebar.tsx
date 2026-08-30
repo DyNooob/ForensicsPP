@@ -27,6 +27,12 @@ import type { Translation } from "../i18n";
 
 export type ToolGroup = { category: ToolCategory; items: ToolDefinition[] };
 
+function tierLabel(tool: ToolDefinition, t: Translation) {
+  if (!tool.tier) return t[tool.category];
+  const tier = tool.tier === "workbench" ? t.tierWorkbench : tool.tier === "utility" ? t.tierUtility : t.tierFeatured;
+  return `${t[tool.category]} · ${tier}`;
+}
+
 type SidebarProps = {
   t: Translation;
   query: string;
@@ -96,7 +102,7 @@ export function Sidebar({
                     key={`favorite-${tool.id}`}
                     rounded
                     active={tool.id === activeTool}
-                    description={t[tool.category]}
+                    description={tierLabel(tool, t)}
                     description-line={1}
                     title={`${toolTitle(tool)} - ${t[tool.desc]}`}
                     aria-current={tool.id === activeTool ? "page" : undefined}
@@ -116,7 +122,7 @@ export function Sidebar({
                     key={tool.id}
                     rounded
                     active={tool.id === activeTool}
-                    description={t[tool.category]}
+                    description={tierLabel(tool, t)}
                     description-line={1}
                     title={`${t[tool.name]} - ${t[tool.desc]}`}
                     aria-current={tool.id === activeTool ? "page" : undefined}
