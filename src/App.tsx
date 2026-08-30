@@ -24,13 +24,10 @@ import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
 import { ToolHost } from "./components/ToolHost";
-import { resolveRetainedTools } from "./core/runtime";
 import { Sidebar } from "./components/Sidebar";
-import type { ToolGroup } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
-import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
-import type { ToolCategory, ToolDefinition, ToolId } from "./config/app";
+import { getToolTitle as resolveToolTitle, legalVersion, toolTitleOverrides, tools, visibleTools, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
 import { compactReportText, defaultCaseReportMeta, isBooleanValue, isCaseNotesValue, isCaseReportMetaValue, isLangValue, isStringValue, isToolIdArrayValue, isToolIdValue } from "./utils/appGuards";
@@ -42,6 +39,7 @@ import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/
 import { useStaleVersion } from "./app/useStaleVersion";
 import { useAppearance } from "./app/useAppearance";
 import { useShellLayout } from "./app/useShellLayout";
+import { useToolNavigation } from "./app/useToolNavigation";
 import { useServiceWorker } from "./app/useServiceWorker";
 import { useLegalConsent } from "./app/useLegalConsent";
 import { useCacheClear } from "./app/useCacheClear";
@@ -57,11 +55,8 @@ function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
 
 export function App() {
   const [lang, setLang] = useStoredState<Lang>("app.lang", "zh", isLangValue);
-  const [storedActiveTool, setStoredActiveTool] = useStoredState<ToolId>("app.activeTool", "home", isToolIdValue);
-  const [routeTool, setRouteTool] = React.useState<ToolId | null>(() => toolIdFromHash());
-  const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
-  const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
   const { query, setQuery, sidebarCollapsed, setSidebarCollapsed, isNarrowShell, detailsExpanded, setDetailsExpanded } = useShellLayout();
+  const { activeTool, active, toolTitle, recentTools, retainedTools, pendingToolClose, setPendingToolClose, setActiveTool, setToolDirty, closeMountedTool, closeAllMountedTools, closeToolsNow, toggleFavoriteTool, activeIsFavorite, favoriteNavTools, groupedTools } = useToolNavigation({ isNarrowShell, setSidebarCollapsed, query, lang });
   const { themeMode, setThemeMode, resolvedThemeColor, appliedTheme, displayThemeColor, applyThemeColor, resetThemeAppearance } = useAppearance();
   const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -83,14 +78,8 @@ export function App() {
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
   const t = copy[lang];
-  const toolTitle = React.useCallback((tool: ToolDefinition) => getToolTitle(tool, lang), [lang]);
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
 
-  const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? canonicalToolId(storedActiveTool) : "home");
-  const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
-  const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
-  const [pendingToolClose, setPendingToolClose] = React.useState<ToolId[] | null>(null);
-  const retainedTools = resolveRetainedTools(activeTool, mountedTools, maxMountedTools);
   React.useEffect(() => {
     clearLegacyEvidenceStorage();
   }, []);
@@ -114,29 +103,6 @@ export function App() {
       document.removeEventListener("drop", rememberDroppedFiles, true);
     };
   }, []);
-  React.useEffect(() => {
-    setMountedTools((current) => {
-      const next = [...current.filter((tool) => tool !== activeTool), activeTool];
-      if (next.length <= maxMountedTools) return next;
-      const removable = next.filter((tool) => tool !== activeTool && tool !== "home" && !dirtyTools.includes(tool));
-      const overflow = next.length - maxMountedTools;
-      const remove = new Set(removable.slice(0, overflow));
-      return next.filter((tool) => !remove.has(tool));
-    });
-  }, [activeTool, dirtyTools]);
-  const rememberToolUse = (tool: ToolId) => {
-    if (tool === "home") return;
-    const canonical = canonicalToolId(tool);
-    setRecentTools((items) => [canonical, ...items.map(canonicalToolId).filter((item) => item !== canonical && visibleTools.some((known) => known.id === item))].slice(0, maxRecentTools));
-  };
-  const setActiveTool = (tool: ToolId, options?: { replaceHash?: boolean }) => {
-    const canonical = canonicalToolId(tool);
-    setRouteTool(canonical);
-    setStoredActiveTool(canonical);
-    rememberToolUse(canonical);
-    writeToolHash(canonical, options?.replaceHash);
-    if (isNarrowShell) setSidebarCollapsed(true);
-  };
   const addCurrentToolToReport = async () => {
     if (reportAddBusy) return;
     if (activeTool === "home") {
@@ -231,44 +197,6 @@ export function App() {
     setCaseNotes((current) => current.filter((note) => note.id !== id));
   };
   const clearCaseNotes = () => setCaseNotes([]);
-  const setToolDirty = React.useCallback((tool: ToolId, dirty: boolean) => {
-    setDirtyTools((current) => dirty
-      ? current.includes(tool) ? current : [...current, tool]
-      : current.filter((item) => item !== tool));
-  }, []);
-  const closeToolsNow = (closing: ToolId[]) => {
-    if (!closing.length) return;
-    if (closing.includes(activeTool)) setActiveTool("home");
-    setMountedTools((current) => current.filter((item) => !closing.includes(item)));
-    setDirtyTools((current) => current.filter((item) => !closing.includes(item)));
-  };
-  const closeMountedTool = (tool: ToolId) => {
-    if (tool === "home") return;
-    if (dirtyTools.includes(tool)) {
-      setPendingToolClose([tool]);
-      return;
-    }
-    closeToolsNow([tool]);
-  };
-  const closeAllMountedTools = () => {
-    const closing = retainedTools.filter((tool) => tool !== "home");
-    if (closing.some((tool) => dirtyTools.includes(tool))) {
-      setPendingToolClose(closing);
-      return;
-    }
-    closeToolsNow(closing);
-  };
-  React.useEffect(() => {
-    if (!dirtyTools.length) return;
-    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warnBeforeUnload);
-    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
-  }, [dirtyTools.length]);
-  const active = tools.find((tool) => tool.id === activeTool) ?? tools[0];
-
   React.useEffect(() => {
     if (!autoSaveEvidence) return;
     const unsubscribe = subscribeAnalysisResult("*", () => {
@@ -306,66 +234,11 @@ export function App() {
     });
     return unsubscribe;
   }, [autoSaveEvidence, activeTool, lang, t, active, setCaseNotes]);
-  const favoriteIds = new Set(favoriteTools.map(canonicalToolId).filter((id) => id !== "home" && visibleTools.some((tool) => tool.id === id)));
-  const activeIsFavorite = favoriteIds.has(activeTool);
-  const toggleFavoriteTool = (tool: ToolId) => {
-    if (tool === "home") return;
-    setFavoriteTools((items) => {
-      const normalized = Array.from(new Set(items.map(canonicalToolId).filter((item) => item !== "home" && visibleTools.some((known) => known.id === item))));
-      return normalized.includes(tool) ? normalized.filter((item) => item !== tool) : [tool, ...normalized].slice(0, maxRecentTools);
-    });
-  };
   const detailsToggleLabel = detailsExpanded ? (lang === "zh" ? "精简" : "Compact") : (lang === "zh" ? "详情" : "Details");
-  const filteredTools = visibleTools.filter((tool) => {
-    const text = [
-      copy.zh[tool.name],
-      copy.zh[tool.desc],
-      copy.zh[tool.category],
-      copy.en[tool.name],
-      copy.en[tool.desc],
-      copy.en[tool.category],
-      ...(tool.accepts ?? []),
-      ...(tool.capabilities ?? [])
-    ].join(" ").toLowerCase();
-    return text.includes(query.toLowerCase());
-  });
-  const favoriteNavTools = favoriteTools
-    .map((id) => filteredTools.find((tool) => tool.id === id))
-    .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
-    .filter((tool) => tool.id !== "home");
-  const groupedTools: ToolGroup[] = (["featured", "analysis", "transform", "network"] as ToolCategory[])
-    .map((category) => ({
-      category,
-      items: filteredTools.filter((tool) => tool.category === category && !favoriteIds.has(tool.id))
-    }))
-    .filter((group) => group.items.length);
   React.useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
     document.title = activeTool === "home" ? "Forensics++ Workbench | Open-source DFIR tools" : `${getToolTitle(active, lang)} - Forensics++`;
   }, [active.name, activeTool, lang, t]);
-
-  React.useEffect(() => {
-    const hashedTool = toolIdFromHash();
-    if (hashedTool) {
-      setRouteTool(hashedTool);
-      setStoredActiveTool(hashedTool);
-      rememberToolUse(hashedTool);
-      return;
-    }
-    writeToolHash(activeTool, true);
-  }, []);
-
-  React.useEffect(() => {
-    const handleHashChange = () => {
-      const nextTool = toolIdFromHash();
-      if (!nextTool) return;
-      setRouteTool(nextTool);
-      setStoredActiveTool(nextTool);
-      rememberToolUse(nextTool);
-    };
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
 
   React.useEffect(() => {
     setDetailsExpanded(false);
