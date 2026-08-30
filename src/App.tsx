@@ -29,18 +29,18 @@ import { Sidebar } from "./components/Sidebar";
 import type { ToolGroup } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
-import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, themePresets, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
+import { getToolTitle as resolveToolTitle, legalVersion, maxMountedTools, maxRecentTools, toolTitleOverrides, canonicalToolId, toolIdFromHash, tools, visibleTools, writeToolHash, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
 import type { ToolCategory, ToolDefinition, ToolId } from "./config/app";
 import { copy } from "./i18n";
 import { clearForensicsStorage, clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
-import { normalizeHexColor, themeDisplayColor, themeSoftColor } from "./utils/themeColors";
-import { compactReportText, defaultCaseReportMeta, isBooleanValue, isCaseNotesValue, isCaseReportMetaValue, isLangValue, isStringValue, isThemeModeValue, isToolIdArrayValue, isToolIdValue } from "./utils/appGuards";
-import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./models";
+import { compactReportText, defaultCaseReportMeta, isBooleanValue, isCaseNotesValue, isCaseReportMetaValue, isLangValue, isStringValue, isToolIdArrayValue, isToolIdValue } from "./utils/appGuards";
+import type { AppCommand, CaseNote, CaseReportMeta, Lang } from "./models";
 import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFiles } from "./features/reporter/evidence";
 import { rememberedTimelineEvents } from "./features/reporter/timeline";
 import { currentAnalysisResult, subscribeAnalysisResult } from "./features/analysis/resultStore";
 import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/result";
 import { useStaleVersion } from "./app/useStaleVersion";
+import { useAppearance } from "./app/useAppearance";
 import { useServiceWorker } from "./app/useServiceWorker";
 import { useLegalConsent } from "./app/useLegalConsent";
 import { useCacheClear } from "./app/useCacheClear";
@@ -61,9 +61,7 @@ export function App() {
   const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
   const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
   const [query, setQuery] = useStoredState("app.query", "", isStringValue);
-  const [themeMode, setThemeMode] = useStoredState<ThemeMode>("app.themeMode", "light", isThemeModeValue);
-  const [themeColor, setThemeColor] = useStoredState("app.themeColor", themePresets[0].hex, isStringValue);
-  const [themeDefaultMigrated, setThemeDefaultMigrated] = useStoredState("app.themeDefaultV070", false, isBooleanValue);
+  const { themeMode, setThemeMode, resolvedThemeColor, appliedTheme, displayThemeColor, applyThemeColor, resetThemeAppearance } = useAppearance();
   const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const { cacheClearArmed, cacheClearError, setCacheClearError, clearLocalWorkspace } = useCacheClear(settingsOpen);
@@ -88,28 +86,11 @@ export function App() {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 900px)").matches;
   });
-  const [systemTheme, setSystemTheme] = React.useState<"light" | "dark">(() => {
-    if (typeof window === "undefined") return "light";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const t = copy[lang];
   const toolTitle = React.useCallback((tool: ToolDefinition) => getToolTitle(tool, lang), [lang]);
-  const resolvedThemeColor = React.useMemo(
-    () => {
-      const normalized = normalizeHexColor(themeColor) ?? themePresets[0].hex;
-      return !themeDefaultMigrated && normalized === "#245F73" ? themePresets[0].hex : normalized;
-    },
-    [themeColor, themeDefaultMigrated]
-  );
-  const appliedTheme = themeMode === "auto" ? systemTheme : themeMode === "dark" ? "dark" : "light";
-
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
 
-  const displayThemeColor = React.useMemo(
-    () => themeDisplayColor(resolvedThemeColor, appliedTheme),
-    [appliedTheme, resolvedThemeColor]
-  );
   const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? canonicalToolId(storedActiveTool) : "home");
   const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
   const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
@@ -364,56 +345,6 @@ export function App() {
     }))
     .filter((group) => group.items.length);
   React.useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => setSystemTheme(media.matches ? "dark" : "light");
-    handleChange();
-    media.addEventListener("change", handleChange);
-    return () => media.removeEventListener("change", handleChange);
-  }, []);
-
-  React.useEffect(() => {
-    if (themeDefaultMigrated) return;
-    if (themeColor.toUpperCase() === "#245F73") setThemeColor(themePresets[0].hex);
-    setThemeDefaultMigrated(true);
-  }, [setThemeColor, setThemeDefaultMigrated, themeColor, themeDefaultMigrated]);
-
-  React.useEffect(() => {
-    if (themeColor !== resolvedThemeColor) {
-      setThemeColor(resolvedThemeColor);
-    }
-  }, [resolvedThemeColor, setThemeColor, themeColor]);
-
-  React.useLayoutEffect(() => {
-    document.documentElement.dataset.themeMode = appliedTheme;
-    document.body.dataset.themeMode = appliedTheme;
-    document.documentElement.style.colorScheme = appliedTheme;
-    document.body.style.colorScheme = appliedTheme;
-    document.documentElement.style.backgroundColor = appliedTheme === "dark" ? "#0f1722" : "#f5f7fa";
-    document.body.style.backgroundColor = appliedTheme === "dark" ? "#0f1722" : "#f5f7fa";
-    document.documentElement.style.setProperty("--app-primary", displayThemeColor);
-    document.documentElement.style.setProperty("--app-primary-soft", themeSoftColor(displayThemeColor, appliedTheme));
-    document.documentElement.style.setProperty("--app-primary-contrast", appliedTheme === "dark" ? "#0F1822" : "#FFFFFF");
-    document.body.style.setProperty("--app-primary", displayThemeColor);
-    document.body.style.setProperty("--app-primary-soft", themeSoftColor(displayThemeColor, appliedTheme));
-    document.body.style.setProperty("--app-primary-contrast", appliedTheme === "dark" ? "#0F1822" : "#FFFFFF");
-    const rootNode = document.getElementById("root");
-    if (rootNode) {
-      rootNode.dataset.themeMode = appliedTheme;
-      rootNode.style.colorScheme = appliedTheme;
-      rootNode.style.setProperty("--app-primary", displayThemeColor);
-      rootNode.style.setProperty("--app-primary-soft", themeSoftColor(displayThemeColor, appliedTheme));
-      rootNode.style.setProperty("--app-primary-contrast", appliedTheme === "dark" ? "#0F1822" : "#FFFFFF");
-    }
-    let themeMeta = document.querySelector("meta[name='theme-color']");
-    if (!themeMeta) {
-      themeMeta = document.createElement("meta");
-      themeMeta.setAttribute("name", "theme-color");
-      document.head.appendChild(themeMeta);
-    }
-    themeMeta.setAttribute("content", appliedTheme === "dark" ? "#0f1722" : "#f5f7fa");
-  }, [appliedTheme, displayThemeColor]);
-
-  React.useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
     document.title = activeTool === "home" ? "Forensics++ Workbench | Open-source DFIR tools" : `${getToolTitle(active, lang)} - Forensics++`;
   }, [active.name, activeTool, lang, t]);
@@ -612,17 +543,6 @@ export function App() {
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [activeTool, commandOpen, openCommandPalette, settingsOpen]);
-
-  const applyThemeColor = (hex: string) => {
-    const normalized = normalizeHexColor(hex);
-    if (!normalized) return;
-    setThemeColor(normalized);
-  };
-
-  const resetThemeAppearance = () => {
-    const fallback = themePresets[0].hex;
-    setThemeColor(fallback);
-  };
 
   const copyCurrentToolLink = () => {
     const url = `${window.location.origin}${window.location.pathname}${window.location.search}#${activeTool}`;
