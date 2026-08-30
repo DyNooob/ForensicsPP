@@ -31,7 +31,9 @@
     "verify": "npm run i18n:check && npm run test && npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "audit:layout": "node scripts/layout-audit.mjs",
-    "audit:contact-sheet": "python3 scripts/make-contact-sheet.py"
+    "audit:contact-sheet": "python3 scripts/make-contact-sheet.py",
+    "perf:baseline": "node scripts/perf-matrix.mjs --write-baseline",
+    "perf:check": "node scripts/perf-matrix.mjs --check"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

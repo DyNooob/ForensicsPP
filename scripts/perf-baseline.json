@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-08-30T07:35:28.614Z",
+  "totalJsRaw": 38462939,
+  "totalJsGzip": 12401267,
+  "chunks": 127,
+  "groups": {
+    "vendor:cyberchef": {
+      "raw": 32761988,
+      "gzip": 10491575,
+      "chunks": 24
+    },
+    "worker": {
+      "raw": 2443967,
+      "gzip": 842815,
+      "chunks": 26
+    },
+    "app": {
+      "raw": 1523102,
+      "gzip": 512662,
+      "chunks": 68
+    },
+    "vendor:antd": {
+      "raw": 714380,
+      "gzip": 225353,
+      "chunks": 1
+    },
+    "entry": {
+      "raw": 543520,
+      "gzip": 166904,
+      "chunks": 2
+    },
+    "vendor:react": {
+      "raw": 197574,
+      "gzip": 61815,
+      "chunks": 1
+    },
+    "vendor:jsqr": {
+      "raw": 131033,
+      "gzip": 47658,
+      "chunks": 1
+    },
+    "vendor:crypto": {
+      "raw": 91231,
+      "gzip": 30105,
+      "chunks": 1
+    },
+    "vendor:sql": {
+      "raw": 40329,
+      "gzip": 14582,
+      "chunks": 1
+    },
+    "vendor:fflate": {
+      "raw": 13516,
+      "gzip": 6563,
+      "chunks": 1
+    },
+    "vendor:email": {
+      "raw": 2299,
+      "gzip": 1235,
+      "chunks": 1
+    }
+  },
+  "largest": [
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/assets/main.js",
+      "raw": 12150517,
+      "gzip": 3655044
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/assets/tesseract/tesseract-core.wasm.js",
+      "raw": 4734034,
+      "gzip": 1770335
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Encodings.js",
+      "raw": 2492717,
+      "gzip": 924796
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Code.js",
+      "raw": 2170824,
+      "gzip": 649903
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Yara.js",
+      "raw": 1340776,
+      "gzip": 506916
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Crypto.js",
+      "raw": 1438130,
+      "gzip": 441996
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Ciphers.js",
+      "raw": 1471302,
+      "gzip": 431376
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/PGP.js",
+      "raw": 1379312,
+      "gzip": 406039
+    },
+    {
+      "file": "node_modules/.fpp-perf/assets/pdf.worker-DOgpw8eT.js",
+      "raw": 1204252,
+      "gzip": 375783
+    },
+    {
+      "file": "node_modules/.fpp-perf/cyberchef/modules/Image.js",
+      "raw": 940046,
+      "gzip": 301139
+    }
+  ]
+}
