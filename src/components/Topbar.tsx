@@ -20,10 +20,11 @@
  */
 
 import React from "react";
-import { Drawer } from "antd";
-import { CodeOutlined, FileAddOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
+import { Badge, Drawer } from "antd";
+import { CodeOutlined, FileAddOutlined, InboxOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { ASegmentedButton, ASegmentedGroup } from "./ui";
 import { GithubIconButton } from "./GithubIconButton";
+import { useEvidenceInbox } from "../app/useEvidenceInbox";
 import type { ToolDefinition } from "../config/app";
 import type { Translation } from "../i18n";
 import type { Lang } from "../models";
@@ -43,6 +44,7 @@ type TopbarProps = {
   onAddToReport: () => void;
   onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
+  onOpenEvidenceInbox: () => void;
   onSetLang: (lang: Lang) => void;
 };
 
@@ -61,9 +63,11 @@ export function Topbar({
   onAddToReport,
   onOpenSettings,
   onOpenCommandPalette,
+  onOpenEvidenceInbox,
   onSetLang
 }: TopbarProps) {
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const { count: evidenceCount } = useEvidenceInbox();
   return (
     <>
     <header className={`tool-topbar ${activeTool === "home" ? "home-topbar" : ""}`}>
@@ -86,6 +90,17 @@ export function Topbar({
         <div className="top-actions">
           <div className="top-action-group">
             <GithubIconButton label={t.repositoryLabel} />
+            <button
+              className="top-action-icon evidence-toggle"
+              type="button"
+              aria-label={t.evidenceInbox}
+              title={`${t.evidenceInbox}${evidenceCount ? ` · ${evidenceCount}` : ""}`}
+              onClick={onOpenEvidenceInbox}
+            >
+              <Badge count={evidenceCount} size="small" offset={[-2, 2]}>
+                <InboxOutlined aria-hidden="true" />
+              </Badge>
+            </button>
             {activeTool !== "home" && (
               <button
                 className="top-action-icon link-toggle"

@@ -26,6 +26,7 @@ import { copy } from "../i18n";
 import { clearLegacyEvidenceStorage } from "../utils/storage";
 import { setCopyToastLabel } from "../utils/clipboard";
 import { rememberEvidenceFiles } from "../features/reporter/evidence";
+import { captureEvidence } from "../core/evidence/inbox";
 import type { Lang } from "../models";
 
 function getToolTitle(tool: ToolDefinition, lang: Lang) {
@@ -56,15 +57,26 @@ export function useWorkbenchBootstrap({
   React.useEffect(() => {
     setCopyToastLabel(t.copyDone);
   }, [t]);
+  // Keep a live ref to the active tool so the file-capture delegation below
+  // (installed once with `[]` deps) can stamp each loaded file with the tool it
+  // was loaded into without re-binding global listeners on every navigation.
+  const activeToolRef = React.useRef(activeTool);
+  React.useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
   React.useEffect(() => {
     const rememberInputFiles = (event: Event) => {
       const target = event.target;
       if (target instanceof HTMLInputElement && target.type === "file" && target.files?.length) {
         rememberEvidenceFiles(target, target.files);
+        captureEvidence(target.files, "upload", activeToolRef.current);
       }
     };
     const rememberDroppedFiles = (event: DragEvent) => {
-      if (event.dataTransfer?.files.length) rememberEvidenceFiles(event.target, event.dataTransfer.files);
+      if (event.dataTransfer?.files.length) {
+        rememberEvidenceFiles(event.target, event.dataTransfer.files);
+        captureEvidence(event.dataTransfer.files, "drop", activeToolRef.current);
+      }
     };
     document.addEventListener("change", rememberInputFiles, true);
     document.addEventListener("drop", rememberDroppedFiles, true);

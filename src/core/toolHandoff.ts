@@ -45,7 +45,7 @@ export type ToolHandoffLineage = {
 
 export type ToolHandoff = {
   id: string;
-  sourceTool: ToolId;
+  sourceTool: ToolId | "evidence-inbox";
   targetTool: ToolId;
   file: File;
   label: string;

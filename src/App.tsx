@@ -23,6 +23,7 @@ import { copyText } from "./utils/clipboard";
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
+import { EvidenceInbox } from "./components/EvidenceInbox";
 import { ToolHost } from "./components/ToolHost";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
@@ -62,6 +63,7 @@ export function App() {
   const { cacheClearArmed, cacheClearError, setCacheClearError, clearLocalWorkspace } = useCacheClear(settingsOpen);
   const [reporterOpen, setReporterOpen] = React.useState(false);
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
+  const [evidenceInboxOpen, setEvidenceInboxOpen] = React.useState(false);
   const { reportAddBusy, reportAddAbortRef, setReportAddBusy, caseNotes, setCaseNotes, caseReportMeta, setCaseReportMeta, defaultExportFormat, setDefaultExportFormat, autoSaveEvidence, setAutoSaveEvidence, addCurrentToolToReport, updateCaseNote, deleteCaseNote, clearCaseNotes } = useCaseReport({ activeTool, active, lang, setReporterOpen, setToolLinkMessage });
   const { commandOpen, setCommandOpen, commandQuery, setCommandQuery, openSettingsPanel, openCommandPalette, shouldIgnoreBackdropClick, filteredCommands } = useCommandPalette({ activeTool, lang, sidebarCollapsed, setSidebarCollapsed, detailsExpanded, setDetailsExpanded, caseNotesCount: caseNotes.length, setActiveTool, setReporterOpen, setThemeMode, setCacheClearError, settingsOpen, setSettingsOpen });
 
@@ -187,6 +189,7 @@ export function App() {
           onAddToReport={addCurrentToolToReport}
           onOpenSettings={() => openSettingsPanel()}
           onOpenCommandPalette={openCommandPalette}
+          onOpenEvidenceInbox={() => setEvidenceInboxOpen(true)}
           onSetLang={setLang}
         />
 
@@ -318,6 +321,14 @@ export function App() {
           }}
         />
       )}
+
+      <EvidenceInbox
+        open={evidenceInboxOpen}
+        onClose={() => setEvidenceInboxOpen(false)}
+        t={t}
+        lang={lang}
+        onOpenTool={(toolId) => setActiveTool(toolId)}
+      />
     </div>
     </ConfigProvider>
   );
