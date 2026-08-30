@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASelect, ToolPanelHeader } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
 import { downloadTextFile } from "../utils/files";
 import { useStoredState } from "../utils/storage";
@@ -54,6 +55,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
   const [selectedFormat, setSelectedFormat] = useStoredState("codec.selectedFormat", "url");
   const [directOperation, setDirectOperation] = useStoredState("codec.directOperation", "autocodec");
   const [error, setError] = React.useState("");
+  const english = t.waiting === "Waiting";
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);
   React.useEffect(() => {
@@ -197,7 +199,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
         </div>
 
         <div className="text-panel codec-simple-text-panel">
-          <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton></div></div>
+          <div className="text-panel-title"><strong>{t.inputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><AButton variant="text" disabled={!input} onClick={() => downloadTextFile(`codec-input-${Date.now()}.txt`, input, "text/plain;charset=utf-8")}>{t.download}</AButton><SampleButton toolId="codec" english={english} onLoad={(text) => setInput(text)} /></div></div>
           <textarea className="codec-simple-textarea" aria-label={t.input_text} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setOutput(""); setError(""); }} placeholder={t.textPlaceholder} />
         </div>
         {error && <div className="empty-state error-state">{error}</div>}

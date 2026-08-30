@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import { analyzeBasicJson, type JsonBasicPath, type JsonBasicResult } from "../features/json/basic";
 import type { JsonBasicWorkerRequest } from "../features/json/basic.worker";
 import type { Translation } from "../i18n";
@@ -199,7 +200,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
           <ASegmentedButton value="unescape" onClick={() => setStoredMode("unescape")}>{t.unescapeString}</ASegmentedButton>
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
-          <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton></div>
+          <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><SampleButton toolId="json" english={english} onLoad={(text) => { setInput(text); setAnalyzedInput(text); }} /></div>
           <textarea className="json-simple-textarea" aria-label={t.json_input} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}

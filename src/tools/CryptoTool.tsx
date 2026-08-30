@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, AInputNumber, ASelect, ToolPanelHeader } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
 import { useStoredState } from "../utils/storage";
 
@@ -122,7 +123,7 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
       <section className="tool-panel wide-panel crypto-simple-input-panel">
         <ToolPanelHeader
           title={t.classical_cipher}
-          actions={<AButton variant="text" disabled={!hasInput && !hasResult} onClick={clear}>{t.clear}</AButton>}
+          actions={<><AButton variant="text" disabled={!hasInput && !hasResult} onClick={clear}>{t.clear}</AButton><SampleButton toolId="crypto" english={english} onLoad={(text) => setInput(text)} /></>}
         />
 
         <div className="crypto-simple-controls">

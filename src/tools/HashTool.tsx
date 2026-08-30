@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ACheckbox, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
 import type { BatchHashRow } from "../models";
 import type { ExpectedHashTarget } from "../features/hash/matching";
@@ -352,6 +353,7 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
               <ASegmentedButton value="text" onClick={() => changeMode("text")}>{t.text}</ASegmentedButton>
             </ASegmentedGroup>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
+            <SampleButton toolId="hash" english={english} onLoad={(text) => { changeMode("text"); setText(text); }} />
           </>}
         />
         <input className="hidden-file-input" ref={fileInputRef} type="file" multiple aria-hidden="true" tabIndex={-1} onChange={(event) => { queueFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />

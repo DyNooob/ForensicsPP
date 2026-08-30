@@ -22,6 +22,7 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import type { Translation } from "../i18n";
 import type { BaseConvertRow } from "../models";
 import { downloadTextFile } from "../utils/files";
