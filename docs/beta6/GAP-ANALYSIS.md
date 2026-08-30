@@ -90,7 +90,7 @@ summary{title,text,metrics} ✅  findings ✅  indicators ✅  artifacts ✅  ti
 | B3 | `archive` | zip-bomb-guard + extraction，artifacts 天然对应 |
 | B3 | `document` | metadata + embedded-files |
 | B3 | `windows` | MFT / USN / Prefetch / LNK，**Timeline 主来源** |
-| B4 | `browserartifacts` / `image` / `ioc` / `email` | 补齐 |
+| B4 | `browserartifacts` / `image` / `ioc` / `email` | ✅ 完成（见 ENVELOPE-COVERAGE，15/38） |
 | — | transform 类（codec / hash / jwt / password / baseconvert / uuid / json / regex / timestamp / url / http / qr / sql / cyberchef） | **不强制**，无检材语义 |
 
 **关键约束**：`transform` 类工具（无检材输入）不应被强制 Envelope 化 —— 这也符合原则 2「不为了统一而统一」。计划书的「核心工具」应理解为**检材分析类工具**。

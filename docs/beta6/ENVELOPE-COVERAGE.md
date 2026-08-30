@@ -4,12 +4,12 @@
 > 计划书原文要求「核心工具必须具备 reset/error recovery/result access/dispose」—— 此处「核心工具」限定为**检材分析类**，
 > transform 类（codec/hash/json/regex…）无检材输入语义，**不强制** Envelope（符合原则 2「不为了统一而统一」）。
 
-**最后更新**：2026-08-29（批 B1 + B2 + B3 完成）
-**覆盖率**：**11 / 38** 工具产出 AnalysisEnvelope（基线 3/38）
+**最后更新**：2026-08-30（批 B1 + B2 + B3 + B4 完成）
+**覆盖率**：**15 / 38** 工具产出 AnalysisEnvelope（基线 3/38）
 
 ---
 
-## 已迁移（11）
+## 已迁移（15）
 
 | 工具 | 批 | Builder | 映射要点 |
 |---|---|---|---|
@@ -24,21 +24,25 @@
 | **archive** | B3 | `src/features/archive/envelope.ts` | 加密条目 / 目录截断 / 压缩倍率(zip-bomb 信号) → findings + artifacts + metrics |
 | **documentforensics** | B3 | `src/features/document/envelope.ts` | 结构检查(external/macro/action→warn) + 加密 error + 嵌入 extracts artifacts + 外部关系 URL/域名 IOC |
 | **windows** | B3 | `src/features/windows/envelope.ts` | TimelineEvent→时间线(cap 5000) + records artifacts + 网络字符串 URL/IPv4/Email IOC + artifactType 取证相关性 |
+| **browserartifacts** | B4 | `src/features/browserArtifacts/envelope.ts` | 时间戳记录→时间线(cap 5000) + 访问 URL→indicators + 解析源文件→artifacts + 截断→review finding |
+| **image** | B4 | `src/features/image/envelope.ts` | PNG chunk CRC/风险→review finding + 嵌入 payload→artifacts + LSB/trailer/EXIF findings |
+| **ioc** | B4 | `src/features/ioc/envelope.ts` | 提取 `IocRecord[]`→indicators + 风险标记→review finding（**修正**：ioc 是解析工具，非纯录入，详见豁免说明） |
+| **email** | B4 | `src/features/email/envelope.ts` | Received 中继链→时间线 + 中继 IP→indicators + 附件→artifacts + SPF/DKIM/DMARC 失败→review finding |
 
 ---
 
 ## 计划迁移（按批，未开始）
 
-| 批 | 工具 | 理由 |
-|---|---|---|
-| B4 | `browserartifacts` / `image` / `ioc` / `email` | 补齐 |
+> 全部四批（B1–B4）已完成。剩余 23 个工具为 transform / 别名 / 隐藏类，按下方豁免规则不强制 Envelope。
 
 ---
 
 ## 明确豁免（transform 类，无检材语义）
 
 `hash` `timestamp` `baseconvert` `uuid` `json` `regex` `crypto` `jwt` `password` `sql`
-`urltool` `http` `ioc`（纯 IOC 录入，非解析） + 隐藏别名 `qr` `fileid` `png` `strings` `entropy` `yara`
+`urltool` `http` + 隐藏别名 `qr` `fileid` `png` `strings` `entropy` `yara`
+
+> **`ioc` 豁免更正**：早期评估把 `ioc` 列为「纯 IOC 录入，非解析」而豁免。实际 `IocTool` 在 worker 中运行 `analyzeIocs`（见 `src/features/ioc/analyzer.ts`）从文本/日志/文件中**结构化提取** `IocRecord[]`，属于检材分析类，已在 B4 迁移并产出 envelope（`indicators` 为核心输出）。`qr` 仍为隐藏别名（合并进 `image`），不单独产 envelope。
 
 ---
 
@@ -54,7 +58,7 @@
 
 ```
 npx tsc --noEmit            # 0 错误
-npx vitest run              # 全绿（当前 269 测试，随批递增）
+npx vitest run              # 全绿（当前 296 测试，随批递增）
 npx vite build              # 成功（注意：清 dist/ 受沙箱批量删除守卫拦，用 --outDir 临时目录绕开）
 ```
 
