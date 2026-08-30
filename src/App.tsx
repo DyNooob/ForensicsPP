@@ -19,7 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { copyText, setCopyToastLabel } from "./utils/clipboard";
+import { copyText } from "./utils/clipboard";
 import React from "react";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
@@ -29,10 +29,9 @@ import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
 import { getToolTitle as resolveToolTitle, legalVersion, tools, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
 import { copy } from "./i18n";
-import { clearLegacyEvidenceStorage, useStoredState } from "./utils/storage";
+import { useStoredState } from "./utils/storage";
 import { isLangValue } from "./utils/appGuards";
 import type { Lang } from "./models";
-import { rememberEvidenceFiles } from "./features/reporter/evidence";
 import { useStaleVersion } from "./app/useStaleVersion";
 import { useAppearance } from "./app/useAppearance";
 import { useShellLayout } from "./app/useShellLayout";
@@ -42,6 +41,7 @@ import { useLegalConsent } from "./app/useLegalConsent";
 import { useCacheClear } from "./app/useCacheClear";
 import { useCaseReport } from "./app/useCaseReport";
 import { useCommandPalette } from "./app/useCommandPalette";
+import { useWorkbenchBootstrap } from "./app/useWorkbenchBootstrap";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
 const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
@@ -68,44 +68,15 @@ export function App() {
   const t = copy[lang];
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
 
-  React.useEffect(() => {
-    clearLegacyEvidenceStorage();
-  }, []);
-  React.useEffect(() => {
-    setCopyToastLabel(t.copyDone);
-  }, [t]);
-  React.useEffect(() => {
-    const rememberInputFiles = (event: Event) => {
-      const target = event.target;
-      if (target instanceof HTMLInputElement && target.type === "file" && target.files?.length) {
-        rememberEvidenceFiles(target, target.files);
-      }
-    };
-    const rememberDroppedFiles = (event: DragEvent) => {
-      if (event.dataTransfer?.files.length) rememberEvidenceFiles(event.target, event.dataTransfer.files);
-    };
-    document.addEventListener("change", rememberInputFiles, true);
-    document.addEventListener("drop", rememberDroppedFiles, true);
-    return () => {
-      document.removeEventListener("change", rememberInputFiles, true);
-      document.removeEventListener("drop", rememberDroppedFiles, true);
-    };
-  }, []);
-  React.useEffect(() => {
-    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-    document.title = activeTool === "home" ? "Forensics++ Workbench | Open-source DFIR tools" : `${getToolTitle(active, lang)} - Forensics++`;
-  }, [active.name, activeTool, lang, t]);
-
-  React.useEffect(() => {
-    setDetailsExpanded(false);
-  }, [activeTool]);
-
-  React.useEffect(() => {
-    if (!toolLinkMessage) return undefined;
-    const timer = window.setTimeout(() => setToolLinkMessage(""), 2200);
-    return () => window.clearTimeout(timer);
-  }, [toolLinkMessage]);
-
+  useWorkbenchBootstrap({
+    active,
+    activeTool,
+    lang,
+    detailsExpanded,
+    setDetailsExpanded,
+    toolLinkMessage,
+    setToolLinkMessage,
+  });
   useServiceWorker();
 
   const copyCurrentToolLink = () => {
