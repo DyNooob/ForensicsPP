@@ -38,7 +38,7 @@ import { compactReportText, defaultCaseReportMeta, isBooleanValue, isCaseNotesVa
 import type { AppCommand, CaseNote, CaseReportMeta, Lang, ThemeMode } from "./models";
 import { fingerprintEvidenceFiles, rememberedEvidenceFiles, rememberEvidenceFiles } from "./features/reporter/evidence";
 import { rememberedTimelineEvents } from "./features/reporter/timeline";
-import { currentAnalysisResult } from "./features/analysis/resultStore";
+import { currentAnalysisResult, subscribeAnalysisResult } from "./features/analysis/resultStore";
 import { analysisResultText, envelopeReportMarkdown } from "./features/analysis/result";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
@@ -71,9 +71,13 @@ export function App() {
   const reportAddAbortRef = React.useRef<AbortController | null>(null);
   const [caseNotes, setCaseNotes] = useStoredState<CaseNote[]>("report.notes", [], isCaseNotesValue);
   const [caseReportMeta, setCaseReportMeta] = useStoredState<CaseReportMeta>("report.meta", defaultCaseReportMeta(), isCaseReportMetaValue);
+  const [defaultExportFormat, setDefaultExportFormat] = useStoredState("app.defaultExportFormat", "md", isStringValue);
+  const [autoSaveEvidence, setAutoSaveEvidence] = useStoredState("app.autoSaveEvidence", false, isBooleanValue);
+  const capturedRunIds = React.useRef<Set<string>>(new Set());
   React.useEffect(() => () => {
     reportAddAbortRef.current?.abort();
   }, []);
+
   const modalOpenGuardRef = React.useRef({ settings: 0, command: 0 });
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false, isBooleanValue);
@@ -175,6 +179,7 @@ export function App() {
     const toolView = Array.from(document.querySelectorAll<HTMLElement>(".tool-retained-view"))
       .find((element) => element.dataset.toolId === activeTool);
     const structuredResult = currentAnalysisResult(activeTool);
+    if (structuredResult?.run.runId) capturedRunIds.current.add(structuredResult.run.runId);
     const structuredContent = structuredResult ? compactReportText(analysisResultText(structuredResult)) : "";
     const domContent = compactReportText(toolView?.innerText || toolView?.textContent || "");
     const content = structuredContent || domContent;
@@ -296,6 +301,44 @@ export function App() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [dirtyTools.length]);
   const active = tools.find((tool) => tool.id === activeTool) ?? tools[0];
+
+  React.useEffect(() => {
+    if (!autoSaveEvidence) return;
+    const unsubscribe = subscribeAnalysisResult("*", () => {
+      const result = currentAnalysisResult(activeTool);
+      const runId = result?.run.runId;
+      if (!result || !runId || capturedRunIds.current.has(runId)) return;
+      capturedRunIds.current.add(runId);
+      const createdAt = new Date().toISOString();
+      const note: CaseNote = {
+        id: `${activeTool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tool: getToolTitle(active, lang),
+        title: result.summary.title,
+        content: analysisResultText(result, t),
+        summary: result.summary.text,
+        markdown: envelopeReportMarkdown(result, t),
+        description: active ? t[active.desc] : "",
+        route: `#${activeTool}`,
+        sourceUrl: window.location.href,
+        ...(result.source.length ? {
+          evidenceFiles: result.source.map((file) => ({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            ...(file.lastModified ? { lastModified: file.lastModified } : {}),
+            ...(file.sha256 ? { sha256: file.sha256 } : {})
+          }))
+        } : {}),
+        ...(result.timeline.length ? { timelineEvents: result.timeline } : {}),
+        ...(result.findings.length ? { findings: result.findings } : {}),
+        ...(result.indicators.length ? { indicators: result.indicators } : {}),
+        ...(result.artifacts.length ? { artifacts: result.artifacts } : {}),
+        createdAt
+      };
+      setCaseNotes((current) => [note, ...current].slice(0, 40));
+    });
+    return unsubscribe;
+  }, [autoSaveEvidence, activeTool, lang, t, active, setCaseNotes]);
   const favoriteIds = new Set(favoriteTools.map(canonicalToolId).filter((id) => id !== "home" && visibleTools.some((tool) => tool.id === id)));
   const activeIsFavorite = favoriteIds.has(activeTool);
   const toggleFavoriteTool = (tool: ToolId) => {
@@ -797,6 +840,7 @@ export function App() {
             notes={caseNotes}
             meta={caseReportMeta}
             t={t}
+            defaultExportFormat={defaultExportFormat}
             onClose={() => {
               reportAddAbortRef.current?.abort();
               reportAddAbortRef.current = null;
@@ -830,6 +874,10 @@ export function App() {
             onThemeColorChange={applyThemeColor}
             onResetAppearance={resetThemeAppearance}
             onClearWorkspace={clearLocalWorkspace}
+            defaultExportFormat={defaultExportFormat}
+            onDefaultExportFormatChange={setDefaultExportFormat}
+            autoSaveEvidence={autoSaveEvidence}
+            onAutoSaveEvidenceChange={setAutoSaveEvidence}
             openTools={retainedTools
               .filter((tool) => tool !== "home")
               .map((tool) => ({

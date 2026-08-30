@@ -21,7 +21,7 @@
 
 import { copyText } from "../../utils/clipboard";
 import React from "react";
-import { CloseOutlined, DownOutlined } from "@ant-design/icons";
+import { CloseOutlined, DownOutlined, MoreOutlined } from "@ant-design/icons";
 import { Dropdown, Modal } from "antd";
 import type { MenuProps } from "antd";
 import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../../components/ui";
@@ -482,6 +482,7 @@ export function CaseReporter({
   notes,
   meta,
   t,
+  defaultExportFormat,
   onClose,
   onMetaChange,
   onUpdateNote,
@@ -492,6 +493,7 @@ export function CaseReporter({
   notes: CaseNote[];
   meta: CaseReportMeta;
   t: Translation;
+  defaultExportFormat: string;
   onClose: () => void;
   onMetaChange: (meta: CaseReportMeta) => void;
   onUpdateNote: (id: string, patch: Partial<CaseNote>) => void;
@@ -620,7 +622,9 @@ export function CaseReporter({
     { key: "csv", label: t.exportNotesCsv }
   ];
 
-  const onExportClick: MenuProps["onClick"] = ({ key }) => {
+  const onExportClick: MenuProps["onClick"] = ({ key }) => runExport(key);
+
+  const runExport = (key: string) => {
     if (key === "md") downloadTextFile(`${reportBaseName(meta)}.md`, markdown);
     else if (key === "html") downloadTextFile(`${reportBaseName(meta)}.html`, htmlReport, "text/html;charset=utf-8");
     else if (key === "print") openPrintReport();
@@ -630,6 +634,11 @@ export function CaseReporter({
     else if (key === "fppcase") downloadBlob(`${reportBaseName(meta)}.fppcase`, new Blob([buildCasePackage(reportBundle)], { type: "application/vnd.forensicspp.case+zip" }));
     else if (key === "csv") downloadTextFile(`${reportBaseName(meta)}-notes.csv`, caseNotesToCsv(notes), "text/csv;charset=utf-8");
   };
+
+  const primaryExportLabel = defaultExportFormat === "html" ? t.exportReportHtml
+    : defaultExportFormat === "json" ? t.exportReportJson
+    : defaultExportFormat === "csv" ? t.exportNotesCsv
+    : t.exportReport;
 
   const reviewCount = notes.filter((note) => caseNoteRiskLevel(note) === "review").length;
   const toolCount = caseReportToolCount(notes);
@@ -651,8 +660,9 @@ export function CaseReporter({
             <AButton variant="outlined" onClick={() => importInputRef.current?.click()}>{t.importReport}</AButton>
             <AButton variant="outlined" disabled={!notes.length} onClick={clearAll}>{t.clearNotes}</AButton>
           </div>
+          <AButton variant="filled" disabled={!notes.length} onClick={() => runExport(defaultExportFormat)}>{primaryExportLabel}</AButton>
           <Dropdown menu={{ items: exportMenuItems, onClick: onExportClick }} trigger={["click"]} disabled={!notes.length}>
-            <AButton variant="filled" disabled={!notes.length} icon={<DownOutlined aria-hidden="true" />} iconPosition="end">{t.exportMenu}</AButton>
+            <AButton variant="outlined" icon={<MoreOutlined aria-hidden="true" />} aria-label={t.exportMenu} title={t.exportMenu} />
           </Dropdown>
         </div>
 

@@ -34,7 +34,7 @@ import {
   ReloadOutlined,
   SunOutlined
 } from "@ant-design/icons";
-import { Button, ColorPicker, Menu, Modal, Segmented, Typography } from "antd";
+import { Button, ColorPicker, Menu, Modal, Segmented, Switch, Typography } from "antd";
 import type { ThemeMode } from "../models";
 import type { ToolId } from "../config/app";
 import {
@@ -63,6 +63,10 @@ type SettingsModalProps = {
   onThemeColorChange: (color: string) => void;
   onResetAppearance: () => void;
   onClearWorkspace: () => void;
+  defaultExportFormat: string;
+  onDefaultExportFormatChange: (format: string) => void;
+  autoSaveEvidence: boolean;
+  onAutoSaveEvidenceChange: (value: boolean) => void;
   openTools: Array<{ id: ToolId; title: string; active: boolean }>;
   onCloseTool: (id: ToolId) => void;
   onCloseAllTools: () => void;
@@ -103,6 +107,10 @@ export function SettingsModal({
   onThemeColorChange,
   onResetAppearance,
   onClearWorkspace,
+  defaultExportFormat,
+  onDefaultExportFormatChange,
+  autoSaveEvidence,
+  onAutoSaveEvidenceChange,
   openTools,
   onCloseTool,
   onCloseAllTools
@@ -324,6 +332,11 @@ export function SettingsModal({
                   <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>
               </div>
+              <div className="settings-privacy-card" role="note">
+                <strong>{t.settingsPrivacyTitle}</strong>
+                <div className="settings-privacy-badge">{t.settingsPrivacyNoUpload}</div>
+                <Typography.Text type="secondary">{t.settingsPrivacyNoUploadDesc}</Typography.Text>
+              </div>
             </div>
           )}
 
@@ -360,6 +373,29 @@ export function SettingsModal({
                   </div>
                 ))}
                 {hiddenOpenToolCount > 0 && <Typography.Text className="settings-session-more" type="secondary">+{hiddenOpenToolCount} {labels.moreOpenTools}</Typography.Text>}
+              </div>
+              <div className="settings-action-line">
+                <div>
+                  <strong>{t.defaultExportFormat}</strong>
+                  <Typography.Text type="secondary">{t.defaultExportFormatDesc}</Typography.Text>
+                </div>
+                <Segmented
+                  value={defaultExportFormat}
+                  onChange={(value) => onDefaultExportFormatChange(String(value))}
+                  options={[
+                    { label: t.exportFormatMd, value: "md" },
+                    { label: t.exportFormatHtml, value: "html" },
+                    { label: t.exportFormatJson, value: "json" },
+                    { label: t.exportFormatCsv, value: "csv" }
+                  ]}
+                />
+              </div>
+              <div className="settings-action-line">
+                <div>
+                  <strong>{t.autoSaveEvidence}</strong>
+                  <Typography.Text type="secondary">{t.autoSaveEvidenceDesc}</Typography.Text>
+                </div>
+                <Switch checked={autoSaveEvidence} onChange={onAutoSaveEvidenceChange} aria-label={t.autoSaveEvidence} />
               </div>
               <div className="settings-action-line settings-danger-line">
                 <div>
