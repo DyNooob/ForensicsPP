@@ -24,10 +24,12 @@ import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined 
 import { AButton, ALinearProgress, ATextField, PanelTitle } from "../components/ui";
 import type { PlistWorkerRequest } from "../features/plist/plist.worker";
 import { plistChildren, plistJson, plistPreview, plistType, type PlistValue } from "../features/plist/analyzer";
+import { buildPlistEnvelope } from "../features/plist/envelope";
 import { copy } from "../i18n";
 import { downloadBlob, downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 
 const LIMIT = 64 * 1024 * 1024;
 const MAX_PERSISTED_PLIST_BYTES = 8 * 1024 * 1024;
@@ -112,6 +114,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
       if (!active || requestId !== requestRef.current || controller.signal.aborted) return;
       const nextStack = [{ path: "$", value: parsed.value }];
       setFormat(parsed.format); setRoot(parsed.value); setStack(nextStack); setQuery("");
+      publishAnalysisResult("plist", buildPlistEnvelope({ format: parsed.format, value: parsed.value, name: next.name, size: next.size }));
       if (next.size <= MAX_PERSISTED_PLIST_BYTES) workspace.save({ format: parsed.format, root: parsed.value, stack: nextStack, query: "", fileName: next.name, fileSize: next.size });
     } catch (caught) {
       if (requestId === requestRef.current && !(caught instanceof DOMException && caught.name === "AbortError")) {

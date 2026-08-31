@@ -32,9 +32,10 @@ const CATEGORIES = ["analysis", "transform", "network", "system", "integration"]
 const MATURITIES = ["stable", "triage", "experimental"] as const;
 const VALIDATIONS = ["unvalidated", "unit-tested", "fixture-validated", "cross-validated"] as const;
 
-// The 15 tools that genuinely publish a structured AnalysisEnvelope (verified by
-// grepping `publishAnalysisResult` calls in src/tools). `bulk` sets supportsResult
-// but never publishes, so it is deliberately excluded.
+// The 18 canonical forensic analyzers that genuinely publish a structured
+// AnalysisEnvelope (verified by grepping `publishAnalysisResult` calls in
+// src/tools). `bulk` sets supportsResult:false but DOES publish an envelope, so it
+// is included; its envelope carries real byte-offset provenance for scanned artifacts.
 const EXPECTED_ENVELOPE_EMITTERS = [
   "android",
   "archive",
@@ -50,7 +51,10 @@ const EXPECTED_ENVELOPE_EMITTERS = [
   "browserartifacts",
   "binary",
   "firmware",
-  "pcap"
+  "pcap",
+  "registry",
+  "plist",
+  "bulk"
 ];
 
 describe("tool registry metadata model (beta.6 correction)", () => {
@@ -117,15 +121,16 @@ describe("tool registry metadata model (beta.6 correction)", () => {
   it("envelope emission is explicit and truthful (X of Y canonical forensic analyzers)", () => {
     const emitters = tools.filter((t) => t.emitsEnvelope === true).map((t) => t.id);
     expect(emitters.sort()).toEqual([...EXPECTED_ENVELOPE_EMITTERS].sort());
-    // bulk claims supportsResult but never publishes an envelope -> must not be counted.
-    expect(getToolDefinitionById("bulk")?.emitsEnvelope, "bulk must not be counted as an envelope emitter").not.toBe(true);
+    // bulk publishes an envelope (real byte-offset provenance) despite supportsResult:false.
+    expect(getToolDefinitionById("bulk")?.emitsEnvelope, "bulk must be counted as an envelope emitter").toBe(true);
     // Every emitter is a canonical forensic analyzer.
     const analyzerIds = new Set(canonicalForensicAnalyzers().map((t) => t.id));
     for (const id of emitters) {
       expect(analyzerIds.has(id), `${id} emits an envelope so it must be a forensic analyzer`).toBe(true);
     }
-    // Honest metric replaces the inflated '15/38': 15 of 18 canonical forensic analyzers emit.
-    expect(emitters.length, "envelope emitter count (X)").toBe(15);
+    // Honest metric: X of Y canonical forensic analyzers emit an AnalysisEnvelope.
+    // After B6-B1, all 18 canonical analyzers (including registry/plist/bulk) migrate.
+    expect(emitters.length, "envelope emitter count (X)").toBe(18);
     expect(canonicalForensicAnalyzers().length, "canonical forensic analyzer count (Y)").toBe(18);
   });
 });

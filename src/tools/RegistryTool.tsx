@@ -23,9 +23,11 @@ import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
 import { AButton, ALinearProgress, ATextField, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import type { RegistryHive } from "../features/registry/analyzer";
+import { buildRegistryEnvelope } from "../features/registry/envelope";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { runWorkerTask } from "../utils/workerTask";
+import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
 
 const LIMIT = 256 * 1024 * 1024;
@@ -115,6 +117,7 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
       setSelectedId(result.rootId);
       setQuery("");
       setValueFilter("");
+      publishAnalysisResult("registry", buildRegistryEnvelope(result, { sourceName: next.name, sourceSize: next.size }));
       if (next.size <= MAX_PERSISTED_REGISTRY_BYTES) workspace.save({ hive: result, selectedId: result.rootId, query: "", valueFilter: "", fileName: next.name, fileSize: next.size });
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
