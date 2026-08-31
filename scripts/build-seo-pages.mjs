@@ -418,6 +418,12 @@ function buildSitemap() {
     <xhtml:link rel="alternate" hreflang="zh-CN" href="${SITE.base}/zh/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="${SITE.base}/" />
   </url>
+  <url>
+    <loc>${SITE.base}/legal.html</loc>
+    <lastmod>2026-07-13</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="${SITE.base}/legal.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${SITE.base}/legal.html" />
+  </url>
 ${urls.join("\n")}
 </urlset>
 `;

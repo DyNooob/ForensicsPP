@@ -85,9 +85,9 @@ The App also gained `hreflang` (en / zh-CN / x-default) and kept its `SoftwareAp
 ## 6. Technical SEO
 
 - **Canonical:** unique per page, self-referencing (EN → `/tools/<slug>/`, ZH → `/zh/tools/<slug>/`). Never canonical back to home.
-- **Sitemap:** `scripts/build-seo-pages.mjs` regenerates `dist/sitemap.xml` with **21 URLs** — home, `/zh/`, and all 20 locale tool pages — each with reciprocal `xhtml:link` alternates. No hash/state URLs.
+- **Sitemap:** `scripts/build-seo-pages.mjs` regenerates `dist/sitemap.xml` with **23 URLs** — home, `/zh/`, all 20 locale tool pages, and the real `/legal.html` (EN-only, lastmod 2026-07-13) — each with reciprocal `xhtml:link` alternates. No hash/state URLs. (Regression fixed: an earlier cut dropped `/legal.html`; now restored.)
 - **robots.txt:** `Allow: /` + sitemap pointer. Does not block CSS/JS/required assets. (`public/robots.txt` is the standalone fallback; web build overwrites with the full one.)
-- **Structured data:** `SoftwareApplication` + `BreadcrumbList` on tool pages; `WebSite` on `/zh/`. **No** fabricated `AggregateRating` / `Review` / `FAQPage` / `offers`-with-claims. The App's homepage keeps its `SoftwareApplication` with a `price:0` offer (pre-existing, accurate).
+- **Structured data:** `SoftwareApplication` + `BreadcrumbList` on tool pages; `WebSite` on `/zh/`. **No** fabricated `AggregateRating` / `Review` / `FAQPage`. The homepage `SoftwareApplication` was deliberately stripped of its `offers` block — there is no real pricing/commercial offer page, so per spec §23 it is omitted rather than asserted as `price:0`.
 - **OG / Twitter:** `og:title/description/url/type`, `twitter:card/title/description` per page, consistent with body copy (no marketing rewrite).
 - **404:** real `public/404.html` (`noindex`) carried into `dist/` by `finalize-dist`.
 
@@ -118,7 +118,7 @@ All copy derives from real metadata, not invented:
 
 ## 9. Build outputs
 
-- **Web (`npm run build`):** `clean → check:headers → typecheck → vite build → finalize-dist → verify:dist → build-seo-pages`. Produces the app **plus** `dist/tools/*`, `dist/zh/tools/*`, `dist/zh/index.html`, and the 21-URL `dist/sitemap.xml`.
+- **Web (`npm run build`):** `clean → check:headers → typecheck → vite build → finalize-dist → build-seo-pages → verify:dist → lint:seo`. Produces the app **plus** `dist/tools/*`, `dist/zh/tools/*`, `dist/zh/index.html`, `dist/legal.html` (carried by `finalize-dist`), and the 23-URL `dist/sitemap.xml`.
 - **Standalone (`npm run build:standalone`):** unchanged pipeline (no SEO step) → single-file app only. SEO pages are **not** bundled.
 
 > Note: the `clean` step is sandbox-guarded in this environment (>50-file delete). Validated here via the sandbox-safe path: `vite build` (into isolated dir) + `finalize-dist` + `verify:dist` + `build-seo-pages`, all green. The committed source produces the same output in a normal environment.
@@ -135,7 +135,7 @@ All copy derives from real metadata, not invented:
 | `npm run i18n:check` | OK |
 | `node scripts/lint-seo.mjs` | OK — 31 pages, 0 marketing terms |
 | `npm run verify:dist` | verified 208 files, 55.4 MiB (with SEO pages present) |
-| `node scripts/build-seo-pages.mjs` | 20 locale tool pages + `/zh/` home + sitemap; guard passed |
+| `node scripts/build-seo-pages.mjs` | 20 locale tool pages + `/zh/` home + `/legal.html` in sitemap; guard passed |
 
 New test: `tests/seo-contract.test.ts` (10 cases) — unique title/canonical/slug, non-empty description, **valid `toolId` reference to real tools** (fails on rename), en/zh 1:1 mapping, forbidden-word lint, and (when built) raw-HTML canonical + reciprocal hreflang + JSON-LD + sitemap coverage.
 
@@ -160,6 +160,8 @@ Real checks against **built** `dist/` (raw HTML, no JS execution):
 - **`robots.txt` / sitemap** are committed to `dist/` at build time; the live site needs the host to serve them at `/robots.txt` and `/sitemap.xml` (GitHub Pages / any static host does).
 - **Worker-backed tools still need HTTP** (standalone `file://` cannot load Workers) — unchanged, and irrelevant to SEO pages (they only link into the app).
 - **Language auto-detection** is the App's runtime concern; the SEO layer uses explicit `hreflang`, not IP/JS redirect.
+- **No-JS + `file://` standalone edge case:** the homepage preboot links use root-absolute `/tools/...`; if a standalone user opens `dist/index.html` via `file://` with JS disabled, those links will not resolve. With JS enabled (the normal case) the preboot is replaced by the app, so this only affects the no-JS-under-file:// corner.
+- **GitHub / README brand consistency (spec §34) not yet audited** — repository description, homepage, topics, and README first paragraph should be checked against the `Forensics++ / ForensicsPP / local-first DFIR` entity. This is a repo-settings/README task, not a code defect; defer to a separate pass.
 
 ---
 
