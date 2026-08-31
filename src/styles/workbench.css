@@ -1865,6 +1865,39 @@ details.tool-panel:not([open]) > :not(summary) {
   border-color: color-mix(in srgb, #8F4A51 45%, transparent);
   background: color-mix(in srgb, #8F4A51 12%, transparent);
 }
+.maturity-chip.maturity-featured {
+  color: #7252A3;
+  border-color: color-mix(in srgb, #7252A3 45%, transparent);
+  background: color-mix(in srgb, #7252A3 12%, transparent);
+}
+.validation-chip {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid color-mix(in srgb, var(--app-line) 70%, transparent);
+}
+.validation-chip.validation-unvalidated {
+  color: var(--app-muted);
+  border-color: color-mix(in srgb, var(--app-muted) 45%, transparent);
+  background: color-mix(in srgb, var(--app-muted) 12%, transparent);
+}
+.validation-chip.validation-unit-tested {
+  color: #52606D;
+  border-color: color-mix(in srgb, #52606D 45%, transparent);
+  background: color-mix(in srgb, #52606D 12%, transparent);
+}
+.validation-chip.validation-fixture-validated {
+  color: #1769AA;
+  border-color: color-mix(in srgb, #1769AA 45%, transparent);
+  background: color-mix(in srgb, #1769AA 12%, transparent);
+}
+.validation-chip.validation-cross-validated {
+  color: #1E6B4B;
+  border-color: color-mix(in srgb, #1E6B4B 45%, transparent);
+  background: color-mix(in srgb, #1E6B4B 12%, transparent);
+}
 
 .home-catalog,
 .home-directory {

@@ -16,7 +16,7 @@
 
 | 差距 | 量级 | 性质 |
 |---|---|---|
-| **Envelope 覆盖率 3/38** | 定义完整，但只有 binary / firmware / pcap 三个工具真正产出 | 工作量最大 |
+| **Envelope 覆盖率 3/18（canonical 取证分析器）** | 定义完整，但只有 binary / firmware / pcap 三个工具真正产出 | 工作量最大 |
 | **Evidence 身份模型缺失** | `CaseEvidenceFile` 无 `id` / `source` / `verification`，身份目前由 `name:size:lastModified` 承担 | 与计划 P0-3 完全吻合，且是 P0-4 的前置 |
 | **无生命周期 / 资源策略** | ToolHost 只做 memo + error boundary + suspense，无 dispose；`maxMountedTools=8` 永久挂载 | 全新基础设施 |
 
@@ -69,7 +69,7 @@ schemaVersion("1") ✅  id ✅  analyzer{id,version} ✅  source ✅  run{starte
 summary{title,text,metrics} ✅  findings ✅  indicators ✅  artifacts ✅  timeline ✅  limitations ✅  data ✅
 ```
 
-**现状 —— 覆盖率 3/38**
+**现状 —— 覆盖率 3/18（canonical 取证分析器；分母不含 transform/别名/隐藏工具，共 38 个总工具）**
 
 | 工具 | 产出 Envelope | 位置 |
 |---|---|---|
@@ -90,7 +90,7 @@ summary{title,text,metrics} ✅  findings ✅  indicators ✅  artifacts ✅  ti
 | B3 | `archive` | zip-bomb-guard + extraction，artifacts 天然对应 |
 | B3 | `document` | metadata + embedded-files |
 | B3 | `windows` | MFT / USN / Prefetch / LNK，**Timeline 主来源** |
-| B4 | `browserartifacts` / `image` / `ioc` / `email` | ✅ 完成（见 ENVELOPE-COVERAGE，15/38） |
+| B4 | `browserartifacts` / `image` / `ioc` / `email` | ✅ 完成（见 ENVELOPE-COVERAGE，15/18 canonical 取证分析器） |
 | — | transform 类（codec / hash / jwt / password / baseconvert / uuid / json / regex / timestamp / url / http / qr / sql / cyberchef） | **不强制**，无检材语义 |
 
 **关键约束**：`transform` 类工具（无检材输入）不应被强制 Envelope 化 —— 这也符合原则 2「不为了统一而统一」。计划书的「核心工具」应理解为**检材分析类工具**。

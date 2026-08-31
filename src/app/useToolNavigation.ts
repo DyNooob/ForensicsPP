@@ -145,12 +145,18 @@ export function useToolNavigation({
     .map((id) => filteredTools.find((tool) => tool.id === id))
     .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
     .filter((tool) => tool.id !== "home");
-  const groupedTools: SidebarToolGroup[] = (["featured", "analysis", "transform", "network"] as ToolCategory[])
+  const domainOrder: ToolCategory[] = ["analysis", "transform", "network"];
+  const featuredItems = filteredTools.filter((tool) => tool.featured === true && !favoriteIds.has(tool.id));
+  const domainGroups: SidebarToolGroup[] = domainOrder
     .map((category) => ({
       category,
-      items: filteredTools.filter((tool) => tool.category === category && !favoriteIds.has(tool.id))
+      items: filteredTools.filter((tool) => tool.category === category && !tool.featured && !favoriteIds.has(tool.id))
     }))
     .filter((group) => group.items.length);
+  const groupedTools: SidebarToolGroup[] = [
+    ...(featuredItems.length ? [{ category: "featured" as const, items: featuredItems }] : []),
+    ...domainGroups
+  ];
   React.useEffect(() => {
     const hashedTool = toolIdFromHash();
     if (hashedTool) {

@@ -19,10 +19,13 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { readFileSync } from "node:fs";
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { buildCasePackage, readCasePackageBytes } from "../src/features/reporter/casePackage";
 import { sha256Bytes } from "../src/utils/hash";
+
+const FIXTURES = new URL("../tests/fixtures/", import.meta.url);
 
 const source = {
   generatedAt: "2026-08-16T00:00:00.000Z",
@@ -71,5 +74,22 @@ describe(".fppcase", () => {
     entries["notes.json"] = strToU8("[]\n");
     const tampered = zipSync(entries);
     expect(() => readCasePackageBytes(tampered)).toThrow(/size mismatch|integrity check failed/i);
+  });
+
+  it("imports a committed schema 1.0 legacy .fppcase fixture (no analysis.json)", () => {
+    const bytes = new Uint8Array(readFileSync(new URL("legacy-case-1.0.fppcase", FIXTURES)));
+    const imported = readCasePackageBytes(bytes);
+    expect(imported.notes).toHaveLength(1);
+    expect(imported.notes[0].title).toBe("Recovered row");
+    expect(imported.meta.caseName).toBe("Legacy Case 001");
+    expect(imported.analysisResults ?? []).toHaveLength(0);
+  });
+
+  it("imports a committed schema 1.1 .fppcase fixture and round-trips analysis results", () => {
+    const bytes = new Uint8Array(readFileSync(new URL("case-1.1.fppcase", FIXTURES)));
+    const imported = readCasePackageBytes(bytes);
+    expect(imported.notes).toHaveLength(1);
+    expect(imported.analysisResults ?? []).toHaveLength(1);
+    expect((imported.analysisResults ?? [])[0]).toMatchObject({ toolId: "firmware" });
   });
 });

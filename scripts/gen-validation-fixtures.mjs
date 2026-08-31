@@ -31,11 +31,14 @@ mkdirSync(outDir, { recursive: true });
 // --- SQLite deleted-record fixture -------------------------------------------
 const SQL = await initSqlJs();
 const db = new SQL.Database();
+db.run("PRAGMA page_size=4096; PRAGMA secure_delete=OFF; PRAGMA auto_vacuum=NONE; PRAGMA journal_mode=DELETE;");
 db.run("CREATE TABLE users(id INTEGER PRIMARY KEY, username TEXT, email TEXT);");
 db.run(
-  "INSERT INTO users(id, username, email) VALUES (1,'alice','alice@example.com'),(2,'bob','bob@example.com'),(3,'carol','carol@example.com');"
+  "INSERT INTO users(id, username, email) VALUES " +
+    "(1,'alice','alice@example.com'),(2,'bob','bob@example.com'),(3,'carol','carol@example.com')," +
+    "(4,'dave','dave@example.com'),(5,'erin','erin@example.com'),(6,'frank','frank@example.com');"
 );
-db.run("DELETE FROM users WHERE id = 2;"); // deleted row -> recoverable
+db.run("DELETE FROM users WHERE id = 2;"); // deleted row -> recoverable only as residual (no VACUUM)
 const sqliteBytes = Buffer.from(db.export());
 db.close();
 writeFileSync(resolve(outDir, "sqlite-deleted-record.sqlite"), sqliteBytes);
@@ -58,9 +61,14 @@ const manifest = {
   sqliteDeletedRecord: {
     fixture: "sqlite-deleted-record.sqlite",
     parser: "inspectSqliteDatabase",
+    build: "PRAGMA page_size=4096; PRAGMA secure_delete=OFF; PRAGMA auto_vacuum=NONE; PRAGMA journal_mode=DELETE;",
     expected: {
-      recoveredRecordsAtLeast: 1,
-      deletedUsernameRecovered: "bob",
+      // Honest claim: the deleted row is recoverable as a fragment/raw residual, NOT a
+      // structured free-space record. The validation test asserts fragment residual recovery
+      // and a secure_delete+VACUUM negative control — it must NOT claim structured record recovery.
+      pageSize: 4096,
+      deletedUsernameRecoveredAsFragment: "bob",
+      structuredRecordRecovery: false,
       envelopeFindingCategory: "sqlite-recovery",
       limitationCode: "SQLITE_RECOVERY_HEURISTIC"
     }

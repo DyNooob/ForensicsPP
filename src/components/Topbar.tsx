@@ -173,19 +173,28 @@ export function Topbar({
       width={420}
       styles={{ body: { whiteSpace: "pre-wrap", lineHeight: 1.7 } }}
     >
-      {active.tier && (
+      {active.featured && (
         <div className="help-meta">
-          <span className="help-meta-label">{t.tierLabel}</span>
-          <span className={`tier-chip tier-${active.tier}`}>
-            {active.tier === "workbench" ? t.tierWorkbench : active.tier === "utility" ? t.tierUtility : t.tierFeatured}
-          </span>
+          <span className="help-meta-label">{t.featured}</span>
+          <span className="maturity-chip maturity-featured">★</span>
         </div>
       )}
       {active.maturity && (
         <div className="help-meta">
           <span className="help-meta-label">{t.maturityLabel}</span>
           <span className={`maturity-chip maturity-${active.maturity}`}>
-            {active.maturity === "validated" ? t.maturityValidated : active.maturity === "stable" ? t.maturityStable : active.maturity === "triage" ? t.maturityTriage : t.maturityExperimental}
+            {active.maturity === "stable" ? t.maturityStable : active.maturity === "triage" ? t.maturityTriage : t.maturityExperimental}
+          </span>
+        </div>
+      )}
+      {active.validation && (
+        <div className="help-meta">
+          <span className="help-meta-label">{t.validationLabel}</span>
+          <span className={`validation-chip validation-${active.validation}`}>
+            {active.validation === "unvalidated" ? t.validationUnvalidated
+              : active.validation === "unit-tested" ? t.validationUnitTested
+              : active.validation === "fixture-validated" ? t.validationFixtureValidated
+              : t.validationCrossValidated}
           </span>
         </div>
       )}

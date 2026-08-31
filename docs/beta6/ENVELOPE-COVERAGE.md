@@ -4,8 +4,14 @@
 > 计划书原文要求「核心工具必须具备 reset/error recovery/result access/dispose」—— 此处「核心工具」限定为**检材分析类**，
 > transform 类（codec/hash/json/regex…）无检材输入语义，**不强制** Envelope（符合原则 2「不为了统一而统一」）。
 
-**最后更新**：2026-08-30（批 B1 + B2 + B3 + B4 完成）
-**覆盖率**：**15 / 38** 工具产出 AnalysisEnvelope（基线 3/38）
+**最后更新**：2026-08-31（B6-A 纠偏：指标口径从「15/38」改为「X/Y canonical 取证分析器」）
+**覆盖率**：**15 / 18** 个 canonical 取证分析器产出 AnalysisEnvelope（基线 3/18：binary / firmware / pcap）
+
+> **指标口径说明（B6-A 纠偏）**：分母不再是「全部 38 个工具」，而是 `canonicalForensicAnalyzers()` 返回的 **18** 个检材/网络分析器
+> （`category ∈ {analysis, network}` 且具备 `accepts` / `capabilities` / `supportsEvidence` / `supportsResult` / `heavy` 之一，排除 `hidden` 别名）。
+> transform 类（codec/hash/json/regex…）、`home`（`system`）、`cyberchef`（`integration`）、隐藏别名（qr/fileid/png/strings/entropy/yara）**不计入分母**——
+> 它们无检材语义，不强制 Envelope（符合原则 2「不为了统一而统一」）。原「15/38」把 38 个总工具当分母，夸大了覆盖率，已弃用。
+> 计算方法见 `tests/tool-registry.test.ts`：`canonicalForensicAnalyzers().length === 18` 且 `emitters.length === 15`。
 
 ---
 
@@ -43,6 +49,35 @@
 `urltool` `http` + 隐藏别名 `qr` `fileid` `png` `strings` `entropy` `yara`
 
 > **`ioc` 豁免更正**：早期评估把 `ioc` 列为「纯 IOC 录入，非解析」而豁免。实际 `IocTool` 在 worker 中运行 `analyzeIocs`（见 `src/features/ioc/analyzer.ts`）从文本/日志/文件中**结构化提取** `IocRecord[]`，属于检材分析类，已在 B4 迁移并产出 envelope（`indicators` 为核心输出）。`qr` 仍为隐藏别名（合并进 `image`），不单独产 envelope。
+
+---
+
+## 诚实迁移矩阵（15 / 18 canonical 取证分析器）
+
+> 分母 = `canonicalForensicAnalyzers()` = 18。状态由 `emitsEnvelope` 字段与 `publishAnalysisResult` 调用实证（见 `tests/tool-registry.test.ts`）。
+
+| # | 分析器 | 域 | 状态 | 批 |
+|---|---|---|---|---|
+| 1 | binary | analysis | ✅ 已迁移 | 基线 |
+| 2 | firmware | analysis | ✅ 已迁移 | 基线 |
+| 3 | pcap | network | ✅ 已迁移 | 基线 |
+| 4 | sqlite | analysis | ✅ 已迁移 | B1 |
+| 5 | evtx | analysis | ✅ 已迁移 | B1 |
+| 6 | disk | analysis | ✅ 已迁移 | B2 |
+| 7 | memory | analysis | ✅ 已迁移 | B2 |
+| 8 | android | analysis | ✅ 已迁移 | B2 |
+| 9 | archive | analysis | ✅ 已迁移 | B3 |
+| 10 | documentforensics | analysis | ✅ 已迁移 | B3 |
+| 11 | windows | analysis | ✅ 已迁移 | B3 |
+| 12 | browserartifacts | analysis | ✅ 已迁移 | B4 |
+| 13 | image | analysis | ✅ 已迁移 | B4 |
+| 14 | ioc | analysis | ✅ 已迁移 | B4 |
+| 15 | email | analysis | ✅ 已迁移 | B4 |
+| 16 | registry | analysis | ⏸ 未迁移（triage，B6-B） | — |
+| 17 | plist | analysis | ⏸ 未迁移（triage，B6-B） | — |
+| 18 | bulk | analysis | ⏸ 未迁移（`supportsResult` 过度声明已修正为 `false`，B6-B） | — |
+
+**结论**：15/18 已迁移；剩余 3 个（registry / plist / bulk）为 B6-B 工作，本轮（B6-A）按用户指令**不迁移剩余 23 工具**，仅做纠偏。
 
 ---
 

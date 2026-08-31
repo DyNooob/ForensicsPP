@@ -25,12 +25,11 @@ import { AButton, AList, AListItem, AListSubheader, ATextField } from "./ui";
 import type { ToolCategory, ToolDefinition } from "../config/app";
 import type { Translation } from "../i18n";
 
-export type ToolGroup = { category: ToolCategory; items: ToolDefinition[] };
+export type ToolGroup = { category: ToolCategory | "featured"; items: ToolDefinition[] };
 
-function tierLabel(tool: ToolDefinition, t: Translation) {
-  if (!tool.tier) return t[tool.category];
-  const tier = tool.tier === "workbench" ? t.tierWorkbench : tool.tier === "utility" ? t.tierUtility : t.tierFeatured;
-  return `${t[tool.category]} · ${tier}`;
+function domainLabel(tool: ToolDefinition, t: Translation) {
+  const base = t[tool.category];
+  return tool.featured ? `★ ${base}` : base;
 }
 
 type SidebarProps = {
@@ -102,7 +101,7 @@ export function Sidebar({
                     key={`favorite-${tool.id}`}
                     rounded
                     active={tool.id === activeTool}
-                    description={tierLabel(tool, t)}
+                    description={domainLabel(tool, t)}
                     description-line={1}
                     title={`${toolTitle(tool)} - ${t[tool.desc]}`}
                     aria-current={tool.id === activeTool ? "page" : undefined}
@@ -122,7 +121,7 @@ export function Sidebar({
                     key={tool.id}
                     rounded
                     active={tool.id === activeTool}
-                    description={tierLabel(tool, t)}
+                    description={domainLabel(tool, t)}
                     description-line={1}
                     title={`${t[tool.name]} - ${t[tool.desc]}`}
                     aria-current={tool.id === activeTool ? "page" : undefined}

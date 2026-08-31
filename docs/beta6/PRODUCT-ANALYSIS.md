@@ -23,7 +23,7 @@ Forensics++ 的工程底座已经相当扎实（运行时契约、证据身份�
 ### 1.1 架构完成度（高）
 - **统一运行时契约** `src/core/runtime/`：`toolLifecycle` / `resourcePolicy` / `managedTask` / `retainedTools` / `runGuard` / `useToolRuntime` / `useWorkerTask` / `useStaleRunGuard`。重型工具（firmware/disk/memory/windows/pcap/sqlite/bulk + android/archive/document/browserartifacts/image/ioc/email）全部走一致的生命周期/错误/资源/竞态守卫。这是 40 工具能"像一个产品"而非"40 个脚本"的根本。
 - **证据身份 + 关联** `src/core/evidence/identity.ts` + `resultStore.publishAnalysisResult`：用 `evidenceKeyFromSources` 把同一检材的多次运行聚到同一 bucket，带来 `runId`（`<key>/<toolId>#<seq>`）与单调 `sequence`。这是"案件关联"的地基，已落地。
-- **结构化产出 Envelope**：`features/analysis/result.ts` 的 `AnalysisEnvelope`（summary/findings/indicators/artifacts/timeline/limitations）+ 15 个 builder（`features/<domain>/envelope.ts`）。覆盖 15/38 工具。
+- **结构化产出 Envelope**：`features/analysis/result.ts` 的 `AnalysisEnvelope`（summary/findings/indicators/artifacts/timeline/limitations）+ 15 个 builder（`features/<domain>/envelope.ts`）。覆盖 **15 / 18** 个 canonical 取证分析器（分母 = `canonicalForensicAnalyzers()`，不含 transform/别名/隐藏工具；原「15/38」口径已弃用，见 ENVELOPE-COVERAGE）。
 - **案件报告引擎** `features/reporter/CaseReporter.tsx`：导出 **md / html / json / bundle / .fppcase(zip) / csv** 六种格式；报告与每条笔记带 **SHA256 完整性校验**（链级保管雏形）。这是项目最强的"可用成果"资产。
 - **外壳体验**：hash 路由、保留多工具分页（`maxMountedTools=8`）、命令面板（Ctrl/Cmd+K）、收藏/最近、9 套主题、深/浅/自动主题、i18n（zh/en，1755 行）、per-tool `ToolErrorBoundary`、法律同意弹窗、版本陈旧横幅、Service Worker（离线/PWA 倾向）、`build:standalone` 单文件便携构建。
 - **内嵌 CyberChef** `tools/CyberChefTool.tsx`：~12MB iframe，延迟挂载。对编码/混淆 analysis 是强力补充。

@@ -2,9 +2,11 @@
   "sqliteDeletedRecord": {
     "fixture": "sqlite-deleted-record.sqlite",
     "parser": "inspectSqliteDatabase",
+    "build": "PRAGMA page_size=4096; PRAGMA secure_delete=OFF; PRAGMA auto_vacuum=NONE; PRAGMA journal_mode=DELETE;",
     "expected": {
-      "recoveredRecordsAtLeast": 1,
-      "deletedUsernameRecovered": "bob",
+      "pageSize": 4096,
+      "deletedUsernameRecoveredAsFragment": "bob",
+      "structuredRecordRecovery": false,
       "envelopeFindingCategory": "sqlite-recovery",
       "limitationCode": "SQLITE_RECOVERY_HEURISTIC"
     }

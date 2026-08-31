@@ -20,53 +20,112 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { tools, visibleTools, getToolDefinitionById, type ToolDefinition } from "../src/config/app";
+import {
+  tools,
+  visibleTools,
+  getToolDefinitionById,
+  canonicalForensicAnalyzers,
+  type ToolDefinition
+} from "../src/config/app";
 
-const TIERS = ["workbench", "utility", "featured"] as const;
-const MATURITIES = ["validated", "stable", "triage", "experimental"] as const;
+const CATEGORIES = ["analysis", "transform", "network", "system", "integration"] as const;
+const MATURITIES = ["stable", "triage", "experimental"] as const;
+const VALIDATIONS = ["unvalidated", "unit-tested", "fixture-validated", "cross-validated"] as const;
 
-describe("tool registry hierarchy (beta.6)", () => {
-  it("every tool declares a tier and a maturity", () => {
+// The 15 tools that genuinely publish a structured AnalysisEnvelope (verified by
+// grepping `publishAnalysisResult` calls in src/tools). `bulk` sets supportsResult
+// but never publishes, so it is deliberately excluded.
+const EXPECTED_ENVELOPE_EMITTERS = [
+  "android",
+  "archive",
+  "disk",
+  "documentforensics",
+  "email",
+  "evtx",
+  "image",
+  "ioc",
+  "memory",
+  "sqlite",
+  "windows",
+  "browserartifacts",
+  "binary",
+  "firmware",
+  "pcap"
+];
+
+describe("tool registry metadata model (beta.6 correction)", () => {
+  it("category is an orthogonal semantic domain and never 'featured'", () => {
     for (const tool of tools) {
-      expect(tool.tier, `${tool.id} should declare a tier`).toBeDefined();
-      expect(TIERS, `${tool.id} tier must be valid`).toContain(tool.tier);
-      expect(tool.maturity, `${tool.id} should declare a maturity`).toBeDefined();
-      expect(MATURITIES, `${tool.id} maturity must be valid`).toContain(tool.maturity);
+      expect(CATEGORIES, `${tool.id} category must be a valid domain`).toContain(tool.category);
+      expect(tool.category, `${tool.id} must not use 'featured' as a category`).not.toBe("featured");
     }
   });
 
-  it("every visible tool declares a tier and a maturity", () => {
-    for (const tool of visibleTools) {
-      expect(tool.tier).toBeDefined();
-      expect(tool.maturity).toBeDefined();
-    }
+  it("home is a system/launcher tool, not a forensic workbench", () => {
+    const home = getToolDefinitionById("home");
+    expect(home?.category, "home must be classified as system").toBe("system");
+    expect(canonicalForensicAnalyzers().some((t) => t.id === "home"), "home must not count as a forensic analyzer").toBe(false);
   });
 
-  it("hidden tools inherit the tier of the tool they merge into", () => {
+  it("cyberchef is expressed as an external/integration tool, not a forensic workbench", () => {
+    const cyberchef = getToolDefinitionById("cyberchef");
+    expect(cyberchef?.category, "cyberchef must be classified as integration").toBe("integration");
+    expect(canonicalForensicAnalyzers().some((t) => t.id === "cyberchef"), "cyberchef must not count as a forensic analyzer").toBe(false);
+  });
+
+  it("featured is a boolean display flag orthogonal to category", () => {
+    const home = getToolDefinitionById("home");
+    const cyberchef = getToolDefinitionById("cyberchef");
+    expect(home?.featured, "home is a featured launcher").toBe(true);
+    expect(cyberchef?.featured, "cyberchef is a featured suite").toBe(true);
     for (const tool of tools) {
-      if (!tool.hidden || !tool.mergedInto) continue;
-      const parent = getToolDefinitionById(tool.mergedInto);
+      if (tool.featured !== undefined) expect(typeof tool.featured, `${tool.id} featured must be boolean`).toBe("boolean");
+    }
+    // A non-featured forensic analyzer is still an analyzer — featured is not a tier.
+    const image = getToolDefinitionById("image");
+    expect(image?.featured, "image is not featured").not.toBe(true);
+    expect(canonicalForensicAnalyzers().some((t) => t.id === "image"), "image is still a forensic analyzer").toBe(true);
+  });
+
+  it("hidden aliases are excluded from counts and inherit their parent category", () => {
+    const hidden = tools.filter((t) => t.hidden);
+    expect(hidden.length, "there must be hidden alias tools").toBeGreaterThan(0);
+    for (const tool of hidden) {
+      expect(tool.mergedInto, `${tool.id} hidden alias must declare mergedInto`).toBeDefined();
+      const parent = getToolDefinitionById(tool.mergedInto as ToolDefinition["id"]);
       expect(parent, `${tool.id} mergedInto ${tool.mergedInto} must exist`).not.toBeNull();
-      expect(tool.tier, `${tool.id} tier should match ${tool.mergedInto}`).toBe(parent?.tier);
+      expect(tool.category, `${tool.id} must inherit parent category`).toBe(parent?.category);
+    }
+    for (const tool of hidden) {
+      expect(visibleTools.some((t) => t.id === tool.id), `${tool.id} hidden alias must not be visible`).toBe(false);
+      expect(canonicalForensicAnalyzers().some((t) => t.id === tool.id), `${tool.id} hidden alias must not inflate analyzer count`).toBe(false);
     }
   });
 
-  it("tier values are consistent with the workbench/utility split", () => {
-    const workbenches = tools.filter((tool) => tool.tier === "workbench");
-    const utilities = tools.filter((tool) => tool.tier === "utility");
-    // Deep forensic analyzers must be workbenches, not level with utilities.
-    expect(workbenches.length).toBeGreaterThan(utilities.length);
-    for (const tool of workbenches as ToolDefinition[]) {
-      // Hidden aliases inherit their parent's surface; skip them here.
-      if (tool.hidden) continue;
-      // A workbench should take evidence or expose an analyzer surface.
-      const isAnalyzer =
-        tool.supportsEvidence ||
-        tool.supportsResult ||
-        tool.heavy ||
-        (tool.capabilities?.length ?? 0) > 0 ||
-        (tool.accepts?.length ?? 0) > 0;
-      expect(isAnalyzer, `${tool.id} claims workbench but exposes no analyzer surface`).toBe(true);
+  it("maturity and validation are two independent, orthogonal dimensions", () => {
+    for (const tool of tools) {
+      if (tool.maturity !== undefined) {
+        expect(MATURITIES, `${tool.id} maturity must be valid`).toContain(tool.maturity);
+        expect(tool.maturity, `${tool.id} must not mix validation into maturity`).not.toBe("validated");
+      }
+      if (tool.validation !== undefined) {
+        expect(VALIDATIONS, `${tool.id} validation must be valid`).toContain(tool.validation);
+      }
     }
+  });
+
+  it("envelope emission is explicit and truthful (X of Y canonical forensic analyzers)", () => {
+    const emitters = tools.filter((t) => t.emitsEnvelope === true).map((t) => t.id);
+    expect(emitters.sort()).toEqual([...EXPECTED_ENVELOPE_EMITTERS].sort());
+    // bulk claims supportsResult but never publishes an envelope -> must not be counted.
+    expect(getToolDefinitionById("bulk")?.emitsEnvelope, "bulk must not be counted as an envelope emitter").not.toBe(true);
+    // Every emitter is a canonical forensic analyzer.
+    const analyzerIds = new Set(canonicalForensicAnalyzers().map((t) => t.id));
+    for (const id of emitters) {
+      expect(analyzerIds.has(id), `${id} emits an envelope so it must be a forensic analyzer`).toBe(true);
+    }
+    // Honest metric replaces the inflated '15/38': 15 of 18 canonical forensic analyzers emit.
+    expect(emitters.length, "envelope emitter count (X)").toBe(15);
+    expect(canonicalForensicAnalyzers().length, "canonical forensic analyzer count (Y)").toBe(18);
   });
 });

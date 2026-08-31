@@ -37,7 +37,8 @@ function hasAccepts(definition: ToolDefinition): boolean {
 
 function defaultPolicyFor(definition: ToolDefinition): ResourcePolicy {
   if (definition.category === "transform") return "retain";
-  if (definition.category === "featured") return "retain";
+  // Launcher (home) and external/embedded suites (cyberchef) are never heavy.
+  if (definition.category === "system" || definition.category === "integration") return "retain";
   if (hasAccepts(definition)) return "suspendable";
   return "retain";
 }
@@ -59,12 +60,12 @@ export function resolveResourceProfile(definition: ToolDefinition | null): ToolR
     };
   }
   const policy = definition.resourcePolicy ?? defaultPolicyFor(definition);
-  const isEvidenceTool = hasAccepts(definition) || definition.category === "analysis" || definition.category === "network";
+  const isEvidenceTool = hasAccepts(definition) || definition.category === "analysis";
   return {
     policy,
     heavy: definition.heavy ?? (policy === "dispose-on-switch" || policy === "suspendable"),
     supportsEvidence: definition.supportsEvidence ?? isEvidenceTool,
-    supportsResult: definition.supportsResult ?? (definition.category === "analysis" || definition.category === "network"),
+    supportsResult: definition.supportsResult ?? (definition.category === "analysis"),
     supportsHandoff: definition.supportsHandoff ?? hasAccepts(definition),
     supportsPersistence: definition.supportsPersistence ?? definition.category === "transform"
   };
