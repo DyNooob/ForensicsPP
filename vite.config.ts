@@ -45,8 +45,12 @@ function copyrightCssPlugin(): Plugin {
   };
 }
 
-// Opt-in single-file build (SINGLE_FILE=1). Inlines all JS/CSS into one
-// index.html so the result opens by double-click from file:// (no server).
+// Opt-in standalone build (SINGLE_FILE=1). Inlines the main-thread app
+// JS/CSS into a single index.html, but Web Workers (per-tool analyzers) are
+// still emitted as separate *.worker-*.js files. Browsers refuse to load
+// Workers from file:// (origin "null"), so worker-backed forensic tools
+// require serving over HTTP (npm run preview or any static server). This is
+// an offline distribution, NOT a single self-contained file.
 // vite-plugin-singlefile forces inlineDynamicImports=true, which conflicts
 // with manualChunks, so we drop manualChunks in this mode. The default
 // `npm run build` stays multi-chunk and is unaffected.

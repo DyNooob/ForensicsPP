@@ -37,8 +37,8 @@
     <meta name="license" content="MIT" />
     <meta name="repository" content="https://github.com/DyNooob/ForensicsPP" />
     <meta name="application-name" content="Forensics++" />
-    <meta name="version" content="1.0.0-beta.5" />
-    <meta name="date" content="2026-08-27" />
+    <meta name="version" content="1.0.0-beta.6" />
+    <meta name="date" content="2026-08-31" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Forensics++" />
     <meta property="og:title" content="Forensics++ Workbench" />
@@ -52,7 +52,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
-    <meta property="og:updated_time" content="2026-08-27T00:00:00+08:00" />
+    <meta property="og:updated_time" content="2026-08-31T00:00:00+08:00" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Forensics++ Workbench" />
     <meta
@@ -90,8 +90,8 @@
         "alternateName": "ForensicsPP",
         "applicationCategory": "SecurityApplication",
         "operatingSystem": "Any modern browser",
-        "softwareVersion": "1.0.0-beta.5",
-        "dateModified": "2026-08-27",
+        "softwareVersion": "1.0.0-beta.6",
+        "dateModified": "2026-08-31",
         "license": "https://github.com/DyNooob/ForensicsPP/src/branch/main/LICENSE",
         "codeRepository": "https://github.com/DyNooob/ForensicsPP",
         "url": "https://www.forensicspp.com/",
@@ -163,7 +163,7 @@
             '<h1 style="margin:0;font-size:20px">页面启动失败</h1>' +
             '<p style="margin:0;max-width:600px;color:#66768a">应用脚本未能加载完成。常见原因之一：开发服务器依赖缓存过期或浏览器缓存了旧的脚本分片。<br/>' +
             '请重新加载；若仍失败，在终端重启开发服务器（<code>npm run dev</code>）并删除 <code>node_modules/.vite</code> 后重启。<br/>' +
-            '若你是双击本地 <code>dist/index.html</code>（file:// 协议）打开静态包：多分片构建会被浏览器 CORS 拦截而白屏，请改用单文件构建 <code>npm run build:standalone</code>，或用 <code>npm run preview</code> 启动本地服务器。</p>' +
+            '若你是双击本地 <code>dist/index.html</code>（file:// 协议）打开：单文件构建（<code>npm run build:standalone</code>）虽把主程序内联进一个 HTML，但取证分析器依赖的 Web Worker 仍以独立文件形式存在，浏览器会以 origin "null" 拒绝从 file:// 加载 Worker。因此依赖 Worker 的工具在 file:// 下无法运行；请改用 <code>npm run preview</code> 或任意静态服务器以 HTTP 方式打开。</p>' +
             '<button type="button" onclick="window.location.reload()" style="height:38px;padding:0 18px;border-radius:6px;border:1px solid #245F73;background:#245F73;color:#fff;font-size:14px;cursor:pointer">重新加载</button>' +
             '</div>';
         }
