@@ -19,7 +19,7 @@
   Released under the MIT License.
   Full source code: https://github.com/DyNooob/ForensicsPP
 -->
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -62,6 +62,9 @@
     <meta name="twitter:image" content="https://www.forensicspp.com/og-image.png" />
     <meta name="twitter:image:alt" content="Forensics++ Workbench - Open-source browser-local DFIR tools" />
     <link rel="canonical" href="https://www.forensicspp.com/" />
+    <link rel="alternate" hreflang="en" href="https://www.forensicspp.com/" />
+    <link rel="alternate" hreflang="zh-CN" href="https://www.forensicspp.com/zh/" />
+    <link rel="alternate" hreflang="x-default" href="https://www.forensicspp.com/" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="manifest" href="./site.webmanifest" />
     <style>
@@ -79,6 +82,34 @@
         #root {
           background: #0f1822;
         }
+      }
+
+      .preboot {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif;
+        color: #162130;
+      }
+      .pb-brand { border-bottom: 1px solid #e2e8f0; padding-bottom: 14px; margin-bottom: 8px; }
+      .pb-name { font-weight: 800; font-size: 18px; letter-spacing: .02em; }
+      .pb-tag { display: block; color: #66768a; font-size: 13px; margin-top: 2px; }
+      .preboot h1 { font-size: 28px; line-height: 1.25; margin: 24px 0 8px; }
+      .preboot h2 { font-size: 18px; margin: 32px 0 8px; border-left: 3px solid #245F73; padding-left: 10px; }
+      .pb-lede { font-size: 16px; color: #2b3a4d; }
+      .pb-privacy { font-size: 14px; color: #245F73; }
+      .pb-tools { padding-left: 20px; line-height: 1.9; }
+      .pb-tools a { color: #245F73; text-decoration: none; }
+      .pb-tools a:hover { text-decoration: underline; }
+      .pb-note { font-size: 14px; color: #66768a; margin-top: 24px; }
+      @media (prefers-color-scheme: dark) {
+        .preboot { color: #dbe4ee; }
+        .pb-brand { border-color: #243240; }
+        .pb-tag, .pb-note { color: #93a4b8; }
+        .preboot h2 { border-color: #4a8aa0; }
+        .pb-lede { color: #c2cedb; }
+        .pb-privacy { color: #7fb6cc; }
+        .pb-tools a { color: #7fb6cc; }
       }
     </style>
     <title>Forensics++ Workbench | Open-source DFIR tools</title>
@@ -187,7 +218,35 @@
         </p>
       </main>
     </noscript>
-    <div id="root"></div>
+    <div id="root">
+      <main class="preboot">
+        <header class="pb-brand">
+          <span class="pb-name">Forensics++</span>
+          <span class="pb-tag">ForensicsPP · Local-first digital forensics workbench</span>
+        </header>
+        <h1>Browser-native DFIR tools that run on your device</h1>
+        <p class="pb-lede">
+          Forensics++ is an open-source workbench for digital forensics and incident response.
+          Evidence files are parsed locally in your browser and are never uploaded to a server.
+        </p>
+        <p class="pb-privacy"><strong>No upload.</strong> Files stay on your device. Works offline once loaded.</p>
+        <h2>Core workbenches</h2>
+        <ul class="pb-tools">
+          <li><a href="/tools/evtx-viewer/">Windows Event Logs (EVTX)</a></li>
+          <li><a href="/tools/sqlite-forensics/">SQLite Forensics</a></li>
+          <li><a href="/tools/sqlite-wal-recovery/">SQLite WAL Recovery</a></li>
+          <li><a href="/tools/apk-signature-analyzer/">APK Signature Analysis</a></li>
+          <li><a href="/tools/pcap-analyzer/">PCAP / Network Analysis</a></li>
+          <li><a href="/tools/registry-forensics/">Registry Forensics</a></li>
+          <li><a href="/tools/firmware-analyzer/">Firmware Analysis</a></li>
+          <li><a href="/tools/binary-file-analyzer/">Binary / Unknown File Analysis</a></li>
+          <li><a href="/tools/windows-artifacts/">Windows Artifacts</a></li>
+          <li><a href="/tools/image-forensics/">Image Forensics</a></li>
+        </ul>
+        <p class="pb-note">Enable JavaScript to open a workbench and analyze evidence. See the
+          <a href="/zh/">中文介绍</a>.</p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
