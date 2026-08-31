@@ -25,6 +25,7 @@ import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
 import { EvidenceInbox } from "./components/EvidenceInbox";
 import { ToolHost } from "./components/ToolHost";
+import { FirstRunGuide } from "./components/FirstRunGuide";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
@@ -43,6 +44,7 @@ import { useCacheClear } from "./app/useCacheClear";
 import { useCaseReport } from "./app/useCaseReport";
 import { useCommandPalette } from "./app/useCommandPalette";
 import { useWorkbenchBootstrap } from "./app/useWorkbenchBootstrap";
+import { useFirstRun } from "./app/useFirstRun";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
 const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
@@ -65,7 +67,8 @@ export function App() {
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
   const [evidenceInboxOpen, setEvidenceInboxOpen] = React.useState(false);
   const { reportAddBusy, reportAddAbortRef, setReportAddBusy, caseNotes, setCaseNotes, caseReportMeta, setCaseReportMeta, defaultExportFormat, setDefaultExportFormat, autoSaveEvidence, setAutoSaveEvidence, addCurrentToolToReport, updateCaseNote, deleteCaseNote, clearCaseNotes } = useCaseReport({ activeTool, active, lang, setReporterOpen, setToolLinkMessage });
-  const { commandOpen, setCommandOpen, commandQuery, setCommandQuery, openSettingsPanel, openCommandPalette, shouldIgnoreBackdropClick, filteredCommands } = useCommandPalette({ activeTool, lang, sidebarCollapsed, setSidebarCollapsed, detailsExpanded, setDetailsExpanded, caseNotesCount: caseNotes.length, setActiveTool, setReporterOpen, setThemeMode, setCacheClearError, settingsOpen, setSettingsOpen });
+  const { firstRunOpen, dismissFirstRun, reopenFirstRun } = useFirstRun();
+  const { commandOpen, setCommandOpen, commandQuery, setCommandQuery, openSettingsPanel, openCommandPalette, shouldIgnoreBackdropClick, filteredCommands } = useCommandPalette({ activeTool, lang, sidebarCollapsed, setSidebarCollapsed, detailsExpanded, setDetailsExpanded, caseNotesCount: caseNotes.length, setActiveTool, setReporterOpen, setThemeMode, setCacheClearError, settingsOpen, setSettingsOpen, reopenFirstRun });
 
   const t = copy[lang];
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
@@ -303,6 +306,7 @@ export function App() {
               }))}
             onCloseTool={closeMountedTool}
             onCloseAllTools={closeAllMountedTools}
+            onShowGuide={reopenFirstRun}
           />
         </React.Suspense>
       )}
@@ -328,6 +332,13 @@ export function App() {
         t={t}
         lang={lang}
         onOpenTool={(toolId) => setActiveTool(toolId)}
+      />
+
+      <FirstRunGuide
+        open={firstRunOpen && acceptedLegalVersion === legalVersion}
+        lang={lang}
+        t={t}
+        onClose={dismissFirstRun}
       />
     </div>
     </ConfigProvider>

@@ -1323,6 +1323,10 @@ pre.result-box {
   text-decoration: underline;
 }
 
+.settings-guide-action {
+  margin-top: 16px;
+}
+
 .settings-action-line {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

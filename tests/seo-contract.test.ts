@@ -1,14 +1,24 @@
 /**
- * Forensics++ (ForensicsPP.com) — B6-SEO contract tests
+ * Forensics++ (ForensicsPP.com)
+ * Local-first browser forensics workbench
  *
- * Enforces the Static Search Discovery Layer invariants:
- *  - every page references a real tool id (fails if a tool is renamed)
- *  - titles / descriptions / canonicals are unique
- *  - English and Chinese pages map 1:1 (hreflang reciprocity at source)
- *  - no AI-marketing forbidden words
- *  - when built, raw HTML carries canonical + hreflang + JSON-LD and the
- *    sitemap covers every locale page.
+ * Copyright (c) 2026 DyNooob. All rights reserved.
+ * Author: DyNooob
+ * Website: https://www.forensicspp.com
+ * Platform: DigiForensics.cn
+ * Project: https://github.com/DyNooob/ForensicsPP
+ *
+ * Forensics++ is an open-source, browser-side toolkit for CTF/MISC,
+ * lightweight forensic triage, encoding/decoding, metadata inspection,
+ * hashes, archive parsing, and local analysis.
+ *
+ * Do not use this project for unauthorized access, intrusion,
+ * privacy infringement, or unlawful activity.
+ *
+ * Released under the MIT License.
+ * Full source code: https://github.com/DyNooob/ForensicsPP
  */
+
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";

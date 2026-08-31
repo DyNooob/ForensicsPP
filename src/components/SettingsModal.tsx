@@ -31,6 +31,7 @@ import {
   LinkOutlined,
   MailOutlined,
   MoonOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
   SunOutlined
 } from "@ant-design/icons";
@@ -70,6 +71,7 @@ type SettingsModalProps = {
   openTools: Array<{ id: ToolId; title: string; active: boolean }>;
   onCloseTool: (id: ToolId) => void;
   onCloseAllTools: () => void;
+  onShowGuide: () => void;
 };
 
 function formatStorageMb(bytes: number) {
@@ -113,7 +115,8 @@ export function SettingsModal({
   onAutoSaveEvidenceChange,
   openTools,
   onCloseTool,
-  onCloseAllTools
+  onCloseAllTools,
+  onShowGuide
 }: SettingsModalProps) {
   const [page, setPage] = React.useState<SettingsPage>("appearance");
   const [storage, setStorage] = React.useState<StorageSnapshot>({ local: 0, usage: 0, quota: 0, estimated: false });
@@ -336,6 +339,9 @@ export function SettingsModal({
                 <strong>{t.settingsPrivacyTitle}</strong>
                 <div className="settings-privacy-badge">{t.settingsPrivacyNoUpload}</div>
                 <Typography.Text type="secondary">{t.settingsPrivacyNoUploadDesc}</Typography.Text>
+              </div>
+              <div className="settings-guide-action">
+                <Button onClick={onShowGuide} icon={<QuestionCircleOutlined />}>{t.firstRunShowAgain}</Button>
               </div>
             </div>
           )}

@@ -44,6 +44,7 @@ export function useCommandPalette({
   setCacheClearError,
   settingsOpen,
   setSettingsOpen,
+  reopenFirstRun,
 }: {
   activeTool: ToolId;
   lang: Lang;
@@ -58,6 +59,7 @@ export function useCommandPalette({
   setCacheClearError: React.Dispatch<React.SetStateAction<boolean>>;
   settingsOpen: boolean;
   setSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  reopenFirstRun: () => void;
 }) {
   const t = copy[lang];
   const [commandOpen, setCommandOpen] = React.useState(false);
@@ -172,10 +174,19 @@ export function useCommandPalette({
         meta: t.themeMode,
         keywords: "theme auto system follow 系统 自动",
         run: () => setThemeMode("auto")
+      },
+      {
+        id: "action:guide",
+        group: t.commandGroupActions,
+        label: t.firstRunShowAgain,
+        hint: t.firstRunTitle,
+        meta: t.commandGroupActions,
+        keywords: "guide tour intro welcome first run onboarding 引导 新手 介绍 入门",
+        run: () => reopenFirstRun()
       }
     ];
     return [...actionCommands, ...toolCommands];
-  }, [activeTool, caseNotesCount, detailsExpanded, detailsToggleLabel, lang, openSettingsPanel, sidebarCollapsed, t]);
+  }, [activeTool, caseNotesCount, detailsExpanded, detailsToggleLabel, lang, openSettingsPanel, sidebarCollapsed, t, reopenFirstRun]);
 
   const filteredCommands = React.useMemo(() => {
     const value = commandQuery.trim().toLowerCase();
