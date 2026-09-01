@@ -23,7 +23,7 @@ import React from "react";
 import { AButton, ALinearProgress, InfoTable, PanelTitle, ToolFactGrid, ToolPanelHeader } from "../components/ui";
 import { analyzerTargetLabel } from "../core/analyzerRouting";
 import { evidenceReaderFromBlob, type EvidenceReader } from "../core/evidence/reader";
-import { dispatchToolHandoff } from "../core/toolHandoff";
+import { dispatchToolHandoff, subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { useToolRuntime } from "../core/runtime";
 import { appVersion, type ToolId } from "../config/app";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
@@ -168,6 +168,18 @@ export function FirmwareAnalyzerTool({
       // rt.error already carries ToolErrorInfo; UI renders rt.error?.error
     }
   };
+
+  const handleFileRef = React.useRef(handleFile);
+  handleFileRef.current = handleFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("firmware");
+      if (handoff) handleFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("firmware", consume);
+  }, [active]);
 
   const selected = React.useMemo(() => session?.analysis.objects.find((object) => object.id === selectedId) ?? null, [session, selectedId]);
   const visibleObjects = React.useMemo(() => {

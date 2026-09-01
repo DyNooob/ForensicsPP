@@ -25,6 +25,7 @@ import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/u
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
+import { scanQrRobust } from "../features/qr/scan";
 
 type QrPoint = [string, string];
 type CompactQrAnalysis = {
@@ -40,6 +41,7 @@ type CompactQrAnalysis = {
   payload: string;
   payloadType: string;
   decodedBytes: number;
+  scanStrategy: string;
   payloadRows: QrPoint[];
   cornerRows: QrPoint[];
   geometryRows: QrPoint[];
@@ -55,8 +57,6 @@ export type QrToolServices = {
 
 const MAX_QR_FILE_BYTES = 96 * 1024 * 1024;
 const MAX_QR_SOURCE_PIXELS = 40_000_000;
-const MAX_QR_SCAN_PIXELS = 4_000_000;
-const MAX_QR_SCAN_EDGE = 2048;
 const MAX_PERSISTED_QR_PREVIEW_BYTES = 8 * 1024 * 1024;
 type QrWorkspace = { analysis: Omit<CompactQrAnalysis, "previewUrl">; previewBytes: Uint8Array | null };
 
@@ -141,25 +141,16 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
       }
       const sourcePixels = image.naturalWidth * image.naturalHeight;
       if (!sourcePixels || sourcePixels > MAX_QR_SOURCE_PIXELS) throw new Error(t.image_dimensions_are_too_large_40_megapixels_maximum);
-      const scale = Math.min(1, MAX_QR_SCAN_EDGE / Math.max(image.naturalWidth, image.naturalHeight), Math.sqrt(MAX_QR_SCAN_PIXELS / sourcePixels));
-      const scanWidth = Math.max(1, Math.round(image.naturalWidth * scale));
-      const scanHeight = Math.max(1, Math.round(image.naturalHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = scanWidth;
-      canvas.height = scanHeight;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) throw new Error("Canvas is not available");
-      context.drawImage(image, 0, 0, scanWidth, scanHeight);
-      const imageData = context.getImageData(0, 0, scanWidth, scanHeight);
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      const { default: jsQR } = await import("jsqr");
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      canvas.width = 1;
-      canvas.height = 1;
+      const result = await scanQrRobust(image);
       if (!active || requestId !== requestIdRef.current) {
         URL.revokeObjectURL(previewUrl);
         return;
       }
+      const code = result?.code ?? null;
+      const scanWidth = result?.scanWidth ?? image.naturalWidth;
+      const scanHeight = result?.scanHeight ?? image.naturalHeight;
+      const scanStrategy = result?.strategy ?? "original";
       const payload = code?.data ?? "";
       const payloadType = classifyQrPayload(payload);
       const scanLocation = (code as unknown as { location?: Record<string, unknown> } | null)?.location ?? {};
@@ -186,6 +177,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         payload,
         payloadType,
         decodedBytes,
+        scanStrategy,
         payloadRows: parseQrPayloadDetails(payload, payloadType),
         cornerRows,
         geometryRows: qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
@@ -202,6 +194,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
         payload,
         payloadType,
         decodedBytes,
+        scanStrategy,
         payloadRows: parseQrPayloadDetails(payload, payloadType),
         cornerRows,
         geometryRows: qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
@@ -242,7 +235,8 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
     [t.fileSize, formatBytes(analysis.size)],
     [t.fileType, `${analysis.mime} / ${analysis.format}`],
     [t.dimensions, `${analysis.width} x ${analysis.height}`],
-    [t.scan_size, `${analysis.scanWidth} x ${analysis.scanHeight}`]
+    [t.scan_size, `${analysis.scanWidth} x ${analysis.scanHeight}`],
+    [t.qrScanStrategy, analysis.scanStrategy]
   ] : [];
 
   return (
@@ -300,6 +294,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
               <div className="result-copy-card"><span>{t.dimensions}</span><strong>{analysis.width} x {analysis.height}</strong></div>
             </div>
             <textarea aria-label={t.qr_code_payload} className="single-textarea qr-payload-box" value={analysis.payload || t.qrNoCode} readOnly />
+            {!analysis.payload && <div className="tool-storage-note" role="status">{t.qrNotFoundHint}</div>}
           </div>
 
           {analysis.payload && (

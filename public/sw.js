@@ -19,7 +19,12 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-const CACHE_VERSION = "forensicspp-v1.0.0-beta.5";
+// Development sentinel only. scripts/finalize-dist.mjs rewrites this at build
+// time to `forensicspp-v<package version>-<asset fingerprint>`, and
+// scripts/verify-dist.mjs fails the build if it was not rewritten. Never
+// hardcode a release version here: a stale literal would make the source SW
+// share a cache namespace with a shipped build.
+const CACHE_VERSION = "forensicspp-dev";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -53,6 +58,39 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+function offlineResponse() {
+  return new Response("Service temporarily unavailable", {
+    status: 504,
+    headers: { "Content-Type": "text/plain; charset=utf-8" }
+  });
+}
+
+// A cached app shell is only worth serving offline when every build asset it
+// references can still be replayed from cache. After a rebuild the shell held in
+// cache may point at content hashes that no longer exist on disk or on the
+// network; serving it then paints a page that can never boot and answers each
+// dead chunk with a synthetic 504. Refusing the unbootable shell surfaces one
+// honest offline response instead of a broken app.
+async function bootableShell(cache) {
+  const shellUrl = new URL("./index.html", self.registration.scope).href;
+  const shell = await cache.match(shellUrl);
+  if (!shell) return undefined;
+  let html;
+  try {
+    html = await shell.clone().text();
+  } catch {
+    return undefined;
+  }
+  const references = new Set();
+  const pattern = /(?:src|href)="([^"]*assets\/[^"]+\.(?:js|css))"/g;
+  let match;
+  while ((match = pattern.exec(html))) references.add(match[1]);
+  for (const reference of references) {
+    if (!(await cache.match(new URL(reference, shellUrl).href))) return undefined;
+  }
+  return shell;
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -62,7 +100,15 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match(new URL("./index.html", self.registration.scope).href))
+      (async () => {
+        try {
+          return await fetch(request);
+        } catch (networkError) {
+          const cache = await caches.open(CACHE_VERSION);
+          const shell = await bootableShell(cache);
+          return shell || offlineResponse();
+        }
+      })()
     );
     return;
   }
@@ -81,16 +127,14 @@ self.addEventListener("fetch", (event) => {
       } catch (networkError) {
         const cached = await cache.match(request);
         if (cached) return cached;
-        // Not cached and offline: answer navigations with the app shell,
-        // other missing assets with a neutral 504 so the caller can recover.
+        // Not cached and offline: answer embedded documents with the app shell
+        // when it is still bootable, other missing assets with a neutral 504 so
+        // the caller can recover.
         if (request.destination === "document") {
-          const shell = await caches.match(new URL("./index.html", self.registration.scope).href);
+          const shell = await bootableShell(cache);
           if (shell) return shell;
         }
-        return new Response("Service temporarily unavailable", {
-          status: 504,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        });
+        return offlineResponse();
       }
     })()
   );

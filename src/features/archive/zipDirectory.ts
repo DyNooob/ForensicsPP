@@ -25,6 +25,13 @@ export type ZipDirectoryEntry = {
   compressed: number;
   uncompressed: number;
   encrypted: boolean;
+  /**
+   * Raw offset of the entry's payload inside the archive content bytes. Only
+   * populated for tar/cpio entries (which store content contiguously); ZIP
+   * entries are inflated on demand by fflate and leave this undefined.
+   */
+  dataOffset?: number;
+  dataLength?: number;
 };
 
 export type ZipDirectory = {

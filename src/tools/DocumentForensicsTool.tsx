@@ -91,7 +91,7 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
     setFindingCategory("all");
     setStructureKind("all");
     if (next.size <= 0 || next.size > MAX_FILE_BYTES) {
-      setError(t.the_document_is_empty_or_exceeds_128_mib );
+      setError(t.the_document_is_empty_or_exceeds_128_mib);
       return;
     }
     setFile(next);

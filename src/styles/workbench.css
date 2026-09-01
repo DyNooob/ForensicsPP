@@ -888,7 +888,6 @@ pre.result-box,
 .baseconvert-example-grid button,
 .baseconvert-list-grid button,
 .uuid-list-grid button,
-.jwt-token-card-grid button,
 .timeline-event-cards button,
 .pcap-mini-list button,
 .yara-hit-card-grid button,
@@ -919,8 +918,6 @@ pre.result-box,
 .baseconvert-example-grid button:hover,
 .baseconvert-list-grid button:hover,
 .uuid-list-grid button:hover,
-.jwt-token-card-grid button:hover,
-.jwt-token-card-grid button.active,
 .timeline-event-cards button:hover,
 .pcap-mini-list button:hover,
 .sqlite-table-item:hover,
@@ -943,7 +940,6 @@ pre.result-box,
 .baseconvert-example-grid button:focus-visible,
 .baseconvert-list-grid button:focus-visible,
 .uuid-list-grid button:focus-visible,
-.jwt-token-card-grid button:focus-visible,
 .timeline-event-cards button:focus-visible,
 .pcap-mini-list button:focus-visible,
 .sqlite-table-item:focus-visible,
@@ -958,7 +954,6 @@ pre.result-box,
 .baseconvert-example-grid button:disabled,
 .baseconvert-list-grid button:disabled,
 .uuid-list-grid button:disabled,
-.jwt-token-card-grid button:disabled,
 .timeline-event-cards button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
@@ -980,10 +975,6 @@ pre.result-box,
 .uuid-list-grid span,
 .uuid-list-grid strong,
 .uuid-list-grid em,
-.jwt-token-card-grid span,
-.jwt-token-card-grid strong,
-.jwt-token-card-grid em,
-.jwt-token-card-grid code,
 .json-path-card-grid span,
 .json-path-card-grid strong,
 .json-path-card-grid em,
@@ -1004,8 +995,6 @@ pre.result-box,
 .baseconvert-list-grid em,
 .uuid-list-grid span,
 .uuid-list-grid em,
-.jwt-token-card-grid span,
-.jwt-token-card-grid em,
 .json-path-card-grid span,
 .json-path-card-grid em,
 .ioc-card-grid span,
@@ -1022,7 +1011,6 @@ pre.result-box,
 .baseconvert-example-grid strong,
 .baseconvert-list-grid strong,
 .uuid-list-grid strong,
-.jwt-token-card-grid strong,
 .json-path-card-grid strong,
 .ioc-card-grid strong {
   color: var(--app-text);
@@ -2241,13 +2229,6 @@ details.tool-panel:not([open]) > :not(summary) {
   gap: 16px;
 }
 
-.jwt-grid.empty-jwt {
-  width: min(100%, 1180px);
-  grid-template-columns: minmax(0, 0.98fr) minmax(320px, 0.82fr);
-  gap: 16px;
-}
-
-.jwt-guide-static-card,
 .workbench-guide-card {
   display: grid;
   gap: 6px;
@@ -2267,8 +2248,6 @@ details.tool-panel:not([open]) > :not(summary) {
   gap: 8px;
 }
 
-.jwt-guide-static-card span,
-.jwt-guide-static-card em,
 .workbench-guide-card span,
 .workbench-guide-card em {
   color: var(--app-muted);
@@ -2277,7 +2256,6 @@ details.tool-panel:not([open]) > :not(summary) {
   line-height: 1.45;
 }
 
-.jwt-guide-static-card strong,
 .workbench-guide-card strong {
   color: var(--app-text);
   font-size: 14px;
@@ -2290,8 +2268,7 @@ details.tool-panel:not([open]) > :not(summary) {
   .crypto-workbench.empty-crypto,
   .json-workbench.empty-json
 ) .text-panel textarea,
-.jwt-grid.empty-jwt .jwt-token-input,
-.regex-workbench.empty-regex .regex-textarea,
+  .regex-workbench.empty-regex .regex-textarea,
 .url-workbench.empty-url .single-textarea,
 .baseconvert-workbench.empty-baseconvert .baseconvert-input,
 .uuid-workbench.empty-uuid .uuid-input {
@@ -2747,10 +2724,6 @@ details.tool-panel:not([open]) > :not(summary) {
 .uuid-desktop-status,
 .uuid-primary-grid,
 .uuid-triage-grid,
-.jwt-intake-status-grid,
-.jwt-primary-grid,
-.jwt-token-card-grid,
-.jwt-triage-grid,
 .password-primary-grid,
 .manifest-current-grid,
 .email-current-grid,
@@ -2825,10 +2798,6 @@ details.tool-panel:not([open]) > :not(summary) {
 .uuid-desktop-status,
 .uuid-primary-grid,
 .uuid-triage-grid,
-.jwt-intake-status-grid,
-.jwt-primary-grid,
-.jwt-token-card-grid,
-.jwt-triage-grid,
 .password-primary-grid,
 .manifest-current-grid,
 .email-current-grid,
@@ -2859,13 +2828,6 @@ details.tool-panel:not([open]) > :not(summary) {
 
 .baseconvert-base-switch .app-button.ant-btn {
   width: 100%;
-}
-
-.jwt-grid.has-jwt {
-  width: min(100%, 1280px);
-  grid-template-columns: minmax(0, 1.04fr) minmax(320px, 0.96fr);
-  gap: 16px;
-  align-items: start;
 }
 
 .sql-workbench.empty-sql {

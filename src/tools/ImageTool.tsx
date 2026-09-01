@@ -26,6 +26,8 @@ import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable,
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
 import { buildImageEnvelope } from "../features/image/envelope";
+import { exifFieldLabel, exifValueLabel } from "../features/image/exifLocalize";
+import { scanQrRobust } from "../features/qr/scan";
 import { useStaleRunGuard } from "../core/runtime";
 import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { downloadBlob, formatBytes } from "../utils/files";
@@ -43,6 +45,7 @@ type ImageQrResult = {
   decodedBytes: number;
   scanWidth: number;
   scanHeight: number;
+  scanStrategy: string;
   payloadRows: QrPoint[];
   cornerRows: QrPoint[];
   geometryRows: QrPoint[];
@@ -492,22 +495,12 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     setError("");
     try {
       const image = source.image;
-      const sourcePixels = image.naturalWidth * image.naturalHeight;
-      const maxScanPixels = 4_000_000;
-      const maxScanEdge = 2048;
-      const scale = Math.min(1, maxScanEdge / Math.max(image.naturalWidth, image.naturalHeight), Math.sqrt(maxScanPixels / Math.max(1, sourcePixels)));
-      const scanWidth = Math.max(1, Math.round(image.naturalWidth * scale));
-      const scanHeight = Math.max(1, Math.round(image.naturalHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = scanWidth;
-      canvas.height = scanHeight;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) throw new Error("Canvas is not available");
-      context.drawImage(image, 0, 0, scanWidth, scanHeight);
-      const imageData = context.getImageData(0, 0, scanWidth, scanHeight);
-      const { default: jsQR } = await import("jsqr");
+      const result = await scanQrRobust(image);
       if (!active || analysisId !== analysisIdRef.current) return;
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      const code = result?.code ?? null;
+      const scanWidth = result?.scanWidth ?? image.naturalWidth;
+      const scanHeight = result?.scanHeight ?? image.naturalHeight;
+      const scanStrategy = result?.strategy ?? "original";
       const payload = code?.data ?? "";
       const payloadType = services.classifyQrPayload(payload);
       const rawLocation = (code as unknown as { location?: Record<string, unknown> } | null)?.location ?? {};
@@ -527,6 +520,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         decodedBytes,
         scanWidth,
         scanHeight,
+        scanStrategy,
         payloadRows: services.parseQrPayloadDetails(payload, payloadType),
         cornerRows,
         geometryRows: services.qrGeometryRows(location, image.naturalWidth, image.naturalHeight)
@@ -657,7 +651,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
                 [t.dimensions, imageInfo.width && imageInfo.height ? `${imageInfo.width} × ${imageInfo.height}` : "--"],
                 [isEnglish ? "Display" : "显示状态", imageInfo.decoded ? (isEnglish ? "Opened" : "可打开") : (isEnglish ? "Not decoded" : "无法解码")],
                 [t.repairStatus, imageInfo.repairStatus],
-                ["EXIF", String(Object.keys(imageInfo.exif).length)],
+                [t.exif, String(Object.keys(imageInfo.exif).length)],
                 [isEnglish ? "Extracted items" : "提取项", String(imageInfo.hiddenPayloads.length)],
                 [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
               ]} />
@@ -694,7 +688,19 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
             <table className="image-exif-table">
               <colgroup><col className="image-exif-field-col" /><col /></colgroup>
               <thead><tr><th>{isEnglish ? "Field" : "字段"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead>
-              <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => <tr key={key}><th scope="row"><code>{key}</code></th><td><pre>{formatExifValue(value)}</pre></td></tr>)}</tbody>
+              <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => {
+                const field = exifFieldLabel(key, isEnglish);
+                const valueLabel = exifValueLabel(key, value, isEnglish);
+                return (
+                  <tr key={key}>
+                    <th scope="row">
+                      <span className="exif-field-label">{field}</span>
+                      {!isEnglish && field !== key && <code className="exif-tag-sub">{key}</code>}
+                    </th>
+                    <td><pre>{valueLabel ?? formatExifValue(value)}</pre></td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           </div> : <div className="empty-state">{t.noExif}</div>}
         </div>}
@@ -725,8 +731,10 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
               [isEnglish ? "Result" : "识别结果", qrResult.payload ? (isEnglish ? "Decoded" : "已识别") : (isEnglish ? "No QR code found" : "未发现二维码")],
               [isEnglish ? "Payload type" : "内容类型", qrResult.payloadType || "--"],
               [isEnglish ? "Decoded bytes" : "解码字节", String(qrResult.decodedBytes)],
-              [isEnglish ? "Scan resolution" : "扫描分辨率", `${qrResult.scanWidth} × ${qrResult.scanHeight}`]
+              [isEnglish ? "Scan resolution" : "扫描分辨率", `${qrResult.scanWidth} × ${qrResult.scanHeight}`],
+              [isEnglish ? "Scan strategy" : "识别策略", isEnglish ? qrResult.scanStrategy : ({ original: "原图", mirror: "镜像", binary: "二值化", "binary-invert": "反相二值化" } as Record<string, string>)[qrResult.scanStrategy] ?? qrResult.scanStrategy]
             ]} />
+            {!qrResult.payload && <div className="tool-storage-note" role="status">{isEnglish ? "No QR code detected. Multiple resolutions and binarization strategies were tried. Common causes: low resolution, QR too small in the frame, oversized center logo, or a non-standard code (e.g. a WeChat mini-program circular code)." : "未识别到二维码。已按多分辨率与二值化策略重试。常见原因：图片分辨率过低、二维码占比过小、中央 logo 过大，或为非标准码（如微信小程序圆形码）。"}</div>}
             {qrResult.payload && <><PanelTitle title={isEnglish ? "Payload" : "二维码内容"} /><textarea className="single-textarea compact-textarea" value={qrResult.payload} readOnly /><div className="action-row"><AButton variant="outlined" onClick={() => void copyText(qrResult.payload)}>{t.copy}</AButton></div></>}
             {qrResult.payloadRows.length > 0 && <><PanelTitle title={isEnglish ? "Parsed payload" : "内容解析"} /><InfoTable rows={qrResult.payloadRows} /></>}
             {qrResult.cornerRows.length > 0 && <><PanelTitle title={isEnglish ? "Corners" : "定位点"} /><InfoTable rows={qrResult.cornerRows} /></>}

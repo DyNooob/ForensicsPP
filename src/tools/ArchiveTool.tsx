@@ -33,7 +33,8 @@ import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { buildArchiveEnvelope } from "../features/archive/envelope";
-import { parseZipCentralDirectory, type ZipDirectoryEntry } from "../features/archive/zipDirectory";
+import { parseArchive, type ArchiveFormat } from "../features/archive/archiveParse";
+import type { ZipDirectoryEntry } from "../features/archive/zipDirectory";
 
 type EntryMeta = ZipDirectoryEntry;
 
@@ -45,6 +46,7 @@ type ArchiveState = {
   name: string;
   size: number;
   kind: string;
+  format: ArchiveFormat;
   entries: ArchiveEntry[];
   skipped: number;
 };
@@ -66,11 +68,13 @@ const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 2000;
 
 export function parseArchiveEntries(bytes: Uint8Array): { entries: EntryMeta[]; skipped: number } {
-  const directory = parseZipCentralDirectory(bytes, MAX_ENTRIES);
-  return directory ? { entries: directory.entries, skipped: directory.skipped } : { entries: [], skipped: 0 };
+  const parsed = parseArchive(bytes, MAX_ENTRIES);
+  return parsed ? { entries: parsed.entries, skipped: parsed.skipped } : { entries: [], skipped: 0 };
 }
 
-function inferKind(name: string, entries: EntryMeta[]) {
+function inferKind(name: string, entries: EntryMeta[], format: ArchiveFormat, gzipped = false) {
+  if (format === "tar") return gzipped ? "TAR.GZ" : "TAR";
+  if (format === "cpio") return "CPIO";
   const names = new Set(entries.map((entry) => entry.name.toLowerCase()));
   if (names.has("androidmanifest.xml") && entries.some((entry) => /^classes\d*\.dex$/i.test(entry.name))) return "APK";
   if (names.has("meta-inf/manifest.mf") && entries.some((entry) => /\.class$/i.test(entry.name))) return "JAR";
@@ -199,12 +203,12 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (!guard.isCurrent(requestId)) return;
-      const parsed = parseArchiveEntries(bytes);
-      if (!parsed.entries.length) throw new Error(t.no_zip_entries_were_found);
-      archiveBytesRef.current = bytes;
+      const parsed = parseArchive(bytes, MAX_ENTRIES);
+      if (!parsed || !parsed.entries.length) throw new Error(t.no_archive_entries_were_found);
+      archiveBytesRef.current = parsed.contentBytes;
       const nextEntries = parsed.entries.map((entry) => ({ ...entry, data: undefined }));
       const firstFile = nextEntries.find((entry) => !entry.name.endsWith("/"));
-      const nextArchive = { name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries), entries: nextEntries, skipped: parsed.skipped } satisfies ArchiveState;
+      const nextArchive = { name: file.name, size: file.size, kind: inferKind(file.name, parsed.entries, parsed.format, parsed.gzipped), format: parsed.format, entries: nextEntries, skipped: parsed.skipped } satisfies ArchiveState;
       guard.commit(requestId, () => {
         setArchive(nextArchive);
         setSelectedName(firstFile?.name ?? "");
@@ -279,7 +283,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
       const workerBytes = bytes.slice();
       const extracted = await runWorkerTask<ArchiveWorkerRequest, ArrayBuffer>({
         createWorker: () => new Worker(new URL("../features/archive/archive.worker.ts", import.meta.url), { type: "module" }),
-        request: { bytes: workerBytes.buffer, entryName: entry.name },
+        request: { bytes: workerBytes.buffer, entryName: entry.name, format: archive?.format ?? "zip", dataOffset: entry.dataOffset, dataLength: entry.dataLength },
         transfer: [workerBytes.buffer],
         signal: controller.signal,
         timeoutMs: 120_000
@@ -344,7 +348,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
     <div className={`tool-grid archive-workbench ${archive ? "has-archive" : "empty-archive"}`}>
       <div className="tool-panel wide-panel archive-source-panel">
         <PanelTitle title={t.archive} />
-        <input className="hidden-file-input" ref={inputRef} type="file" tabIndex={-1} aria-hidden="true" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
+        <input className="hidden-file-input" ref={inputRef} type="file" tabIndex={-1} aria-hidden="true" accept=".zip,.apk,.jar,.docx,.xlsx,.pptx,.docm,.xlsm,.pptm,.tar,.gz,.tgz,.cpio" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void loadFile(file); }} />
         <div className={`desktop-drop-zone ${dropActive ? "active" : ""}`} role="button" tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}

@@ -55,7 +55,7 @@ export function FirstRunGuide({ open, lang, t, onClose }: Props) {
       centered
       width={680}
       title={t.firstRunTitle}
-      destroyOnClose
+      destroyOnHidden
     >
       <Steps current={current} items={items} size="small" style={{ marginBottom: 24 }} />
       <Typography.Paragraph style={{ fontSize: 15, minHeight: 104, lineHeight: 1.7 }}>

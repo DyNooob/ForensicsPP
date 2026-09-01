@@ -26,20 +26,20 @@ import { useEvidenceInbox } from "../app/useEvidenceInbox";
 import { clearEvidenceInbox, noteEvidenceUsed, type EvidenceInboxItem } from "../core/evidence/inbox";
 import { dispatchToolHandoff } from "../core/toolHandoff";
 import { copy, type Translation } from "../i18n";
-import { getToolTitle, tools, type ToolId } from "../config/app";
+import { getToolTitle, tools, type ToolId, type ToolDefinition } from "../config/app";
 import type { Lang } from "../models";
 import { copyText } from "../utils/clipboard";
 
-/** Tools that actually subscribe to `takeToolHandoff` and can be pre-filled. */
-const HANDOFF_TARGETS: ToolId[] = [
-  "binary",
-  "android",
-  "archive",
-  "disk",
-  "sqlite",
-  "documentforensics",
-  "image"
-];
+/**
+ * Every tool that can actually receive a handoff. Derived from `config/app.ts`
+ * (`supportsHandoff: true`, excluding hidden/merged aliases) so the dropdown
+ * can never drift out of sync with the tools that subscribe to
+ * `takeToolHandoff`. The two sets are kept in lockstep by a contract test
+ * (`tests/handoff-targets.test.ts`).
+ */
+const HANDOFF_TARGETS: ToolId[] = tools
+  .filter((tool: ToolDefinition) => tool.supportsHandoff && !tool.hidden)
+  .map((tool) => tool.id);
 
 function formatBytes(n: number): string {
   if (!n) return "0 B";

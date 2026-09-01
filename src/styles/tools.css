@@ -61,8 +61,6 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.jwt-grid.empty-jwt,
-.jwt-grid.has-jwt,
 .hash-workbench.empty-hash,
 .hash-workbench.has-hash,
 .password-grid.has-password,
@@ -88,8 +86,6 @@
   align-items: start;
 }
 
-.jwt-grid.empty-jwt > *,
-.jwt-grid.has-jwt > *,
 .hash-workbench.empty-hash > *,
 .hash-workbench.has-hash > *,
 .timeline-workbench.empty-timeline > *,
@@ -324,10 +320,6 @@ body,
 .email-overview-primary,
 .email-overview-grid-compact,
 .sqlite-intake-shell,
-.jwt-intake-shell,
-.jwt-overview-layout,
-.jwt-claims-layout,
-.jwt-token-review-grid,
 .password-intake-shell,
 .password-primary-hero,
 .password-verify-intake-grid,
@@ -407,14 +399,12 @@ details.sqlite-sql-details > .panel-title,
 }
 
 .tool-section-header strong,
-.password-section-header strong,
-.jwt-section-header strong {
+.password-section-header strong {
   font-weight: 720;
 }
 
 .tool-section-header span,
 .password-section-header span,
-.jwt-section-header span,
 .inline-note {
   color: var(--app-muted);
   font-size: 12.5px;
@@ -605,7 +595,6 @@ textarea {
 .baseconvert-example-grid button,
 .baseconvert-list-grid button,
 .uuid-list-grid button,
-.jwt-token-card-grid button,
 .timeline-event-cards button,
 .pcap-mini-list button,
 .yara-hit-card-grid button,
@@ -778,7 +767,6 @@ pre.result-box {
 .tool-grid[class*="empty-"] .tool-stage-meta,
 .sql-workbench.empty-sql .tool-stage-meta,
 .hash-workbench.empty-hash > .hash-context-panel,
-.jwt-grid.empty-jwt > .jwt-guide-panel,
 .url-workbench.empty-url > .url-guide-panel,
 .timeline-workbench.empty-timeline > .timeline-empty-guide-panel,
 .http-workbench.empty-http > .http-guide-panel,
@@ -922,16 +910,6 @@ pre.result-box {
   min-height: 440px;
 }
 
-.settings-modal.settings-page-project .ant-modal-body {
-  height: min(500px, calc(100vh - 96px));
-  min-height: 440px;
-}
-
-.settings-modal.settings-page-storage .ant-modal-body {
-  height: min(480px, calc(100vh - 96px));
-  min-height: 430px;
-}
-
 .settings-shell {
   display: grid;
   grid-template-columns: 184px minmax(0, 1fr);
@@ -988,12 +966,6 @@ pre.result-box {
   overflow-y: auto;
   padding: 24px 28px 26px;
   scrollbar-gutter: stable;
-}
-
-.settings-page-project .settings-main,
-.settings-page-storage .settings-main {
-  overflow: hidden;
-  scrollbar-gutter: auto;
 }
 
 .settings-page-storage .settings-main {
@@ -2880,12 +2852,6 @@ pre.result-box {
     min-height: 0;
   }
 
-  .settings-modal.settings-page-project .ant-modal-body,
-  .settings-modal.settings-page-storage .ant-modal-body {
-    height: calc(100vh - 92px);
-    min-height: 0;
-  }
-
   .settings-shell {
     grid-template-columns: 132px minmax(0, 1fr);
   }
@@ -2901,11 +2867,6 @@ pre.result-box {
   .settings-main {
     overflow-y: auto;
     padding: 20px 16px;
-  }
-
-  .settings-page-project .settings-main,
-  .settings-page-storage .settings-main {
-    overflow-y: auto;
   }
 
   .settings-form-row,
@@ -3314,6 +3275,19 @@ pre.result-box {
 .image-exif-table code {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 12px;
+}
+
+.image-exif-table .exif-field-label {
+  font-weight: 600;
+}
+
+.image-exif-table .exif-tag-sub {
+  display: block;
+  margin-top: 2px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.55;
 }
 
 .image-exif-table tr:last-child > * {
@@ -4058,7 +4032,6 @@ details[open] > summary::after {
   .home-launch-strip,
   .binary-empty-preview-grid,
   .settings-layout,
-  .jwt-grid.empty-jwt,
   .file-analysis-workbench.empty-binary,
   .pcap-workbench.empty-pcap,
   .url-workbench.empty-url,
@@ -4072,8 +4045,6 @@ details[open] > summary::after {
     .empty-windows,
     .empty-pcap
   ) > .upload-zone,
-  .jwt-grid.empty-jwt > .jwt-intake-panel,
-  .jwt-grid.empty-jwt > .jwt-guide-panel,
   .url-workbench.empty-url > .url-intake-panel,
   .url-workbench.empty-url > .url-guide-panel,
   .sqlite-browser-grid.empty-sqlite > .sqlite-upload-panel,
@@ -4096,7 +4067,6 @@ details[open] > summary::after {
   .http-extract-list-grid,
   .http-selected-layout,
   .http-triage-layout,
-  .jwt-overview-cards,
   .regex-selected-layout,
   .codec-header,
   .reporter-layout {

@@ -331,7 +331,7 @@ export function SettingsModal({
               <div className="settings-project-links">
                 <strong>{labels.friendLinks}</strong>
                 <div>
-                  <a href="https://www.电子取证.com" target="_blank" rel="noreferrer">电子取证.com</a>
+                  <a href="https://www.forensicspp.com" target="_blank" rel="noreferrer">ForensicsPP</a>
                   <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
                 </div>
               </div>

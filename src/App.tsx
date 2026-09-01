@@ -21,6 +21,7 @@
 
 import { copyText } from "./utils/clipboard";
 import React from "react";
+import { setUiLang } from "./uiLang";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
 import { EvidenceInbox } from "./components/EvidenceInbox";
@@ -71,6 +72,7 @@ export function App() {
   const { commandOpen, setCommandOpen, commandQuery, setCommandQuery, openSettingsPanel, openCommandPalette, shouldIgnoreBackdropClick, filteredCommands } = useCommandPalette({ activeTool, lang, sidebarCollapsed, setSidebarCollapsed, detailsExpanded, setDetailsExpanded, caseNotesCount: caseNotes.length, setActiveTool, setReporterOpen, setThemeMode, setCacheClearError, settingsOpen, setSettingsOpen, reopenFirstRun });
 
   const t = copy[lang];
+  React.useEffect(() => { setUiLang(lang); }, [lang]);
   const { showStaleBanner, dismissStaleBanner } = useStaleVersion();
 
   useWorkbenchBootstrap({

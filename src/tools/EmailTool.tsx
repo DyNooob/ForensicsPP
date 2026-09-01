@@ -183,7 +183,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
     if (!source.trim() || !active) return;
     if (new TextEncoder().encode(source).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
       setParsed(null);
-      setError(t.pasted_email_text_is_limited_to_16_mib );
+      setError(t.pasted_email_text_is_limited_to_16_mib);
       return;
     }
     workspace.clear();
@@ -437,7 +437,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
             onChange={(event) => {
               const next = event.currentTarget.value;
               if (new TextEncoder().encode(next).byteLength > MAX_EMAIL_TEXT_INPUT_BYTES) {
-                setError(t.pasted_email_text_is_limited_to_16_mib );
+                setError(t.pasted_email_text_is_limited_to_16_mib);
                 return;
               }
               setInput(next);

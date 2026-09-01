@@ -19,30 +19,58 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { unzip } from "fflate";
+import { unzipSync } from "fflate";
+import { parseTar } from "./tar";
+import { parseCpio } from "./cpio";
+
+export type ArchiveFormat = "zip" | "tar" | "cpio";
 
 export type ArchiveWorkerRequest = {
+  /** Un-gzipped archive content bytes (the worker never re-runs decompression). */
   bytes: ArrayBuffer;
   entryName: string;
+  format: ArchiveFormat;
+  /** tar/cpio payload offset + length inside `bytes`; zip extraction ignores these. */
+  dataOffset?: number;
+  dataLength?: number;
 };
 
-self.onmessage = (event: MessageEvent<ArchiveWorkerRequest>) => {
-  try {
-    const { bytes, entryName } = event.data;
-    unzip(new Uint8Array(bytes), { filter: (entry) => entry.name === entryName }, (error, data) => {
-      if (error) {
-        self.postMessage({ type: "error", error: error instanceof Error ? error.message : String(error) });
-        return;
-      }
-      const output = data[entryName];
-      if (!output) {
+/**
+ * Pure, synchronous entry extraction used by the worker and unit tests.
+ * - zip: inflate the single matching entry via fflate.
+ * - tar/cpio: slice the contiguous payload (or re-parse to locate it by name).
+ * Returns the raw entry bytes, or null when the entry cannot be extracted.
+ */
+export function extractEntry(request: ArchiveWorkerRequest): Uint8Array | null {
+  const content = new Uint8Array(request.bytes);
+
+  if (request.format === "zip") {
+    const data = unzipSync(content, { filter: (entry) => entry.name === request.entryName });
+    return data[request.entryName] ?? null;
+  }
+
+  if ((request.format === "tar" || request.format === "cpio") && typeof request.dataOffset === "number" && typeof request.dataLength === "number") {
+    return content.subarray(request.dataOffset, request.dataOffset + request.dataLength);
+  }
+
+  const parsed = request.format === "tar" ? parseTar(content) : parseCpio(content);
+  const entry = parsed.entries.find((candidate) => candidate.name === request.entryName);
+  if (!entry) return null;
+  return content.subarray(entry.dataOffset, entry.dataOffset + entry.dataLength);
+}
+
+if (typeof self !== "undefined") {
+  self.onmessage = (event: MessageEvent<ArchiveWorkerRequest>) => {
+    try {
+      const slice = extractEntry(event.data);
+      if (!slice) {
         self.postMessage({ type: "error", error: "Entry could not be extracted." });
         return;
       }
-      const result = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength);
+      const result = slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength);
       self.postMessage({ type: "result", result });
-    });
-  } catch (caught) {
-    self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
-  }
-};
+    } catch (caught) {
+      self.postMessage({ type: "error", error: caught instanceof Error ? caught.message : String(caught) });
+    }
+  };
+}

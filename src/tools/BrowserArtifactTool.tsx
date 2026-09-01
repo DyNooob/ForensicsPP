@@ -166,7 +166,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
         setAnalysis(result);
         workspace.save(persistableBrowserArtifactAnalysis(result));
         publishAnalysisResult("browserartifacts", buildBrowserArtifactEnvelope(result));
-        if (!result.records.length) setError(t.files_opened_but_no_supported_browser_records_were_found );
+        if (!result.records.length) setError(t.files_opened_but_no_supported_browser_records_were_found);
       });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;

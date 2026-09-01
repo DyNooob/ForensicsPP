@@ -1395,41 +1395,30 @@ textarea {
   padding: 10px 12px;
 }
 
-/* JWT workbench: one decode/verify flow and one HS256 generation flow. */
-.tool-grid.jwt-simple-workbench {
-  width: min(100%, 1100px);
-  margin-inline: auto;
-  grid-template-columns: minmax(0, 1fr) !important;
-  align-content: start;
-  gap: 14px;
+/* JWT workbench: decode/verify, generate/sign, and security lab. */
+.jwt-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
-.tool-grid.jwt-simple-workbench > .tool-panel {
-  width: 100% !important;
-  max-width: none !important;
-  grid-column: 1 !important;
-}
-
-.jwt-simple-main-panel,
-.jwt-simple-section,
-.jwt-simple-output,
-.jwt-simple-key-section {
+.jwt-decode-grid {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 
-.jwt-simple-mode {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(120px, 1fr));
+.jwt-decode-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
-.jwt-simple-mode .app-button.ant-btn,
-.jwt-simple-view .app-button.ant-btn {
-  width: 100%;
-}
-
-.jwt-simple-token-input {
-  min-height: 154px;
+.jwt-token-input {
+  min-height: 150px;
   max-height: 340px;
   resize: vertical;
   font-family: var(--app-mono);
@@ -1437,120 +1426,220 @@ textarea {
   line-height: 1.55;
 }
 
-.jwt-simple-key-input {
-  min-height: 126px;
-  max-height: 280px;
-  resize: vertical;
-  font-family: var(--app-mono);
-  font-weight: 500;
+.jwt-guide {
+  padding: 18px 20px;
+  border: 1px dashed var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface-soft);
 }
 
-.jwt-simple-output {
-  border-top: 1px solid var(--app-line);
-  padding-top: 14px;
-}
-
-.jwt-simple-view {
+.jwt-token-list {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(86px, 1fr);
+  gap: 8px;
+  margin-top: 14px;
 }
 
-.jwt-simple-output .info-table {
-  table-layout: fixed;
+.jwt-token-pick {
+  display: grid;
+  grid-template-columns: 26px auto 1fr;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  background: var(--app-surface);
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--app-text);
 }
 
-.jwt-simple-output .info-table th {
-  width: 150px;
+.jwt-token-pick:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 50%, var(--app-line));
 }
 
-.jwt-simple-output .info-table td {
-  font-family: var(--app-mono);
-  overflow-wrap: anywhere;
+.jwt-token-pick.active {
+  border-color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary-soft) 55%, var(--app-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-primary) 14%, transparent);
 }
 
-.jwt-simple-json,
-.jwt-simple-compose,
-.jwt-simple-generated {
+.jwt-token-pick-index {
+  color: var(--app-muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.jwt-token-pick-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.jwt-token-pick-meta strong {
+  font-size: 13px;
+}
+
+.jwt-token-pick-meta em {
+  color: var(--app-muted);
+  font-style: normal;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jwt-json,
+.jwt-key-input {
   resize: vertical;
   font-family: var(--app-mono);
   font-weight: 500;
   line-height: 1.55;
 }
 
-.jwt-simple-json.compact-textarea {
+.jwt-json.compact-textarea {
   min-height: 104px;
   max-height: 240px;
 }
 
-.jwt-simple-json.single-textarea,
-.jwt-simple-compose.single-textarea {
+.jwt-json.single-textarea {
   min-height: 180px;
   max-height: 380px;
 }
 
-.jwt-simple-compose.compact-textarea {
-  min-height: 112px;
+.jwt-key-input {
+  min-height: 110px;
+  max-height: 260px;
+}
+
+.jwt-generated {
+  resize: vertical;
+  font-family: var(--app-mono);
+  font-weight: 500;
+  line-height: 1.5;
+  min-height: 104px;
   max-height: 240px;
-}
-
-.jwt-simple-generated {
-  min-height: 112px;
-  max-height: 220px;
   overflow-wrap: anywhere;
 }
 
-.jwt-simple-token-scroll {
-  max-height: min(54vh, 560px);
+.jwt-forge-output,
+.jwt-sign-output {
+  margin-top: 4px;
 }
 
-.jwt-simple-token-table {
-  min-width: 940px;
+.jwt-none-hint {
+  color: var(--app-warn);
 }
 
-.jwt-simple-token-table th:first-child {
-  width: 58px;
+.jwt-sign-grid,
+.jwt-security-grid {
+  display: grid;
+  gap: 16px;
+  align-items: start;
 }
 
-.jwt-simple-token-table th:nth-child(2) {
-  width: 90px;
+.jwt-security-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.jwt-simple-token-table th:nth-child(3),
-.jwt-simple-token-table th:nth-child(4),
-.jwt-simple-token-table th:nth-child(5) {
-  min-width: 150px;
+.cve-list {
+  display: grid;
+  gap: 10px;
 }
 
-.jwt-simple-token-table td {
-  vertical-align: top;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.jwt-simple-token-select {
-  width: 32px;
-  height: 28px;
-  border: 0 !important;
+.cve-item {
+  border: 1px solid var(--app-line);
+  border-left: 3px solid var(--app-danger);
   border-radius: var(--app-radius-sm);
-  background: transparent !important;
-  padding: 0 !important;
+  padding: 10px 12px;
+  background: var(--app-surface-soft);
+}
+
+.cve-item strong {
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--app-mono);
+  font-size: 12.5px;
+  color: var(--app-danger);
+}
+
+.cve-item span {
+  font-size: 12.5px;
+  color: var(--app-muted);
+  line-height: 1.5;
+}
+
+.jwt-workbench .finding-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.jwt-workbench .finding-item.risk {
+  border-left-color: var(--app-danger);
+}
+
+.finding-sev {
+  align-self: start;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--app-primary-soft);
   color: var(--app-primary);
-  font-weight: 700 !important;
-  box-shadow: none !important;
+  white-space: nowrap;
 }
 
-.jwt-simple-token-select:hover,
-.jwt-simple-token-select:focus-visible {
-  background: var(--app-primary-soft) !important;
+.jwt-workbench .finding-item.warn .finding-sev {
+  background: color-mix(in srgb, var(--app-warn) 22%, transparent);
+  color: var(--app-warn);
 }
 
-@media (max-width: 700px) {
-  .jwt-simple-output .info-table th {
-    width: 112px;
+.jwt-workbench .finding-item.risk .finding-sev {
+  background: color-mix(in srgb, var(--app-danger) 20%, transparent);
+  color: var(--app-danger);
+}
+
+.finding-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.finding-body strong {
+  font-size: 13px;
+}
+
+.finding-body span {
+  font-size: 12.5px;
+  color: var(--app-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.app-chip.ok,
+.app-chip.selected.ok {
+  background: color-mix(in srgb, var(--app-primary) 18%, transparent);
+  color: var(--app-primary);
+  border-color: color-mix(in srgb, var(--app-primary) 42%, transparent);
+}
+
+.app-chip.bad,
+.app-chip.selected.bad {
+  background: color-mix(in srgb, var(--app-danger) 18%, transparent);
+  color: var(--app-danger);
+  border-color: color-mix(in srgb, var(--app-danger) 40%, transparent);
+}
+
+@media (max-width: 900px) {
+  .jwt-decode-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .jwt-simple-mode {
+  .jwt-security-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -23,6 +23,7 @@ import { appVersion } from "../../config/app";
 import type { CaseEvidenceFile } from "../../models";
 import type { AnalysisArtifact, AnalysisEnvelope, AnalysisFinding, AnalysisLimitation } from "../analysis/result";
 import type { ZipDirectoryEntry } from "./zipDirectory";
+import type { ArchiveFormat } from "./archiveParse";
 
 export type ArchiveEnvelopeMeta = {
   startedAt?: string;
@@ -35,6 +36,8 @@ export type ArchiveAnalysis = {
   kind: string;
   entries: ZipDirectoryEntry[];
   skipped: number;
+  /** Container format; defaults to "zip" for backwards compatibility with callers that predate tar/cpio support. */
+  format?: ArchiveFormat;
 };
 
 const ENCRYPTED_ENTRY_CAP = 200;
@@ -55,6 +58,7 @@ function methodLabel(method: number) {
 export function buildArchiveEnvelope(analysis: ArchiveAnalysis, meta: ArchiveEnvelopeMeta = {}): AnalysisEnvelope {
   const startedAt = meta.startedAt ?? new Date().toISOString();
   const completedAt = meta.completedAt ?? new Date().toISOString();
+  const format: ArchiveFormat = analysis.format ?? "zip";
   const entries = analysis.entries ?? [];
   const fileCount = entries.filter((entry) => !entry.name.endsWith("/")).length;
   const dirCount = entries.filter((entry) => entry.name.endsWith("/")).length;
@@ -118,15 +122,31 @@ export function buildArchiveEnvelope(analysis: ArchiveAnalysis, meta: ArchiveEnv
     }))
   ];
 
+  const formatLimitations: Record<ArchiveFormat, string> = {
+    zip: "Only the ZIP central directory is parsed; entry content is not inflated unless explicitly extracted for preview.",
+    tar: "TAR headers are parsed; entry payloads are sliced on demand for preview.",
+    cpio: "CPIO headers are parsed; entry payloads are sliced on demand for preview."
+  };
   const limitations: AnalysisLimitation[] = [
-    { code: "ARCHIVE_DIRECTORY_ONLY", detail: "Only the ZIP central directory is parsed; entry content is not inflated unless explicitly extracted for preview." }
+    { code: "ARCHIVE_DIRECTORY_ONLY", detail: formatLimitations[format] }
   ];
 
+  const sourceTypes: Record<ArchiveFormat, string> = {
+    zip: "application/zip",
+    tar: "application/x-tar",
+    cpio: "application/x-cpio"
+  };
   const source: CaseEvidenceFile = {
     name: analysis.name,
     size: analysis.size,
-    type: "application/zip",
+    type: sourceTypes[format],
     lastModified: ""
+  };
+
+  const formatTitles: Record<ArchiveFormat, string> = {
+    zip: "Archive (ZIP family) analysis",
+    tar: "Archive (TAR) analysis",
+    cpio: "Archive (CPIO) analysis"
   };
 
   return {
@@ -134,9 +154,9 @@ export function buildArchiveEnvelope(analysis: ArchiveAnalysis, meta: ArchiveEnv
     id: `archive-${startedAt}-${Math.random().toString(36).slice(2, 8)}`,
     analyzer: { id: "archive", version: appVersion },
     source: [source],
-    run: { startedAt, completedAt, parameters: { kind: analysis.kind } },
+    run: { startedAt, completedAt, parameters: { kind: analysis.kind, format } },
     summary: {
-      title: "Archive (ZIP family) analysis",
+      title: formatTitles[format],
       text: `${analysis.kind} container with ${entries.length.toLocaleString()} central-directory entries (${fileCount} files, ${dirCount} directories).`,
       metrics: [
         { label: "Type", value: analysis.kind },

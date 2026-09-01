@@ -32,6 +32,7 @@ import { runWorkerTask } from "../utils/workerTask";
 import { evidenceReaderFromBlob, readEvidenceFully } from "../core/evidence/reader";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { appVersion } from "../config/app";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 
 const MAX_PCAP_BYTES = 128 * 1024 * 1024;
 const MAX_STREAM_PREVIEW_BYTES = 1024 * 1024;
@@ -530,6 +531,18 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     extractedHashRequestRef.current += 1;
     setLoading(false);
     setExtractedHashingKey("");
+  }, [active]);
+
+  const loadFileRef = React.useRef(loadFile);
+  loadFileRef.current = loadFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("pcap");
+      if (handoff) loadFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("pcap", consume);
   }, [active]);
 
   return (

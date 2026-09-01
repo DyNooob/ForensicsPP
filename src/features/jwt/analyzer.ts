@@ -27,11 +27,104 @@ export const MAX_JWT_INPUT_CHARS = 8 * 1024 * 1024;
 export const MAX_JWT_TOKEN_CHARS = 2 * 1024 * 1024;
 
 export function signJwtHS256(header: string, payload: string, secret: string) {
-  const encodedHeader = base64UrlEncode(header);
-  const encodedPayload = base64UrlEncode(payload);
-  const data = `${encodedHeader}.${encodedPayload}`;
-  const signature = CryptoJS.HmacSHA256(data, secret);
-  return `${data}.${base64UrlEncode(signature)}`;
+  return signJwtHmac("HS256", header, payload, secret);
+}
+
+export type JwtAlgFamily = "HS" | "RS" | "PS" | "ES" | "none" | "unknown";
+
+export function jwtAlgFamily(alg: string): JwtAlgFamily {
+  if (alg.toLowerCase() === "none") return "none";
+  if (/^HS/i.test(alg)) return "HS";
+  if (/^RS/i.test(alg)) return "RS";
+  if (/^PS/i.test(alg)) return "PS";
+  if (/^ES/i.test(alg)) return "ES";
+  return "unknown";
+}
+
+export function signJwtHmac(alg: string, header: string, payload: string, secret: string) {
+  const data = `${base64UrlEncode(header)}.${base64UrlEncode(payload)}`;
+  const normalized = alg.toUpperCase();
+  let hash: CryptoJS.lib.WordArray;
+  if (normalized === "HS256") hash = CryptoJS.HmacSHA256(data, secret);
+  else if (normalized === "HS384") hash = CryptoJS.HmacSHA384(data, secret);
+  else if (normalized === "HS512") hash = CryptoJS.HmacSHA512(data, secret);
+  else throw new Error(`Unsupported HMAC alg: ${alg}`);
+  return `${data}.${base64UrlEncode(hash)}`;
+}
+
+function pemKeyBytes(keyText: string, expectedLabels: string[]) {
+  const match = keyText.match(/-----BEGIN ([^-]+)-----([\s\S]+?)-----END \1-----/);
+  if (!match) throw new Error("Expected a PEM key block (-----BEGIN ...-----)");
+  const label = match[1].trim().toUpperCase();
+  if (!expectedLabels.includes(label)) throw new Error(`Expected ${expectedLabels.join(" / ")} PEM, found ${label}`);
+  const body = match[2].replace(/\s+/g, "");
+  return Uint8Array.from(atob(body), (char) => char.charCodeAt(0));
+}
+
+async function importPrivateKeyForSign(keyText: string, alg: string) {
+  const algorithm = jwtCryptoAlgorithm(alg);
+  if (!algorithm) throw new Error(`Unsupported asymmetric alg ${alg}`);
+  const trimmed = keyText.trim();
+  if (!trimmed) throw new Error("Provide a private key (PEM/JWK) to sign");
+  if (trimmed.startsWith("{")) {
+    const jwk = JSON.parse(trimmed) as JsonWebKey;
+    return crypto.subtle.importKey("jwk", jwk, algorithm as AlgorithmIdentifier, false, ["sign"]);
+  }
+  const bytes = pemKeyBytes(trimmed, ["PRIVATE KEY", "EC PRIVATE KEY", "RSA PRIVATE KEY"]);
+  return crypto.subtle.importKey("pkcs8", bytes, algorithm as AlgorithmIdentifier, false, ["sign"]);
+}
+
+function signParams(alg: string): RsaPssParams | EcdsaParams | Algorithm {
+  if (/^RS/i.test(alg)) return { name: "RSASSA-PKCS1-v1_5" };
+  if (/^PS/i.test(alg)) return { name: "RSA-PSS", saltLength: Number(alg.slice(2)) / 8 };
+  if (/^ES/i.test(alg)) return { name: "ECDSA", hash: jwtHashForAlg(alg) };
+  throw new Error(`Unsupported sign alg ${alg}`);
+}
+
+function bytesToBase64Url(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function signJwtAsymmetric(alg: string, header: string, payload: string, privateKeyText: string) {
+  const key = await importPrivateKeyForSign(privateKeyText, alg);
+  const data = `${base64UrlEncode(header)}.${base64UrlEncode(payload)}`;
+  const signature = await crypto.subtle.sign(signParams(alg), key, new TextEncoder().encode(data));
+  return `${data}.${bytesToBase64Url(new Uint8Array(signature))}`;
+}
+
+export function buildNoneToken(header: string, payload: string) {
+  return `${base64UrlEncode(header)}.${base64UrlEncode(payload)}.`;
+}
+
+export function stripJwtSignature(token: string) {
+  const parts = token.trim().split(".");
+  if (parts.length < 2) throw new Error("JWT must contain at least header.payload");
+  return `${parts[0]}.${parts[1]}.`;
+}
+
+export type JwtCveRef = { id: string; summary: string };
+
+export function jwtCveReferences(alg: string, headerObject: Record<string, unknown>): JwtCveRef[] {
+  const refs: JwtCveRef[] = [];
+  const family = jwtAlgFamily(alg);
+  if (alg.toLowerCase() === "none") {
+    refs.push({ id: "CVE-2015-9235", summary: "alg=none 签名绕过：若服务端信任 alg 头而非配置固定算法，攻击者可提交无签名令牌越权。" });
+  }
+  if (family === "ES") {
+    refs.push({ id: "CVE-2022-21449", summary: "ECDSA 验证绕过（Psychic Signatures）：未校验签名 r/s 非零，可用全零签名伪造有效令牌。" });
+  }
+  if (family === "RS") {
+    refs.push({ id: "Key Confusion (CVE-2015-9235 类)", summary: "RS256→HS256 密钥混淆：若服务端用 RSA 公钥当 HMAC 密钥验签，攻击者可拿公钥自签 HS256。" });
+  }
+  if (headerObject && (headerObject.jku || headerObject.x5u)) {
+    refs.push({ id: "CVE-2018-0114 (类)", summary: "jku/x5u 远程密钥引用：可能触发 SSRF 或接受攻击者控制的公钥。" });
+  }
+  return refs;
 }
 
 function parseJwtPart(part: string) {
@@ -250,6 +343,13 @@ export function inspectJwtToken(token: string, secret: string) {
     if (!payloadObject.sub) findings.push({ level: "warn", title: "Missing subject", detail: "No sub claim was found." });
     if (typeof payloadObject.iat === "number" && typeof payloadObject.exp === "number" && payloadObject.iat > payloadObject.exp) findings.push({ level: "warn", title: "Invalid claim order", detail: "iat is later than exp." });
     if (String(payloadObject.scope ?? payloadObject.scp ?? "").split(/\s+/).filter(Boolean).length > 8) findings.push({ level: "warn", title: "Broad scope set", detail: stringifyClaim(payloadObject.scope ?? payloadObject.scp) });
+
+  if (jwtAlgFamily(alg) !== "unknown") {
+    for (const ref of jwtCveReferences(alg, headerObject)) {
+      findings.push({ level: "info", title: `Known weakness: ${ref.id}`, detail: ref.summary });
+    }
+  }
+
     rows.push(["signature", signatureStatus], ["exp status", expires], ["nbf status", notBefore]);
 
     return {

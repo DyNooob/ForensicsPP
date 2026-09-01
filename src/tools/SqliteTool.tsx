@@ -166,6 +166,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
   const restoreStartedRef = React.useRef(false);
   const forensicTaskRef = React.useRef<AbortController | null>(null);
   const sqliteFileRequestRef = React.useRef(0);
+  const sqliteOpenRequestRef = React.useRef(0);
   const [fileName, setFileName] = React.useState("");
   const [fileSize, setFileSize] = React.useState(0);
   const [walInfo, setWalInfo] = React.useState<SqliteWalInfo | null>(null);
@@ -546,6 +547,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
     persist?: boolean;
   }) => {
     if (!active) return;
+    const openRequestId = ++sqliteOpenRequestRef.current;
     forensicTaskRef.current?.abort();
     const controller = new AbortController();
     forensicTaskRef.current = controller;
@@ -568,6 +570,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
       const sqlPromise = sqlRef.current ? Promise.resolve(sqlRef.current) : initSqlJs({ locateFile: () => sqlWasmUrl });
       const [SQL, analysis] = await Promise.all([sqlPromise, forensicPromise]);
       if (!active || controller.signal.aborted) return;
+      if (openRequestId !== sqliteOpenRequestRef.current) return;
       sqlRef.current = SQL;
 
       let baseline = input.baseline?.byteLength ? input.baseline : input.database;

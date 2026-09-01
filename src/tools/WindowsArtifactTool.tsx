@@ -31,6 +31,7 @@ import { runWorkerTask } from "../utils/workerTask";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { useStaleRunGuard } from "../core/runtime";
 import { buildWindowsEnvelope } from "../features/windows/envelope";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_MFT_FILE_BYTES = 256 * 1024 * 1024;
@@ -124,6 +125,18 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       if (guard.isCurrent(requestId)) setLoading(false);
     }
   };
+
+  const loadFileRef = React.useRef(loadFile);
+  loadFileRef.current = loadFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("windows");
+      if (handoff) loadFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("windows", consume);
+  }, [active]);
 
   const clear = () => {
     guard.next();

@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { localizeRowLabel } from "../i18nRowLabels";
 import { Button, Checkbox, Input, InputNumber, Progress, Select } from "antd";
 import type { ButtonProps, CheckboxProps, InputNumberProps, InputProps, SelectProps } from "antd";
 
@@ -284,7 +285,7 @@ export function InfoTable({ rows }: { rows: Array<[string, string]> }) {
       <tbody>
         {rows.map(([label, value]) => (
           <tr key={label}>
-            <th>{label}</th>
+            <th>{localizeRowLabel(label)}</th>
             <td>{value}</td>
           </tr>
         ))}

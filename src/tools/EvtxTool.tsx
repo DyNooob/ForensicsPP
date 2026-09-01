@@ -29,6 +29,7 @@ import { useToolWorkspace } from "../utils/useToolWorkspace";
 import { runWorkerTask } from "../utils/workerTask";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { buildEvtxEnvelope } from "../features/evtx/envelope";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
@@ -103,7 +104,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   React.useEffect(() => { if (page >= pageCount) setPage(pageCount - 1); }, [page, pageCount]);
   React.useEffect(() => () => { parseAbortRef.current?.abort(); sigmaAbortRef.current?.abort(); }, []);
 
-  const queueFiles = (files?: FileList | null) => {
+  const queueFiles = (files?: FileList | File[] | null) => {
     if (!active) return;
     // Replacing the selection must stop an in-flight parse before its partial
     // results can be committed to the new workspace.
@@ -142,8 +143,9 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setError("");
   };
 
-  const analyze = async () => {
-    if (!active || !selectedFiles.length || loading) return;
+  const analyze = async (explicitFiles?: File[]) => {
+    const files = explicitFiles ?? selectedFiles;
+    if (!active || !files.length || loading) return;
     const run = runRef.current + 1;
     runRef.current = run;
     const startedAt = new Date().toISOString();
@@ -154,9 +156,9 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
     setParsedFiles([]);
     setError("");
     const results: ParsedFile[] = [];
-    for (let index = 0; index < selectedFiles.length; index += 1) {
+    for (let index = 0; index < files.length; index += 1) {
       if (!active || runRef.current !== run) break;
-      const file = selectedFiles[index];
+      const file = files[index];
       setProgress(english ? `Parsing ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在解析 ${index + 1}/${selectedFiles.length}：${file.name}`);
       try {
         const bytes = await file.arrayBuffer();
@@ -202,6 +204,23 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
   React.useEffect(() => {
     if (active) return;
     cancel();
+  }, [active]);
+
+  const queueFilesRef = React.useRef(queueFiles);
+  queueFilesRef.current = queueFiles;
+  const analyzeRef = React.useRef(analyze);
+  analyzeRef.current = analyze;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("evtx");
+      if (handoff) {
+        queueFilesRef.current([handoff.file]);
+        void analyzeRef.current([handoff.file]);
+      }
+    };
+    consume();
+    return subscribeToolHandoff("evtx", consume);
   }, [active]);
 
   const clear = () => {
