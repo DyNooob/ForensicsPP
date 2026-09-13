@@ -196,7 +196,103 @@ export type ImageInfo = {
     noiseMap: string;
     bitPlanes: Array<{ label: string; src: string }>;
   };
+  formatLayers: ImageFormatLayer[];
 };
+
+export type ImageFinding = { level: "info" | "warn" | "danger"; title: string; detail: string };
+
+export type GifFrame = {
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  disposalMethod: string;
+  transparentFlag: boolean;
+  transparentColorIndex: number;
+  delayCentiseconds: number;
+  localColorTable: boolean;
+};
+export type GifStructure = {
+  version: string;
+  screenWidth: number;
+  screenHeight: number;
+  globalColorTable: boolean;
+  globalColorTableSize: number;
+  backgroundIndex: number;
+  pixelAspectRatio: number;
+  loopCount: number | null;
+  frameCount: number;
+  frames: GifFrame[];
+  commentCount: number;
+  comments: string[];
+  applicationExtensions: string[];
+  trailingBytes: number;
+};
+export type JpegMarker = { marker: string; offset: number; label: string };
+export type JpegStructure = {
+  markerCount: number;
+  markers: JpegMarker[];
+  sof: { width: number; height: number; precision: number; components: number } | null;
+  app0: { version: string; density: string } | null;
+  hasExif: boolean;
+  hasXmp: boolean;
+  hasAdobe: boolean | null;
+  commentCount: number;
+  comments: string[];
+  hasThumbnail: boolean;
+};
+export type WebpChunk = { fourcc: string; size: number; offset: number };
+export type WebpStructure = {
+  chunkCount: number;
+  chunks: WebpChunk[];
+  hasVp8x: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+  hasAlpha: boolean;
+  isAnimation: boolean;
+  hasExif: boolean;
+  hasXmp: boolean;
+  hasIcc: boolean;
+};
+export type BmpStructure = {
+  dibHeaderType: string;
+  width: number;
+  height: number;
+  planes: number;
+  bpp: number;
+  compression: number;
+  compressionName: string;
+  importantColors: number;
+  colorMasks: { red: number; green: number; blue: number; alpha: number } | null;
+};
+export type TiffEntry = { tag: number; tagName: string; type: string; count: number; value: string };
+export type TiffStructure = {
+  endian: "little" | "big";
+  magic: number;
+  ifd0Offset: number;
+  entryCount: number;
+  entries: TiffEntry[];
+  width: number | null;
+  height: number | null;
+};
+export type HeifStructure = {
+  majorBrand: string;
+  minorVersion: number;
+  compatibleBrands: string[];
+  hasMeta: boolean;
+  hasMdia: boolean;
+  width: number | null;
+  height: number | null;
+};
+export type ImageFormatLayer =
+  | { format: "PNG"; rows: Array<[string, string]>; findings: ImageFinding[] }
+  | { format: "GIF"; rows: Array<[string, string]>; findings: ImageFinding[]; gif: GifStructure }
+  | { format: "JPEG"; rows: Array<[string, string]>; findings: ImageFinding[]; jpeg: JpegStructure }
+  | { format: "WEBP"; rows: Array<[string, string]>; findings: ImageFinding[]; webp: WebpStructure }
+  | { format: "BMP"; rows: Array<[string, string]>; findings: ImageFinding[]; bmp: BmpStructure }
+  | { format: "TIFF"; rows: Array<[string, string]>; findings: ImageFinding[]; tiff: TiffStructure }
+  | { format: "HEIF/AVIF"; rows: Array<[string, string]>; findings: ImageFinding[]; heif: HeifStructure };
 
 export type PcapInfo = {
   name: string;

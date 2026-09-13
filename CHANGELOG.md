@@ -2,6 +2,37 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
+## [1.0.0-beta.6] - 2026-09-13
+
+> Web Delivery hardening release. 焦点：能力真实性审计（移除无法佐证的取证宣称）、图片/ JWT 分析器重写、静态可索引路由层与预览环境隔离。
+
+### Added
+- **图片格式层取证**：`features/image` 新增 GIF/BMP/JPEG/WebP/TIFF/HEIF 结构解析模型（`GifFrame`/`GifStructure`/`JpegMarker`/`JpegStructure`/`WebpChunk`/`WebpStructure`/`BmpStructure`/`TiffEntry`/`TiffStructure`/`HeifStructure`/`ImageFormatLayer`/`ImageFinding`），图片工作台可逐格式展示容器结构与风险层。
+- **预览环境隔离**：`VITE_PREVIEW=1` 构建开关 —— 所有页面注入 `noindex,nofollow,noarchive`、`robots.txt Disallow: /`、预览专属 sitemap 主机，并在顶栏显示含版本/提交哈希/分支的 Preview 横幅；构建期身份（commit hash + branch）经 `vite.config.ts` 的 `define` 注入运行时，修复此前横幅静默不显示的问题。
+- **静态可索引路由层 + SPA 404**：为每个可索引工具生成 `dist/tools/<slug>/index.html`（克隆 SPA 外壳并注入路由级 meta），未知路由渲染 `NotFound` 组件（`routeUnknown`）；`core/routeAdapter` 统一封装预览判定与 `toolToShareUrl` 可分享本地化链接。
+- **JWT 旧式 PEM 兼容**：分析器自动将 PKCS#1（RSA）/ SEC1（EC）私钥转换为 PKCS#8，兼容 OpenSSL 默认导出的遗留格式；紧凑与美化（pretty-printed）JWT 头均可解析。
+- **SEO lint 门禁**：`lint:seo` 校验生成的静态页不含营销话术；`scripts/smoke-prod.mjs` / `scripts/smoke-standalone.mjs` 真 Chrome 冒烟脚本。
+- **新测试**：`image-format-layers`、`route-adapter`、`capability-contract`、`jwt`（扩充）、`seo-contract`（扩充）。
+
+### Changed
+- **JWT 分析器重写**：算法/密钥处理与签名验证路径重构（移除了原先导出的 `jwtCveReferences` / `stripJwtSignature`，改为内部化处理）。
+- **能力真实性审计（2026-09-09）**：逐一核对每个用户可见能力是否可追溯到真实代码 + 测试，修正过度/不足宣称：
+  - SQLite 移除空的 `timeline` 能力（envelope 时间线为空）。
+  - Registry 仅支持 hive 文件，移除 `.reg` 文本导出入口（`.reg` 非 hive）。
+  - Firmware 仅检测 squashfs/ubi，移除 `cramfs` 检测宣称。
+  - Windows Artifacts 移除「设备线索」（TrackerDataBlock 未解析）。
+  - 修正双品牌 `Forensics++ ForensicsPP` 顶栏、语言切换标签 `中文介绍`→`中文`、「Works offline」收敛为仅应用外壳（服务 worker 仅预缓存外壳，非懒加载工具块）。
+- **UX 审计（2026-09-01）一致性补齐**：`baseconvert` 补回「载入示例」按钮（P1 已修复）；样例加载器与 Help 抽屉覆盖更均匀。
+
+### Fixed
+- 修复 Preview 横幅因缺少构建期 `VITE_PREVIEW` 注入而从不显示的问题。
+- 修复 `baseconvert` 缺「载入示例」按钮（与其他转换类工具体验不一致）。
+
+### Verification
+- 发布门禁全绿：`check:headers`（337 文件）、`typecheck`、`i18n:check`、`vite build` + `finalize-dist` + `build-seo-pages` + `verify:dist`（197 文件 / 55.5 MiB）+ `lint:seo`，`vitest` **82 文件 / 463 用例通过**。
+- 发版前仍应在完整依赖环境执行 `npm ci && npm run verify`，并将 `src/config/app.ts` 的 `appReleaseDate` 更新为本版发布日期以重置「过旧版本」提示。
+- **已修复（能力审计待办）**：`sqlite-wal-recovery` 不再生成独立静态页（`build-seo-pages.mjs` 仅输出 canonical slug 页）；其 URL 仍经 SPA 运行时 `routeAdapter` 解析到 `sqlite` 工作台，canonical `<link>` 指向 `sqlite-forensics`，消除重复内容 SEO 风险。
+
 ## [1.0.0-beta.5] - 2026-08-27
 
 ### Added

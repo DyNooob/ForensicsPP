@@ -28,8 +28,8 @@ const toolDefinitions = [
   { id: "jwt", category: "transform", name: "jwt", desc: "jwtDesc", maturity: "stable" },
   { id: "password", category: "transform", name: "password", desc: "passwordDesc", maturity: "stable" },
   { id: "sql", category: "transform", name: "sql", desc: "sqlDesc", maturity: "stable" },
-  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc", accepts: [".sqlite", ".sqlite3", ".db", "-wal"], capabilities: ["database", "deleted-record-recovery", "wal", "timeline"], resourcePolicy: "suspendable", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "打开 SQLite 数据库：列出表与结构、执行查询、恢复已删除记录（WAL/回滚残留）。生成时间线，适用于移动端与应用数据库取证。", en: "Open SQLite databases: list tables and schema, run queries, and recover deleted records from WAL/rollback leftovers. Builds a timeline — useful for mobile and application-database forensics." } },
-  { id: "registry", category: "analysis", name: "registry", desc: "registryDesc", accepts: [".reg", ".dat"], supportsEvidence: true, maturity: "triage", emitsEnvelope: true, validation: "fixture-validated" },
+  { id: "sqlite", category: "analysis", name: "sqlite", desc: "sqliteDesc", accepts: [".sqlite", ".sqlite3", ".db", "-wal"], capabilities: ["database", "deleted-record-recovery", "wal"], resourcePolicy: "suspendable", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "打开 SQLite 数据库：列出表与结构、执行查询、恢复已删除记录（WAL/回滚残留）。适用于移动端与应用数据库取证。", en: "Open SQLite databases: list tables and schema, run queries, and recover deleted records from WAL/rollback leftovers. Useful for mobile and application-database forensics." } },
+  { id: "registry", category: "analysis", name: "registry", desc: "registryDesc", accepts: [".dat", ".hiv"], supportsEvidence: true, maturity: "triage", emitsEnvelope: true, validation: "fixture-validated" },
   { id: "plist", category: "analysis", name: "plist", desc: "plistDesc", accepts: [".plist"], supportsEvidence: true, maturity: "triage", emitsEnvelope: true, validation: "fixture-validated" },
   { id: "browserartifacts", category: "analysis", name: "browserartifacts", desc: "browserartifactsDesc", supportsEvidence: true, supportsResult: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "解析浏览器痕迹（历史/下载/Cookie/自动填充等）：提取访问记录、时间线与登录信息，并跨数据源关联，重建用户浏览行为。", en: "Parse browser artifacts (history/downloads/cookies/autofill): extract visits, timelines, and login data, then correlate across data sources to reconstruct browsing behavior." } },
   { id: "evtx", category: "analysis", name: "evtx", desc: "evtxDesc", accepts: [".evtx"], capabilities: ["windows-event-log", "timeline"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "解析 Windows 事件日志 (.evtx)：按频道/级别/事件 ID 聚合，提取关键字段与时间线，适用于主机入侵排查与时间线重建。", en: "Parse Windows event logs (.evtx): aggregate by channel/level/event ID, extract key fields and a timeline. Useful for host intrusion triage and timeline reconstruction." } },
@@ -42,9 +42,15 @@ const toolDefinitions = [
   { id: "qr", category: "analysis", name: "qr", desc: "qrDesc", hidden: true, mergedInto: "image" },
   { id: "fileid", category: "analysis", name: "fileid", desc: "fileidDesc", hidden: true, mergedInto: "binary" },
   { id: "png", category: "analysis", name: "png", desc: "pngDesc", hidden: true, mergedInto: "image" },
+  { id: "gif", category: "analysis", name: "gif", desc: "gifDesc", hidden: true, mergedInto: "image" },
+  { id: "jpeg", category: "analysis", name: "jpeg", desc: "jpegDesc", hidden: true, mergedInto: "image" },
+  { id: "webp", category: "analysis", name: "webp", desc: "webpDesc", hidden: true, mergedInto: "image" },
+  { id: "bmp", category: "analysis", name: "bmp", desc: "bmpDesc", hidden: true, mergedInto: "image" },
+  { id: "tiff", category: "analysis", name: "tiff", desc: "tiffDesc", hidden: true, mergedInto: "image" },
+  { id: "heif", category: "analysis", name: "heif", desc: "heifDesc", hidden: true, mergedInto: "image" },
   { id: "archive", category: "analysis", name: "archive", desc: "archiveDesc", accepts: [".zip", ".jar", ".apk", ".gz", ".tar", ".cpio"], capabilities: ["archive", "zip", "extraction", "zip-bomb-guard"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "解包归档（zip/jar/apk/gz/tar/cpio）：递归列出条目、检测 zip 炸弹、提取文件。可 handoff 到下游分析工具继续深入。", en: "Unpack archives (zip/jar/apk/gz/tar/cpio): list entries recursively, detect zip bombs, and extract files. Can hand off to downstream analyzers for deeper inspection." } },
   { id: "binary", category: "analysis", name: "binary", desc: "binaryDesc", accepts: ["*/*"], capabilities: ["binary", "file-identification", "pe", "elf", "mach-o", "hex", "strings", "ioc", "entropy", "yara", "embedded-signature"], supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "加载任意二进制文件：自动识别真实类型（magic/签名）并与扩展名比对，给出熵、字符串与结构概览。内置 yara/strings/entropy/pe/elf/mach-o 等能力，适用于未知样本初步分类。", en: "Load any binary: auto-identify the real type (magic/signature) and compare it against the extension, then summarize entropy, strings, and structure. Built-in yara/strings/entropy/pe/elf/mach-o help with first-pass triage of unknown samples." } },
-  { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "triage", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析固件镜像：识别文件系统（squashfs/ubi/cramfs 等）、入口与架构线索，用熵分布发现压缩/加密区段。支持 carving 与递归解包，可 handoff 到 archive/binary 继续深入。", en: "Analyze firmware images: identify filesystems (squashfs/ubi/cramfs), entry points and architecture hints, and use entropy to spot compressed/encrypted regions. Supports carving and recursive extraction, with handoff to archive/binary." } },
+  { id: "firmware", category: "analysis", name: "firmware", desc: "firmwareDesc", accepts: [".bin", ".img", ".rom", ".fw", ".trx", ".ubi", ".ubifs", ".squashfs", "*/*"], capabilities: ["firmware", "streaming", "carving", "entropy", "recursive-extraction", "analyzer-handoff"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "triage", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析固件镜像：识别文件系统（squashfs/ubi/ubifs、ext、FAT、NTFS、exFAT、ISO9660）、入口与架构线索，用熵分布发现压缩/加密区段。支持 carving 与递归解包，可 handoff 到 archive/binary 继续深入。", en: "Analyze firmware images: identify filesystems (squashfs/ubi/ubifs, ext, FAT, NTFS, exFAT, ISO9660), entry points and architecture hints, and use entropy to spot compressed/encrypted regions. Supports carving and recursive extraction, with handoff to archive/binary." } },
   { id: "disk", category: "analysis", name: "disk", desc: "diskDesc", accepts: [".dd", ".raw", ".img", ".iso"], capabilities: ["random-access", "mbr", "gpt", "fat", "ntfs", "ext", "iso9660"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "triage", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "加载磁盘镜像（.dd/.raw/.img/.iso）：随机访问分区（MBR/GPT），识别 FAT/NTFS/ext/ISO9660，浏览与提取文件。重型工具，切换时自动释放资源。", en: "Load disk images (.dd/.raw/.img/.iso): random-access partitions (MBR/GPT), identify FAT/NTFS/ext/ISO9660, and browse or extract files. Heavy — resources are released when you switch tools." } },
   { id: "windows", category: "analysis", name: "windows", desc: "windowsDesc", accepts: [".lnk", ".pf", ".reg", ".mft", ".j"], capabilities: ["windows", "mft", "usn-journal", "prefetch", "lnk", "timeline"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "triage", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "解析 Windows 工件（LNK/Prefetch/Registry/MFT/USN）：提取执行痕迹、时间线与注册表键，重建用户行为与主机时间线。", en: "Parse Windows artifacts (LNK/Prefetch/Registry/MFT/USN): extract execution traces, timelines, and registry keys to reconstruct user behavior and a host timeline." } },
   { id: "memory", category: "analysis", name: "memory", desc: "memoryDesc", accepts: [".dmp", ".mdmp", ".raw", ".mem"], capabilities: ["minidump", "memory-triage", "pe-carving"], resourcePolicy: "dispose-on-switch", heavy: true, supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "triage", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析内存转储（.dmp/.raw）：minidump 与内存分类索引、PE 进程/模块 carving，适用于内存取证与恶意代码痕迹发现。", en: "Analyze memory dumps (.dmp/.raw): minidump and memory triage indexing, PE process/module carving. Useful for memory forensics and uncovering malware traces." } },
@@ -160,7 +166,7 @@ export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } a
 export const storagePrefix = "forensicspp:";
 export const appVersion = "1.0.0-beta.6";
 /** Date this version was published (YYYY-MM-DD). Bump together with `appVersion` on each release. */
-export const appReleaseDate = "2026-08-31";
+export const appReleaseDate = "2026-09-13";
 /** Where users download new releases. */
 export const releaseDownloadUrl = `${projectLinks.repo}/releases`;
 export const projectLicense = "MIT";
@@ -168,6 +174,15 @@ export const projectRepoName = "DyNooob/ForensicsPP";
 export const lastUpdated = "2026-08-31";
 export const legalVersion = "2026-07-13-v2";
 export const feedbackEmail = "toolab@digiforensics.cn";
+
+/**
+ * Build identity injected at build time (see vite.config.ts). Lets the Preview
+ * notice show exactly which commit/branch is running. Falls back when the
+ * `VITE_BUILD_*` define is absent (dev server, or a build that skipped git).
+ */
+const buildEnv = import.meta.env as { VITE_BUILD_HASH?: string; VITE_BUILD_BRANCH?: string };
+export const buildHash = buildEnv.VITE_BUILD_HASH || "dev";
+export const buildBranch = buildEnv.VITE_BUILD_BRANCH || "dev";
 
 export const themePresets: ReadonlyArray<{
   id: string;

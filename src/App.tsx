@@ -30,7 +30,7 @@ import { FirstRunGuide } from "./components/FirstRunGuide";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { LegalConsentModal } from "./components/LegalConsentModal";
-import { getToolTitle as resolveToolTitle, legalVersion, tools, appVersion, appReleaseDate, releaseDownloadUrl } from "./config/app";
+import { getToolTitle as resolveToolTitle, legalVersion, tools, appVersion, appReleaseDate, releaseDownloadUrl, buildHash, buildBranch } from "./config/app";
 import { copy } from "./i18n";
 import { useStoredState } from "./utils/storage";
 import { isLangValue } from "./utils/appGuards";
@@ -46,6 +46,8 @@ import { useCaseReport } from "./app/useCaseReport";
 import { useCommandPalette } from "./app/useCommandPalette";
 import { useWorkbenchBootstrap } from "./app/useWorkbenchBootstrap";
 import { useFirstRun } from "./app/useFirstRun";
+import { toolToShareUrl, isPreview } from "./core/routeAdapter";
+import { NotFound } from "./components/NotFound";
 
 const SettingsModal = React.lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
 const CaseReporter = React.lazy(() => import("./features/reporter/CaseReporter").then((module) => ({ default: module.CaseReporter })));
@@ -59,7 +61,7 @@ function getToolTitle(tool: (typeof tools)[number], lang: Lang) {
 export function App() {
   const [lang, setLang] = useStoredState<Lang>("app.lang", "zh", isLangValue);
   const { query, setQuery, sidebarCollapsed, setSidebarCollapsed, isNarrowShell, detailsExpanded, setDetailsExpanded } = useShellLayout();
-  const { activeTool, active, toolTitle, recentTools, retainedTools, pendingToolClose, setPendingToolClose, setActiveTool, setToolDirty, closeMountedTool, closeAllMountedTools, closeToolsNow, toggleFavoriteTool, activeIsFavorite, favoriteNavTools, groupedTools } = useToolNavigation({ isNarrowShell, setSidebarCollapsed, query, lang });
+  const { activeTool, active, routeUnknown, toolTitle, recentTools, retainedTools, pendingToolClose, setPendingToolClose, setActiveTool, setToolDirty, closeMountedTool, closeAllMountedTools, closeToolsNow, toggleFavoriteTool, activeIsFavorite, favoriteNavTools, groupedTools } = useToolNavigation({ isNarrowShell, setSidebarCollapsed, query, lang });
   const { themeMode, setThemeMode, resolvedThemeColor, appliedTheme, displayThemeColor, applyThemeColor, resetThemeAppearance } = useAppearance();
   const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -87,9 +89,28 @@ export function App() {
   useServiceWorker();
 
   const copyCurrentToolLink = () => {
-    const url = `${window.location.origin}${window.location.pathname}${window.location.search}#${activeTool}`;
+    const url = toolToShareUrl(activeTool, window.location.origin);
     void copyText(url, { feedback: false }).then((copied) => setToolLinkMessage(copied ? t.toolLinkCopied : url));
   };
+
+  // Preview policy + shareable locale link support.
+  React.useEffect(() => {
+    if (isPreview()) {
+      // Belt-and-suspenders: make sure crawlers never index the preview.
+      const existing = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+      const content = "noindex,nofollow,noarchive";
+      if (existing) existing.content = content;
+      else {
+        const m = document.createElement("meta");
+        m.name = "robots";
+        m.content = content;
+        document.head.appendChild(m);
+      }
+    }
+    const langParam = new URLSearchParams(window.location.search).get("lang");
+    if (langParam === "zh" || langParam === "en") setLang(langParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ConfigProvider
@@ -198,6 +219,24 @@ export function App() {
           onSetLang={setLang}
         />
 
+        {isPreview() && (
+          <div
+            className="app-stale-banner app-preview-banner"
+            role="status"
+            aria-label={t.previewBadgeTitle.replace("{version}", appVersion).replace("{hash}", buildHash).replace("{branch}", buildBranch)}
+          >
+            <span className="app-stale-banner__icon" aria-hidden="true">⚠</span>
+            <span className="app-stale-banner__text">
+              <strong>{t.previewBadge}</strong>{" "}
+              {t.previewBadgeTitle
+                .replace("{version}", appVersion)
+                .replace("{hash}", buildHash)
+                .replace("{branch}", buildBranch)}{" "}
+              <a href={releaseDownloadUrl} target="_blank" rel="noreferrer">{t.previewBannerLink}</a>
+            </span>
+          </div>
+        )}
+
         {showStaleBanner && (
           <div
             className="app-stale-banner"
@@ -225,9 +264,13 @@ export function App() {
         </div>
 
         <section className={detailsExpanded || activeTool === "home" ? "tool-body" : "tool-body compact-results"}>
-          {retainedTools.map((mountedTool) => (
-            <ToolHost key={mountedTool} toolId={mountedTool} active={mountedTool === activeTool} t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} setToolDirty={setToolDirty} />
-          ))}
+          {routeUnknown ? (
+            <NotFound onGoHome={() => setActiveTool("home")} t={t} lang={lang} />
+          ) : (
+            retainedTools.map((mountedTool) => (
+              <ToolHost key={mountedTool} toolId={mountedTool} active={mountedTool === activeTool} t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} setToolDirty={setToolDirty} />
+            ))
+          )}
         </section>
       </main>
 

@@ -90,7 +90,29 @@ try {
   const indexHtml = await readFile(join(distRoot, "index.html"), "utf8");
   if (!indexHtml.includes(`<meta name="version" content="${packageJson.version}"`)) errors.push("index.html version metadata does not match package.json");
   if (!indexHtml.includes(`"softwareVersion": "${packageJson.version}"`)) errors.push("index.html structured-data version does not match package.json");
-  if (/\b(?:src|href)="\/assets\//.test(indexHtml)) errors.push("index.html contains root-absolute build asset paths");
+  // Web build uses root-absolute /assets/ so SPA deep-links and the
+  // Nginx `try_files ... /index.html` fallback boot the app from a sub-path
+  // (e.g. /tools/<unknown>/). The standalone build inlines the app and keeps
+  // relative paths, so when index.html references no external assets at all
+  // (fully inlined single file) this assertion does not apply.
+  const usesExternalAssets = /\b(?:src|href)="[^"]*\/assets\//.test(indexHtml);
+  const usesRootAbsolute = /\b(?:src|href)="\/assets\//.test(indexHtml);
+  if (usesExternalAssets && !usesRootAbsolute) {
+    errors.push("web build index.html must use root-absolute /assets/ paths so deep-linked and fallback routes boot");
+  }
+
+  // Environment-aware indexing assertion:
+  //  - production build must NOT carry a noindex meta (would hide the launch)
+  //  - preview build MUST carry a noindex meta (would otherwise be indexed)
+  const isPreview = process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true";
+  const hasNoindex = /name="robots"[^>]*content="[^"]*noindex/i.test(indexHtml);
+  if (isPreview && !hasNoindex) errors.push("preview build must contain a noindex robots meta");
+  if (!isPreview && hasNoindex) errors.push("production build must NOT contain a noindex robots meta");
+
+  // robots.txt must match the deploy mode.
+  const robotsTxt = await readFile(join(distRoot, "robots.txt"), "utf8").catch(() => "");
+  if (isPreview && !/Disallow:\s*\//.test(robotsTxt)) errors.push("preview robots.txt must Disallow /");
+  if (!isPreview && !/Allow:\s*\//.test(robotsTxt)) errors.push("production robots.txt must Allow /");
 } catch {
   // The required-file check above reports a missing index.html.
 }

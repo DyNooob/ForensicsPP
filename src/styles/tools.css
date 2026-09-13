@@ -3156,6 +3156,18 @@ pre.result-box {
     linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--app-line) 42%, transparent) 75%);
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   background-size: 16px 16px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.image-simple-preview:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.image-simple-preview:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
 }
 
 .image-simple-preview img {
@@ -5002,9 +5014,9 @@ textarea {
   padding: 0;
   border: 0;
   border-radius: 2px 2px 0 0;
-  background: currentColor;
-  color: var(--accent-color, #4457a6);
-  opacity: 0.65;
+  background-color: #4457a6;
+  color: #4457a6;
+  opacity: 0.72;
   cursor: pointer;
 }
 
@@ -5015,10 +5027,15 @@ textarea {
   outline-offset: 1px;
 }
 
-.firmware-entropy-bar.sparse { color: #8a949e; }
-.firmware-entropy-bar.structured { color: var(--accent-color, #4457a6); }
-.firmware-entropy-bar.high { color: #9a6a16; }
-.firmware-entropy-bar.very-high { color: #9b3f4a; }
+/* Classification-driven heatmap colours (shared by Firmware + Binary).
+   Hard-coded hex so the chart never depends on --accent-color being defined. */
+.firmware-entropy-bar.structured   { background-color: #4457a6; color: #4457a6; }
+.firmware-entropy-bar.text-heavy   { background-color: #2f7d6b; color: #2f7d6b; }
+.firmware-entropy-bar.repeated-byte{ background-color: #7a5cab; color: #7a5cab; }
+.firmware-entropy-bar.small-tail   { background-color: #9aa3ad; color: #9aa3ad; }
+.firmware-entropy-bar.sparse       { background-color: #8a949e; color: #8a949e; }
+.firmware-entropy-bar.high         { background-color: #b9791b; color: #b9791b; }
+.firmware-entropy-bar.very-high    { background-color: #b23b4a; color: #b23b4a; }
 
 .firmware-entropy-legend {
   display: flex;

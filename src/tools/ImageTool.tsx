@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { createPortal } from "react-dom";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
@@ -157,8 +158,10 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   const [imagePage, setImagePage] = React.useState<"overview" | "structure" | "hidden" | "channels" | "qr" | "repair">(() => {
     if (typeof window === "undefined") return "overview";
     const legacy = window.location.hash.replace(/^#/, "").toLowerCase();
-    return legacy === "png" ? "structure" : legacy === "qr" ? "qr" : "overview";
+    if (["png", "gif", "jpeg", "webp", "bmp", "tiff", "heif"].includes(legacy)) return "structure";
+    return legacy === "qr" ? "qr" : "overview";
   });
+  const [imageFormatLayer, setImageFormatLayer] = React.useState<"container" | "exif" | "PNG" | "GIF" | "JPEG" | "WEBP" | "BMP" | "TIFF" | "HEIF/AVIF">("container");
   const [qrResult, setQrResult] = React.useState<ImageQrResult | null>(null);
   const [qrScanning, setQrScanning] = React.useState(false);
   const [lightbox, setLightbox] = React.useState<{ src: string; label: string } | null>(null);
@@ -166,7 +169,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   React.useEffect(() => {
     if (!active || typeof window === "undefined") return;
     const legacy = window.location.hash.replace(/^#/, "").toLowerCase();
-    if (legacy === "png") setImagePage("structure");
+    if (legacy === "png") { setImagePage("structure"); setImageFormatLayer("PNG"); }
+    else if (["gif", "jpeg", "webp", "bmp", "tiff", "heif"].includes(legacy)) { setImagePage("structure"); setImageFormatLayer(legacy === "heif" ? "HEIF/AVIF" : legacy.toUpperCase() as "GIF" | "JPEG" | "WEBP" | "BMP" | "TIFF"); }
     else if (legacy === "qr") setImagePage("qr");
   }, [active]);
 
@@ -310,6 +314,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         pngChunks: analysis.pngChunks,
         repairPreviewItems: [],
         autoRevealPreviews: [],
+        formatLayers: analysis.formatLayer ? [analysis.formatLayer] : [],
         channelDataUrls: emptyImageChannels(placeholderDataUrl)
       };
       guard.commit(requestId, () => {
@@ -641,7 +646,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
         {imagePage === "overview" && <div className="tool-panel wide-panel image-simple-overview-panel">
           <div className="image-simple-overview">
-            <figure className="image-simple-preview"><img src={imageInfo.dataUrl || imageInfo.repairedDataUrl} alt={imageInfo.name} /></figure>
+            <figure className="image-simple-preview" role="button" tabIndex={0} onClick={() => setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name }); } }}><img src={imageInfo.dataUrl || imageInfo.repairedDataUrl} alt={imageInfo.name} /></figure>
             <div className="image-simple-facts">
               <PanelTitle title={t.imageOverview} />
               <InfoTable rows={[
@@ -665,44 +670,170 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
         {imagePage === "structure" && <div className="tool-panel wide-panel image-simple-structure-panel">
           <PanelTitle title={t.imageStructure} />
-          <InfoTable rows={imageInfo.structureRows} />
-          {imageInfo.pngChunks.length > 0 && <>
-            <PanelTitle title={isEnglish ? "PNG forensic structure" : "PNG 取证结构"} />
-            <InfoTable rows={[
-              ["Chunks", String(imageInfo.pngChunks.length)],
-              ["IDAT", formatBytes(pngIdatBytes)],
-              ["CRC", pngBadCrc.length ? `${pngBadCrc.length} mismatch` : "OK"],
-              ["IEND", pngHasIend ? (isEnglish ? "Present" : "存在") : (isEnglish ? "Missing" : "缺失")],
-              [isEnglish ? "Text chunks" : "文本块", String(imageInfo.pngTextEntries.length)],
-              [isEnglish ? "Risk / private chunks" : "风险 / 私有块", String(pngRiskChunks.length)],
-              [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
-            ]} />
-            {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <div className="finding-item warn" key={`png-risk-${chunk.offset}-${chunk.type}`}><strong>{chunk.type} @ 0x{chunk.offset.toString(16).toUpperCase()}</strong><span>{chunk.risk.join("; ")}</span></div>)}</div>}
-            <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td><td>{[chunk.ancillary ? "ancillary" : "critical", chunk.privateUse ? "private" : "public", chunk.safeToCopy ? "safe-copy" : "unsafe-copy"].join(" · ")}</td></tr>)}</tbody></table></div>
+          <ASegmentedGroup className="image-format-layer-tabs" value={imageFormatLayer} selects="single" aria-label={isEnglish ? "Format analysis layers" : "格式分析层"}>
+            <ASegmentedButton value="container" onClick={() => setImageFormatLayer("container")}>{isEnglish ? "Container" : "容器"}</ASegmentedButton>
+            {imageInfo.formatLayers.map((layer) => (
+              <ASegmentedButton key={layer.format} value={layer.format} onClick={() => setImageFormatLayer(layer.format)}>{layer.format}</ASegmentedButton>
+            ))}
+          </ASegmentedGroup>
+
+          {imageFormatLayer === "container" && <>
+            <InfoTable rows={imageInfo.structureRows} />
+            <div className="panel-heading-row image-exif-heading">
+              <PanelTitle title={t.exif} />
+              {Object.keys(imageInfo.exif).length > 0 && <span className="status-pill">{Math.min(100, Object.keys(imageInfo.exif).length)}/{Object.keys(imageInfo.exif).length}</span>}
+            </div>
+            {Object.keys(imageInfo.exif).length ? <div className="image-exif-scroll">
+              <table className="image-exif-table">
+                <colgroup><col className="image-exif-field-col" /><col /></colgroup>
+                <thead><tr><th>{isEnglish ? "Field" : "字段"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead>
+                <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => {
+                  const field = exifFieldLabel(key, isEnglish);
+                  const valueLabel = exifValueLabel(key, value, isEnglish);
+                  return (
+                    <tr key={key}>
+                      <th scope="row">
+                        <span className="exif-field-label">{field}</span>
+                        {!isEnglish && field !== key && <code className="exif-tag-sub">{key}</code>}
+                      </th>
+                      <td><pre>{valueLabel ?? formatExifValue(value)}</pre></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div> : <div className="empty-state">{t.noExif}</div>}
           </>}
-          <div className="panel-heading-row image-exif-heading">
-            <PanelTitle title={t.exif} />
-            {Object.keys(imageInfo.exif).length > 0 && <span className="status-pill">{Math.min(100, Object.keys(imageInfo.exif).length)}/{Object.keys(imageInfo.exif).length}</span>}
-          </div>
-          {Object.keys(imageInfo.exif).length ? <div className="image-exif-scroll">
-            <table className="image-exif-table">
-              <colgroup><col className="image-exif-field-col" /><col /></colgroup>
-              <thead><tr><th>{isEnglish ? "Field" : "字段"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead>
-              <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => {
-                const field = exifFieldLabel(key, isEnglish);
-                const valueLabel = exifValueLabel(key, value, isEnglish);
-                return (
-                  <tr key={key}>
-                    <th scope="row">
-                      <span className="exif-field-label">{field}</span>
-                      {!isEnglish && field !== key && <code className="exif-tag-sub">{key}</code>}
-                    </th>
-                    <td><pre>{valueLabel ?? formatExifValue(value)}</pre></td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          </div> : <div className="empty-state">{t.noExif}</div>}
+
+          {imageInfo.formatLayers.filter((layer) => layer.format === imageFormatLayer).map((layer) => (
+            <React.Fragment key={layer.format}>
+              <InfoTable rows={layer.rows} />
+              {layer.findings.length > 0 && <>
+                <PanelTitle title={isEnglish ? "Format findings" : "格式检查记录"} />
+                <div className="finding-list">{layer.findings.map((finding, index) => <div className={`finding-item ${finding.level === "danger" ? "danger" : finding.level === "warn" ? "warn" : "info"}`} key={`fl-${index}`}><strong>{finding.title}</strong><span>{finding.detail}</span></div>)}</div>
+              </>}
+
+              {layer.format === "PNG" && imageInfo.pngChunks.length > 0 && <>
+                <PanelTitle title={isEnglish ? "PNG forensic structure" : "PNG 取证结构"} />
+                <InfoTable rows={[
+                  ["Chunks", String(imageInfo.pngChunks.length)],
+                  ["IDAT", formatBytes(pngIdatBytes)],
+                  ["CRC", pngBadCrc.length ? `${pngBadCrc.length} mismatch` : "OK"],
+                  ["IEND", pngHasIend ? (isEnglish ? "Present" : "存在") : (isEnglish ? "Missing" : "缺失")],
+                  [isEnglish ? "Text chunks" : "文本块", String(imageInfo.pngTextEntries.length)],
+                  [isEnglish ? "Risk / private chunks" : "风险 / 私有块", String(pngRiskChunks.length)],
+                  [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
+                ]} />
+                {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <div className="finding-item warn" key={`png-risk-${chunk.offset}-${chunk.type}`}><strong>{chunk.type} @ 0x{chunk.offset.toString(16).toUpperCase()}</strong><span>{chunk.risk.join("; ")}</span></div>)}</div>}
+                <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td><td>{[chunk.ancillary ? "ancillary" : "critical", chunk.privateUse ? "private" : "public", chunk.safeToCopy ? "safe-copy" : "unsafe-copy"].join(" · ")}</td></tr>)}</tbody></table></div>
+              </>}
+
+              {layer.format === "GIF" && <>
+                <PanelTitle title={isEnglish ? "GIF summary" : "GIF 概要"} />
+                <InfoTable rows={[
+                  ["Version", layer.gif.version],
+                  ["Screen", `${layer.gif.screenWidth} × ${layer.gif.screenHeight}`],
+                  [isEnglish ? "Global color table" : "全局色表", layer.gif.globalColorTable ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  [isEnglish ? "Loop count" : "循环次数", layer.gif.loopCount === null ? (isEnglish ? "not set / infinite" : "未设置 / 无限") : String(layer.gif.loopCount)],
+                  [isEnglish ? "Frame count" : "帧数", String(layer.gif.frameCount)],
+                  [isEnglish ? "Comment count" : "注释数", String(layer.gif.commentCount)],
+                  [isEnglish ? "Trailing bytes" : "尾部残留", formatBytes(layer.gif.trailingBytes)]
+                ]} />
+                {layer.gif.frames.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "GIF frames" : "GIF 帧"} />
+                  <div className="table-scroll"><table className="data-table"><thead><tr><th>#</th><th>{isEnglish ? "Dimensions" : "尺寸"}</th><th>{isEnglish ? "Delay (cs)" : "延迟(厘秒)"}</th><th>{isEnglish ? "Disposal" : "处置"}</th><th>{isEnglish ? "Transparent" : "透明"}</th><th>{isEnglish ? "Local CT" : "局部色表"}</th></tr></thead><tbody>{layer.gif.frames.map((frame) => <tr key={frame.index}><td>{frame.index + 1}</td><td>{frame.width} × {frame.height}{frame.left || frame.top ? ` @${frame.left},${frame.top}` : ""}</td><td>{frame.delayCentiseconds}</td><td>{frame.disposalMethod}</td><td>{frame.transparentFlag ? (isEnglish ? `yes (${frame.transparentColorIndex})` : `是 (${frame.transparentColorIndex})`) : (isEnglish ? "no" : "否")}</td><td>{frame.localColorTable ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")}</td></tr>)}</tbody></table></div>
+                </>}
+                {layer.gif.comments.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "GIF comments" : "GIF 注释"} />
+                  <div className="image-text-result-list">{layer.gif.comments.map((comment, index) => <label key={`gif-comment-${index}`}>{`${isEnglish ? "Comment" : "注释"} #${index + 1}`}<textarea className="single-textarea compact-textarea" value={comment} readOnly /></label>)}</div>
+                </>}
+                {layer.gif.applicationExtensions.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "GIF application extensions" : "GIF 应用扩展"} />
+                  <div className="image-text-result-list">{layer.gif.applicationExtensions.map((ext, index) => <label key={`gif-appext-${index}`}>{`${isEnglish ? "App extension" : "应用扩展"} #${index + 1}`}<textarea className="single-textarea compact-textarea" value={ext} readOnly /></label>)}</div>
+                </>}
+              </>}
+
+              {layer.format === "JPEG" && <>
+                <PanelTitle title={isEnglish ? "JPEG summary" : "JPEG 概要"} />
+                <InfoTable rows={[
+                  [isEnglish ? "Marker count" : "标记数", String(layer.jpeg.markerCount)],
+                  [isEnglish ? "Dimensions" : "尺寸", layer.jpeg.sof ? `${layer.jpeg.sof.width} × ${layer.jpeg.sof.height}` : "--"],
+                  ["APP0 / JFIF", layer.jpeg.app0 ? `${layer.jpeg.app0.version} (${layer.jpeg.app0.density})` : (isEnglish ? "not present" : "不存在")],
+                  ["EXIF", layer.jpeg.hasExif ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["XMP", layer.jpeg.hasXmp ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["Adobe APP14", layer.jpeg.hasAdobe === null ? (isEnglish ? "n/a" : "不适用") : (layer.jpeg.hasAdobe ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否"))],
+                  [isEnglish ? "Comments" : "注释", String(layer.jpeg.commentCount)],
+                  [isEnglish ? "Thumbnail" : "缩略图", layer.jpeg.hasThumbnail ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")]
+                ]} />
+                {layer.jpeg.markers.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "JPEG markers" : "JPEG 标记"} />
+                  <div className="table-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Marker" : "标记"}</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Label" : "标签"}</th></tr></thead><tbody>{layer.jpeg.markers.map((marker, index) => <tr key={`jpeg-marker-${index}`}><td>{marker.marker}</td><td>0x{marker.offset.toString(16).toUpperCase()}</td><td>{marker.label}</td></tr>)}</tbody></table></div>
+                </>}
+              </>}
+
+              {layer.format === "WEBP" && <>
+                <PanelTitle title={isEnglish ? "WEBP summary" : "WEBP 概要"} />
+                <InfoTable rows={[
+                  [isEnglish ? "Chunk count" : "块数", String(layer.webp.chunkCount)],
+                  ["VP8X", layer.webp.hasVp8x ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  [isEnglish ? "Canvas" : "画布", layer.webp.hasVp8x ? `${layer.webp.canvasWidth} × ${layer.webp.canvasHeight}` : "--"],
+                  [isEnglish ? "Alpha" : "透明", layer.webp.hasAlpha ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  [isEnglish ? "Animation" : "动画", layer.webp.isAnimation ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["EXIF", layer.webp.hasExif ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["XMP", layer.webp.hasXmp ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["ICC", layer.webp.hasIcc ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")]
+                ]} />
+                {layer.webp.chunks.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "WEBP chunks" : "WEBP 块"} />
+                  <div className="table-scroll"><table className="data-table"><thead><tr><th>FourCC</th><th>{isEnglish ? "Size" : "大小"}</th><th>{isEnglish ? "Offset" : "偏移"}</th></tr></thead><tbody>{layer.webp.chunks.map((chunk, index) => <tr key={`webp-chunk-${index}`}><td>{chunk.fourcc}</td><td>{formatBytes(chunk.size)}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td></tr>)}</tbody></table></div>
+                </>}
+              </>}
+
+              {layer.format === "BMP" && <>
+                <PanelTitle title={isEnglish ? "BMP header" : "BMP 文件头"} />
+                <InfoTable rows={[
+                  [isEnglish ? "DIB header" : "DIB 头", layer.bmp.dibHeaderType],
+                  [isEnglish ? "Dimensions" : "尺寸", `${layer.bmp.width} × ${layer.bmp.height}`],
+                  [isEnglish ? "Planes" : "面数", String(layer.bmp.planes)],
+                  ["BPP", String(layer.bmp.bpp)],
+                  [isEnglish ? "Compression" : "压缩", `${layer.bmp.compression} (${layer.bmp.compressionName})`],
+                  [isEnglish ? "Important colors" : "重要颜色", String(layer.bmp.importantColors)],
+                  [isEnglish ? "Color masks" : "颜色掩码", layer.bmp.colorMasks ? `R:0x${layer.bmp.colorMasks.red.toString(16)} G:0x${layer.bmp.colorMasks.green.toString(16)} B:0x${layer.bmp.colorMasks.blue.toString(16)} A:0x${layer.bmp.colorMasks.alpha.toString(16)}` : (isEnglish ? "not present" : "不存在")]
+                ]} />
+              </>}
+
+              {layer.format === "TIFF" && <>
+                <PanelTitle title={isEnglish ? "TIFF summary" : "TIFF 概要"} />
+                <InfoTable rows={[
+                  [isEnglish ? "Endian" : "字节序", layer.tiff.endian],
+                  ["Magic", String(layer.tiff.magic)],
+                  [isEnglish ? "IFD0 offset" : "IFD0 偏移", String(layer.tiff.ifd0Offset)],
+                  [isEnglish ? "Entry count" : "条目数", String(layer.tiff.entryCount)],
+                  [isEnglish ? "Dimensions" : "尺寸", layer.tiff.width && layer.tiff.height ? `${layer.tiff.width} × ${layer.tiff.height}` : "--"]
+                ]} />
+                {layer.tiff.entries.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "TIFF IFD entries" : "TIFF IFD 条目"} />
+                  <div className="table-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Tag" : "标签"}</th><th>{isEnglish ? "Name" : "名称"}</th><th>{isEnglish ? "Type" : "类型"}</th><th>{isEnglish ? "Count" : "数量"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead><tbody>{layer.tiff.entries.map((entry, index) => <tr key={`tiff-entry-${index}`}><td>0x{entry.tag.toString(16).toUpperCase()}</td><td>{entry.tagName}</td><td>{entry.type}</td><td>{String(entry.count)}</td><td>{entry.value}</td></tr>)}</tbody></table></div>
+                </>}
+              </>}
+
+              {layer.format === "HEIF/AVIF" && <>
+                <PanelTitle title={isEnglish ? "HEIF/AVIF summary" : "HEIF/AVIF 概要"} />
+                <InfoTable rows={[
+                  [isEnglish ? "Major brand" : "主品牌", layer.heif.majorBrand],
+                  [isEnglish ? "Minor version" : "次版本", String(layer.heif.minorVersion)],
+                  [isEnglish ? "Dimensions" : "尺寸", layer.heif.width && layer.heif.height ? `${layer.heif.width} × ${layer.heif.height}` : "--"],
+                  ["meta", layer.heif.hasMeta ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")],
+                  ["mdia", layer.heif.hasMdia ? (isEnglish ? "yes" : "是") : (isEnglish ? "no" : "否")]
+                ]} />
+                {layer.heif.compatibleBrands.length > 0 && <>
+                  <PanelTitle title={isEnglish ? "Compatible brands" : "兼容品牌"} />
+                  <InfoTable rows={layer.heif.compatibleBrands.map((brand, index) => [`${isEnglish ? "Brand" : "品牌"} #${index + 1}`, brand])} />
+                </>}
+              </>}
+            </React.Fragment>
+          ))}
+
+          {imageFormatLayer !== "container" && !imageInfo.formatLayers.some((layer) => layer.format === imageFormatLayer) && <div className="empty-state">{isEnglish ? "This file was not detected as that format, so no dedicated structure layer is shown." : "该图片未被识别为此格式，无独立结构层。"}</div>}
         </div>}
 
         {imagePage === "hidden" && <div className="tool-panel wide-panel image-simple-hidden-panel">
@@ -745,7 +876,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         {imagePage === "repair" && <div className="tool-panel wide-panel image-simple-repair-panel">
           <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Checking..." : "正在检查...") : (isEnglish ? "Check repair options" : "检查修复结果")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-recovered.png`}>{t.downloadRepaired}</AButton>}</div></div>
           <InfoTable rows={imageInfo.recoveryRows} />
-          <div className="image-repair-preview-grid">{imageInfo.repairPreviewItems.map((item) => <figure key={`${item.label}-${item.detail}`}><img src={item.src} alt={item.label} /><figcaption><strong>{item.label}</strong><span>{item.detail}</span></figcaption></figure>)}</div>
+          <div className="image-repair-preview-grid">{imageInfo.repairPreviewItems.map((item) => <figure key={`${item.label}-${item.detail}`} role="button" tabIndex={0} onClick={() => setLightbox({ src: item.src, label: item.label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src: item.src, label: item.label }); } }}><img src={item.src} alt={item.label} /><figcaption><strong>{item.label}</strong><span>{item.detail}</span></figcaption></figure>)}</div>
           {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
@@ -760,7 +891,13 @@ function ImageLightbox({ src, label, name, english, t, onClose }: { src: string;
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  // Rendered into <body> via a portal on purpose: the workbench grid forces
+  // `position: static !important; top: auto !important` on its direct children
+  // (tools.css `.tool-grid[class*="has-"] > *`, and the stacked variant), which
+  // would drop this overlay into the page flow at the very bottom — forcing the
+  // user to scroll the whole tool to see it. Portaling keeps it a real,
+  // viewport-centered overlay.
+  return createPortal(
     <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={onClose}>
       <div className="image-lightbox-inner" onClick={(event) => event.stopPropagation()}>
         <div className="image-lightbox-head">
@@ -772,6 +909,7 @@ function ImageLightbox({ src, label, name, english, t, onClose }: { src: string;
         </div>
         <img className="image-lightbox-img" src={src} alt={label} />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

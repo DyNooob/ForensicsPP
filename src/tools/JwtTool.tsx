@@ -27,12 +27,13 @@ import {
   ASegmentedButton,
   ASegmentedGroup,
   AChip,
-  ACard,
   ASelect,
   ToolFactGrid,
   ToolPanelHeader
 } from "../components/ui";
+import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
+import { useStoredState } from "../utils/storage";
 import {
   MAX_JWT_INPUT_CHARS,
   MAX_JWT_TOKEN_CHARS,
@@ -41,13 +42,9 @@ import {
   jwtCryptoAlgorithm,
   jwtAlgFamily,
   verifyJwtAsymmetricSignature,
-  signJwtHS256,
   signJwtHmac,
   signJwtAsymmetric,
-  buildNoneToken,
-  stripJwtSignature,
-  jwtCveReferences,
-  type JwtCveRef
+  buildNoneToken
 } from "../features/jwt/analyzer";
 
 type Finding = { level: string; title: string; detail: string };
@@ -63,11 +60,9 @@ export type JwtToolServices = {
   signJwtHmac: (alg: string, header: string, payload: string, secret: string) => string;
   signJwtAsymmetric: (alg: string, header: string, payload: string, keyText: string) => Promise<string>;
   buildNoneToken: (header: string, payload: string) => string;
-  stripJwtSignature: (token: string) => string;
-  jwtCveReferences: (alg: string, headerObject: Record<string, unknown>) => JwtCveRef[];
 };
 
-type Mode = "decode" | "sign" | "security";
+type Mode = "decode" | "sign";
 
 const ALG_OPTIONS = [
   { label: "HS256", value: "HS256" },
@@ -84,6 +79,9 @@ const ALG_OPTIONS = [
   { label: "PS512", value: "PS512" },
   { label: "none (unsigned)", value: "none" }
 ];
+
+const DEFAULT_SIGN_HEADER = '{\n  "alg": "HS256",\n  "typ": "JWT"\n}';
+const DEFAULT_SIGN_PAYLOAD = "{\n  \n}";
 
 function findingClass(finding: Finding) {
   const title = finding.title.toLowerCase();
@@ -106,14 +104,14 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     verifyJwtAsymmetricSignature: verifyAsym,
     signJwtHmac: signHmac,
     signJwtAsymmetric: signAsym,
-    buildNoneToken: buildNone,
-    stripJwtSignature: stripSig,
-    jwtCveReferences: cveRefs
+    buildNoneToken: buildNone
   } = services;
   const english = t.jwt_workbench === "JWT workbench";
 
-  const [mode, setMode] = React.useState<Mode>("decode");
-  const [tokenInput, setTokenInput] = React.useState("");
+  const [storedMode, setStoredMode] = useStoredState("jwt.mode", "decode");
+  const mode: Mode = storedMode === "sign" ? "sign" : "decode";
+  const setMode = (next: Mode) => setStoredMode(next);
+  const [tokenInput, setTokenInput] = useStoredState("jwt.input.v1", "");
   const [secret, setSecret] = React.useState("");
   const [verifyKey, setVerifyKey] = React.useState("");
   const [verification, setVerification] = React.useState<{ status: string; detail: string }>({ status: "idle", detail: "" });
@@ -121,21 +119,15 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
   const [decodeHeader, setDecodeHeader] = React.useState("");
   const [decodePayload, setDecodePayload] = React.useState("");
   const [decodeError, setDecodeError] = React.useState("");
-  const [forgeNone, setForgeNone] = React.useState("");
 
-  const [signAlg, setSignAlg] = React.useState("HS256");
-  const [signHeader, setSignHeader] = React.useState('{\n  "alg": "HS256",\n  "typ": "JWT"\n}');
-  const [signPayload, setSignPayload] = React.useState("{\n  \n}");
+  const [storedSignAlg, setSignAlg] = useStoredState("jwt.signAlg", "HS256");
+  const signAlg = ALG_OPTIONS.some((option) => option.value === storedSignAlg) ? storedSignAlg : "HS256";
+  const [signHeader, setSignHeader] = useStoredState("jwt.signHeader.v1", DEFAULT_SIGN_HEADER);
+  const [signPayload, setSignPayload] = useStoredState("jwt.signPayload.v1", DEFAULT_SIGN_PAYLOAD);
   const [signSecret, setSignSecret] = React.useState("");
   const [signKey, setSignKey] = React.useState("");
   const [generatedToken, setGeneratedToken] = React.useState("");
   const [signError, setSignError] = React.useState("");
-
-  const [secPubKey, setSecPubKey] = React.useState("");
-  const [secNone, setSecNone] = React.useState("");
-  const [secStripped, setSecStripped] = React.useState("");
-  const [secConfusion, setSecConfusion] = React.useState("");
-  const [secError, setSecError] = React.useState("");
 
   const verificationRequestRef = React.useRef(0);
 
@@ -174,7 +166,13 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
   const parseError = inputTooLarge
     ? (english ? `Input exceeds ${Math.round(MAX_JWT_INPUT_CHARS / 1024 / 1024)} MiB.` : `输入超过 ${Math.round(MAX_JWT_INPUT_CHARS / 1024 / 1024)} MiB。`)
     : tokenInput.trim() && !tokens.length
-      ? (activeInspection.result || (english ? `No valid JWT found (single token limit: ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB)` : `未找到有效 JWT（单个 Token 上限 ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB）`))
+      ? (() => {
+          const direct = inspect(tokenInput.trim(), secret);
+          const failed = direct.rows.length > 0 && direct.rows[0][0] === "JWT";
+          return failed && direct.result
+            ? direct.result
+            : (english ? `No valid JWT found (single token limit: ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB)` : `未找到有效 JWT（单个 Token 上限 ${Math.round(MAX_JWT_TOKEN_CHARS / 1024 / 1024)} MiB）`);
+        })()
       : "";
 
   React.useEffect(() => {
@@ -186,7 +184,6 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     if (activeRow) {
       setDecodeHeader(activeInspection.headerText || "{}");
       setDecodePayload(activeInspection.payloadText || "{}");
-      setForgeNone("");
       setDecodeError("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,17 +215,6 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     setMode("sign");
   };
 
-  const doForgeNone = () => {
-    try {
-      const header = JSON.parse(decodeHeader);
-      header.alg = "none";
-      setForgeNone(buildNone(JSON.stringify(header), decodePayload));
-      setDecodeError("");
-    } catch {
-      setDecodeError(t.jwt_err_invalid_json);
-    }
-  };
-
   const doSign = async () => {
     setSignError("");
     try {
@@ -251,36 +237,6 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     }
   };
 
-  const runSecNone = () => {
-    try {
-      const header = JSON.parse(activeInspection.headerText || "{}");
-      header.alg = "none";
-      setSecNone(buildNone(JSON.stringify(header), activeInspection.payloadText || "{}"));
-      setSecError("");
-    } catch (caught) {
-      setSecError(caught instanceof Error ? caught.message : String(caught));
-    }
-  };
-  const runSecStrip = () => {
-    try {
-      setSecStripped(stripSig(activeToken));
-      setSecError("");
-    } catch (caught) {
-      setSecError(caught instanceof Error ? caught.message : String(caught));
-    }
-  };
-  const runSecConfusion = () => {
-    try {
-      if (algFamily(activeAlg) !== "RS") throw new Error(t.jwt_err_rs_only);
-      if (!secPubKey.trim()) throw new Error(t.jwt_err_public_key);
-      setSecConfusion(signHmac("HS256", activeInspection.headerText || "{}", activeInspection.payloadText || "{}", secPubKey));
-      setSecError("");
-    } catch (caught) {
-      setSecConfusion("");
-      setSecError(caught instanceof Error ? caught.message : String(caught));
-    }
-  };
-
   const clear = () => {
     setTokenInput("");
     setSecret("");
@@ -290,19 +246,13 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
     setDecodeHeader("");
     setDecodePayload("");
     setDecodeError("");
-    setForgeNone("");
     setSignAlg("HS256");
-    setSignHeader('{\n  "alg": "HS256",\n  "typ": "JWT"\n}');
-    setSignPayload("{\n  \n}");
+    setSignHeader(DEFAULT_SIGN_HEADER);
+    setSignPayload(DEFAULT_SIGN_PAYLOAD);
     setSignSecret("");
     setSignKey("");
     setGeneratedToken("");
     setSignError("");
-    setSecPubKey("");
-    setSecNone("");
-    setSecStripped("");
-    setSecConfusion("");
-    setSecError("");
   };
 
   const factItems = activeRow
@@ -318,37 +268,31 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
       ]
     : [];
 
-  const cveList: JwtCveRef[] = activeRow ? cveRefs(activeAlg, activeInspection.headerObject ?? {}) : [];
-  const sensitiveClaims = activeInspection.payloadObject
-    ? Object.entries(activeInspection.payloadObject).filter(
-        ([key, value]) =>
-          /(pass(word)?|secret|api[_-]?key|token|session|cookie|private[_-]?key)/i.test(key) ||
-          /(bearer\s+|AKIA[0-9A-Z]{16}|-----BEGIN)/i.test(String(value))
-      )
-    : [];
-
   return (
-    <div className="tool-page-shell jwt-workbench">
-      <ToolPanelHeader
-        title={t.jwt_workbench}
-        subtitle={mode === "decode" ? t.jwt_tab_decode : mode === "sign" ? t.jwt_tab_sign : t.jwt_tab_security}
-        actions={
-          <>
-            <ASegmentedGroup className="jwt-mode" value={mode} selects="single">
-              <ASegmentedButton value="decode" onClick={() => setMode("decode")}>{t.jwt_tab_decode}</ASegmentedButton>
-              <ASegmentedButton value="sign" onClick={() => setMode("sign")}>{t.jwt_tab_sign}</ASegmentedButton>
-              <ASegmentedButton value="security" onClick={() => setMode("security")}>{t.jwt_tab_security}</ASegmentedButton>
-            </ASegmentedGroup>
+    <div className={`tool-grid jwt-workbench ${activeToken || hasInput ? "has-jwt" : "empty-jwt"}`}>
+      <div className="tool-panel wide-panel jwt-input-panel">
+        <ToolPanelHeader
+          title={t.jwt_workbench}
+          subtitle={mode === "decode" ? t.jwt_tab_decode : t.jwt_tab_sign}
+          actions={
             <AButton variant="text" disabled={!hasInput && !activeToken} onClick={clear}>{t.clear}</AButton>
-          </>
-        }
-      />
+          }
+        />
+        <ASegmentedGroup className="jwt-modes" value={mode} selects="single">
+          <ASegmentedButton value="decode" onClick={() => setMode("decode")}>{t.jwt_tab_decode}</ASegmentedButton>
+          <ASegmentedButton value="sign" onClick={() => setMode("sign")}>{t.jwt_tab_sign}</ASegmentedButton>
+        </ASegmentedGroup>
 
-      {mode === "decode" && (
-        <div className="jwt-decode-grid">
-          <ACard className="jwt-input-card">
-            <label className="stack-label">
-              JWT
+        {mode === "decode" && (
+          <>
+            <div className="text-panel jwt-text-panel">
+              <div className="text-panel-title">
+                <strong>JWT</strong>
+                <div className="mini-actions">
+                  <AButton variant="text" disabled={!tokenInput} onClick={() => void copyText(tokenInput)}>{t.copyInput}</AButton>
+                  <SampleButton toolId="jwt" english={english} onLoad={(text) => { setTokenInput(text); setSelectedToken(""); }} />
+                </div>
+              </div>
               <textarea
                 className="single-textarea jwt-token-input"
                 value={tokenInput}
@@ -358,7 +302,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                 }}
                 placeholder={t.jwt_input_placeholder}
               />
-            </label>
+            </div>
             {parseError && <div className="empty-state error-state">{parseError}</div>}
             {!activeRow && !parseError && (
               <div className="empty-state jwt-guide">
@@ -385,98 +329,11 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                 ))}
               </div>
             )}
-          </ACard>
+          </>
+        )}
 
-          {activeRow && (
-            <div className="jwt-decode-result">
-              <ACard className="jwt-overview-card">
-                <ToolPanelHeader title={t.jwt_overview} />
-                <ToolFactGrid items={factItems} />
-              </ACard>
-
-              <ACard className="jwt-editor-card">
-                <ToolPanelHeader
-                  title={t.decoded_token}
-                  actions={
-                    <>
-                      <AButton variant="outlined" onClick={() => void copyText(activeToken)}>{t.copy_token}</AButton>
-                      <AButton variant="text" disabled={!activeInspection.headerText} onClick={() => void copyText(decodeHeader)}>{t.copy_header}</AButton>
-                      <AButton variant="text" disabled={!activeInspection.payloadText} onClick={() => void copyText(decodePayload)}>{t.copy_payload}</AButton>
-                    </>
-                  }
-                />
-                <p className="inline-note">{t.jwt_edit_hint}</p>
-                <label className="stack-label">Header<textarea className="compact-textarea jwt-json" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} /></label>
-                <label className="stack-label">Payload<textarea className="single-textarea jwt-json" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} /></label>
-                {decodeError && <div className="empty-state error-state">{decodeError}</div>}
-                <div className="button-row">
-                  <AButton variant="filled" onClick={forgeToSign}>{t.jwt_forge_to_sign}</AButton>
-                  <AButton variant="outlined" onClick={doForgeNone}>{t.jwt_sec_none_btn_short}</AButton>
-                </div>
-                {forgeNone && (
-                  <div className="jwt-forge-output">
-                    <ToolPanelHeader title={t.jwt_sec_none_title} actions={<AButton variant="outlined" onClick={() => void copyText(forgeNone)}>{t.copy}</AButton>} />
-                    <textarea className="single-textarea jwt-generated" value={forgeNone} readOnly />
-                  </div>
-                )}
-              </ACard>
-
-              {(isHmac || asymmetric) && (
-                <ACard className="jwt-verify-card">
-                  <ToolPanelHeader title={t.jwt_verify} />
-                  {isHmac && (
-                    <label className="stack-label">
-                      {t.shared_secret}
-                      <APasswordField className="text-input full-input" value={secret} onChange={(event) => setSecret(event.currentTarget.value)} placeholder={t.optional_verify_hmac_signature} />
-                    </label>
-                  )}
-                  {asymmetric && (
-                    <label className="stack-label">
-                      {t.public_key_or_jwk}
-                      <textarea className="compact-textarea jwt-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" />
-                    </label>
-                  )}
-                  {asymmetric && (
-                    <div className="button-row">
-                      <AButton variant="outlined" disabled={!verifyKey.trim() || verification.status === "checking"} onClick={() => void verifyAsymmetric()}>{t.verify_signature}</AButton>
-                      {verification.status !== "idle" && (
-                        <AChip selected className={verification.status === "valid" ? "ok" : verification.status === "invalid" ? "bad" : ""}>
-                          {verification.detail}
-                        </AChip>
-                      )}
-                    </div>
-                  )}
-                  {isHmac && !secret && (
-                    <p className="inline-note">{t.jwt_hint_verify_hmac}</p>
-                  )}
-                </ACard>
-              )}
-
-              {activeInspection.findings.length > 0 && (
-                <ACard className="jwt-findings-card">
-                  <ToolPanelHeader title={t.jwt_findings} />
-                  <div className="finding-list">
-                    {activeInspection.findings.map((finding, index) => (
-                      <div className={`finding-item ${findingClass(finding)}`} key={`${finding.title}-${index}`}>
-                        <span className="finding-sev">{severityLabel(t, findingClass(finding))}</span>
-                        <div className="finding-body">
-                          <strong>{finding.title}</strong>
-                          <span>{finding.detail}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ACard>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {mode === "sign" && (
-        <div className="jwt-sign-grid">
-          <ACard className="jwt-sign-card">
-            <ToolPanelHeader title={t.jwt_tab_sign} />
+        {mode === "sign" && (
+          <>
             <label className="stack-label">
               {t.jwt_sign_alg}
               <ASelect
@@ -487,12 +344,18 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
               />
             </label>
             {algFamily(signAlg) === "none" && <p className="inline-note jwt-none-hint">{t.jwt_sign_none_hint}</p>}
-            <label className="stack-label">Header<textarea className="compact-textarea jwt-json" value={signHeader} onChange={(event) => { setSignHeader(event.currentTarget.value); setGeneratedToken(""); }} /></label>
-            <label className="stack-label">Payload<textarea className="single-textarea jwt-json" value={signPayload} onChange={(event) => { setSignPayload(event.currentTarget.value); setGeneratedToken(""); }} /></label>
+            <div className="text-panel jwt-text-panel">
+              <div className="text-panel-title"><strong>Header</strong></div>
+              <textarea className="compact-textarea jwt-json" value={signHeader} onChange={(event) => { setSignHeader(event.currentTarget.value); setGeneratedToken(""); }} />
+            </div>
+            <div className="text-panel jwt-text-panel">
+              <div className="text-panel-title"><strong>Payload</strong></div>
+              <textarea className="single-textarea jwt-json" value={signPayload} onChange={(event) => { setSignPayload(event.currentTarget.value); setGeneratedToken(""); }} />
+            </div>
             {algFamily(signAlg) === "HS" && (
               <label className="stack-label">
                 {t.shared_secret}
-                <APasswordField className="text-input full-input" value={signSecret} onChange={(event) => { setSignSecret(event.currentTarget.value); setGeneratedToken(""); }} placeholder={t.optional_verify_hmac_signature} />
+                <APasswordField className="text-input full-input" value={signSecret} onChange={(event) => { setSignSecret(event.currentTarget.value); setGeneratedToken(""); }} placeholder={t.jwt_sign_secret_ph} />
               </label>
             )}
             {["RS", "ES", "PS"].includes(algFamily(signAlg)) && (
@@ -506,99 +369,102 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             </div>
             {signError && <div className="empty-state error-state">{signError}</div>}
             {generatedToken && (
-              <div className="jwt-sign-output">
-                <ToolPanelHeader title={t.generated_token} actions={<><AButton variant="outlined" onClick={() => void copyText(generatedToken)}>{t.copy}</AButton><AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("decode"); }}>{t.jwt_open_decode}</AButton></>} />
+              <div className="text-panel jwt-text-panel">
+                <div className="text-panel-title">
+                  <strong>{t.generated_token}</strong>
+                  <div className="mini-actions">
+                    <AButton variant="text" onClick={() => void copyText(generatedToken)}>{t.copy}</AButton>
+                    <AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("decode"); }}>{t.jwt_open_decode}</AButton>
+                  </div>
+                </div>
                 <textarea className="single-textarea jwt-generated" value={generatedToken} readOnly />
               </div>
             )}
-          </ACard>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
-      {mode === "security" && (
-        <div className="jwt-security-grid">
-          {!activeRow && (
-            <ACard>
-              <div className="empty-state jwt-guide">
-                <p>{t.jwt_sec_needs_token}</p>
+      {mode === "decode" && activeRow && (
+        <>
+          <div className="tool-panel wide-panel jwt-overview-panel">
+            <ToolPanelHeader title={t.jwt_overview} />
+            <ToolFactGrid items={factItems} />
+          </div>
+
+          <div className="tool-panel wide-panel jwt-decoded-panel">
+            <ToolPanelHeader
+              title={t.decoded_token}
+              actions={<AButton variant="outlined" onClick={() => void copyText(activeToken)}>{t.copy_token}</AButton>}
+            />
+            <p className="inline-note">{t.jwt_edit_hint}</p>
+            <div className="text-panel jwt-text-panel">
+              <div className="text-panel-title">
+                <strong>Header</strong>
+                <AButton variant="text" disabled={!decodeHeader} onClick={() => void copyText(decodeHeader)}>{t.copy_header}</AButton>
               </div>
-            </ACard>
-          )}
-          {activeRow && (
-            <>
-              <ACard className="jwt-attack-card">
-                <ToolPanelHeader title={t.jwt_sec_none_title} />
-                <p className="inline-note">{t.jwt_sec_none_desc}</p>
-                <div className="button-row">
-                  <AButton variant="outlined" onClick={runSecNone}>{t.jwt_sec_none_btn}</AButton>
-                  {secNone && <AButton variant="text" onClick={() => void copyText(secNone)}>{t.copy}</AButton>}
-                </div>
-                {secNone && <textarea className="single-textarea jwt-generated" value={secNone} readOnly />}
-              </ACard>
+              <textarea className="compact-textarea jwt-json" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} />
+            </div>
+            <div className="text-panel jwt-text-panel">
+              <div className="text-panel-title">
+                <strong>Payload</strong>
+                <AButton variant="text" disabled={!decodePayload} onClick={() => void copyText(decodePayload)}>{t.copy_payload}</AButton>
+              </div>
+              <textarea className="single-textarea jwt-json" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
+            </div>
+            {decodeError && <div className="empty-state error-state">{decodeError}</div>}
+            <div className="button-row">
+              <AButton variant="filled" onClick={forgeToSign}>{t.jwt_forge_to_sign}</AButton>
+            </div>
+          </div>
 
-              <ACard className="jwt-attack-card">
-                <ToolPanelHeader title={t.jwt_sec_strip_title} />
-                <p className="inline-note">{t.jwt_sec_strip_desc}</p>
-                <div className="button-row">
-                  <AButton variant="outlined" onClick={runSecStrip}>{t.jwt_sec_strip_btn}</AButton>
-                  {secStripped && <AButton variant="text" onClick={() => void copyText(secStripped)}>{t.copy}</AButton>}
-                </div>
-                {secStripped && <textarea className="single-textarea jwt-generated" value={secStripped} readOnly />}
-              </ACard>
-
-              <ACard className="jwt-attack-card">
-                <ToolPanelHeader title={t.jwt_sec_confusion_title} />
-                <p className="inline-note">{t.jwt_sec_confusion_desc}</p>
+          {(isHmac || asymmetric) && (
+            <div className="tool-panel wide-panel jwt-verify-panel">
+              <ToolPanelHeader title={t.jwt_verify} />
+              {isHmac && (
                 <label className="stack-label">
-                  {t.jwt_sec_confusion_pubkey}
-                  <textarea className="compact-textarea jwt-key-input" value={secPubKey} onChange={(event) => setSecPubKey(event.currentTarget.value)} placeholder="-----BEGIN PUBLIC KEY-----" />
+                  {t.shared_secret}
+                  <APasswordField className="text-input full-input" value={secret} onChange={(event) => setSecret(event.currentTarget.value)} placeholder={t.optional_verify_hmac_signature} />
                 </label>
+              )}
+              {asymmetric && (
+                <label className="stack-label">
+                  {t.public_key_or_jwk}
+                  <textarea className="compact-textarea jwt-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" />
+                </label>
+              )}
+              {asymmetric && (
                 <div className="button-row">
-                  <AButton variant="outlined" onClick={runSecConfusion}>{t.jwt_sec_confusion_btn}</AButton>
-                  {secConfusion && <AButton variant="text" onClick={() => void copyText(secConfusion)}>{t.copy}</AButton>}
+                  <AButton variant="outlined" disabled={!verifyKey.trim() || verification.status === "checking"} onClick={() => void verifyAsymmetric()}>{t.verify_signature}</AButton>
+                  {verification.status !== "idle" && (
+                    <AChip selected className={verification.status === "valid" ? "ok" : verification.status === "invalid" ? "bad" : ""}>
+                      {verification.detail}
+                    </AChip>
+                  )}
                 </div>
-                {secConfusion && <textarea className="single-textarea jwt-generated" value={secConfusion} readOnly />}
-              </ACard>
-
-              {secError && <div className="empty-state error-state">{secError}</div>}
-
-              <ACard className="jwt-attack-card">
-                <ToolPanelHeader title={t.jwt_sec_cve} />
-                {cveList.length ? (
-                  <div className="cve-list">
-                    {cveList.map((ref) => (
-                      <div className="cve-item" key={ref.id}>
-                        <strong>{ref.id}</strong>
-                        <span>{ref.summary}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="inline-note">{t.jwt_sec_no_cve}</p>
-                )}
-              </ACard>
-
-              <ACard className="jwt-attack-card">
-                <ToolPanelHeader title={t.jwt_sec_sensitive} />
-                {sensitiveClaims.length ? (
-                  <div className="finding-list">
-                    {sensitiveClaims.map(([key, value]) => (
-                      <div className="finding-item warn" key={key}>
-                        <span className="finding-sev">{t.jwt_sev_warn}</span>
-                        <div className="finding-body">
-                          <strong>{key}</strong>
-                          <span>{String(value).slice(0, 120)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="inline-note">{t.jwt_sec_no_sensitive}</p>
-                )}
-              </ACard>
-            </>
+              )}
+              {isHmac && !secret && (
+                <p className="inline-note">{t.jwt_hint_verify_hmac}</p>
+              )}
+            </div>
           )}
-        </div>
+
+          {activeInspection.findings.length > 0 && (
+            <div className="tool-panel wide-panel jwt-findings-panel">
+              <ToolPanelHeader title={t.jwt_findings} />
+              <div className="finding-list">
+                {activeInspection.findings.map((finding, index) => (
+                  <div className={`finding-item ${findingClass(finding)}`} key={`${finding.title}-${index}`}>
+                    <span className="finding-sev">{severityLabel(t, findingClass(finding))}</span>
+                    <div className="finding-body">
+                      <strong>{finding.title}</strong>
+                      <span>{finding.detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

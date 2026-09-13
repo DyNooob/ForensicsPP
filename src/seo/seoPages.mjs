@@ -23,27 +23,25 @@
 // Generator: scripts/build-seo-pages.mjs
 // Contract test: tests/seo-contract.test.ts
 
+// Environment-aware canonical base. The same built artifact family is
+// published to two hosts: production (www.forensicspp.com) and the unreleased
+// Preview (pre.forensicspp.com). Canonical/OG/sitemap URLs MUST match the host
+// the page is actually served from, otherwise the Preview would consolidate
+// its pages onto production canonicals (a real SEO + index-leak defect).
+const isPreviewBuild =
+  process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true";
+
 export const SITE = {
-  base: "https://www.forensicspp.com",
+  base: isPreviewBuild ? "https://pre.forensicspp.com" : "https://www.forensicspp.com",
   name: "Forensics++",
   brand: "ForensicsPP",
   tagline: "Local-first digital forensics workbench",
 };
 
-// Maps an SEO page slug to the tool id it documents, so related-tools links
-// resolve to the right landing page (or fall back to the in-app tool route).
-export const SLUG_TO_TOOL = {
-  "evtx-viewer": "evtx",
-  "sqlite-forensics": "sqlite",
-  "sqlite-wal-recovery": "sqlite",
-  "apk-signature-analyzer": "android",
-  "pcap-analyzer": "pcap",
-  "registry-forensics": "registry",
-  "firmware-analyzer": "firmware",
-  "binary-file-analyzer": "binary",
-  "windows-artifacts": "windows",
-  "image-forensics": "image",
-};
+// Maps an SEO page slug to the tool id it documents. Imported from the
+// single source of truth (src/seo/toolRoutes.mjs) shared with the runtime
+// router, so routing and SEO can never drift apart.
+export { SLUG_TO_TOOL } from "./toolRoutes.mjs";
 
 export const seoPages = [
   // ───────────────────────────── EVTX ─────────────────────────────
@@ -131,7 +129,6 @@ export const seoPages = [
       "Queryable row data",
       "Freelist pages and unallocated regions",
       "WAL frames showing historical row versions",
-      "A timeline built from recovered timestamps",
     ],
     input: [".sqlite, .sqlite3, .db files", "Companion -wal files"],
     useCases: [
@@ -147,7 +144,7 @@ export const seoPages = [
     maturity: "Stable",
     validation: "Fixture-validated",
     relatedArtifacts: ["SQLite databases", "WAL files", "Freelist pages"],
-    relatedTools: ["browserartifacts", "android", "sqlite-wal-recovery"],
+    relatedTools: ["browserartifacts", "android"],
     ctaLabel: "Open SQLite Forensics",
   },
   {
@@ -166,7 +163,6 @@ export const seoPages = [
       "可查询的行数据",
       "空闲列表页与未分配区域",
       "反映历史行版本的 WAL 帧",
-      "基于恢复出的时间戳构建的时间线",
     ],
     input: [".sqlite、.sqlite3、.db 文件", "配套的 -wal 文件"],
     useCases: ["移动端与应用数据库取证", "调查被删除或被修改的行", "依据 WAL 历史重建状态"],
@@ -178,75 +174,10 @@ export const seoPages = [
     maturity: "稳定",
     validation: "Fixture 校验",
     relatedArtifacts: ["SQLite 数据库", "WAL 文件", "空闲列表页"],
-    relatedTools: ["browserartifacts", "android", "sqlite-wal-recovery"],
+    relatedTools: ["browserartifacts", "android"],
     ctaLabel: "打开 SQLite 取证",
   },
 
-  // ───────────────────────── SQLite WAL (sub-page) ─────────────────────────
-  {
-    slug: "sqlite-wal-recovery",
-    toolId: "sqlite",
-    locale: "en",
-    title: "SQLite WAL Recovery and Analysis | Forensics++",
-    description:
-      "Understand SQLite WAL files: frames, historical row versions, and companion files. Analyzed inside the SQLite Workbench, locally.",
-    h1: "SQLite WAL Recovery and Analysis",
-    intro:
-      "A Write-Ahead Log (-wal) records recent changes before they are merged into the main database. Forensics++ reads WAL frames in the SQLite Workbench, entirely in the browser.",
-    what: "SQLite -wal files: WAL frames, checksums, page numbers, and committed vs. uncommitted frames.",
-    extracts: [
-      "WAL frames with page numbers and checksums",
-      "Historical row versions not yet merged into the database",
-      "Companion files (-wal, -shm) context",
-      "Recoverable fragments that may contain residual deleted data",
-    ],
-    input: ["Companion -wal files", "The matching main .sqlite/.db file"],
-    useCases: [
-      "Recovering activity that was never committed",
-      "Reconstructing recent changes before database compaction",
-      "Correlating WAL history with application behavior",
-    ],
-    limitations: [
-      "WAL analysis is performed inside the SQLite Workbench, not as a separate tool",
-      "Recovery is heuristic fragment recovery, not guaranteed full records",
-      "A missing or mismatched main database limits frame interpretation",
-    ],
-    maturity: "Stable",
-    validation: "Fixture-validated",
-    relatedArtifacts: ["WAL files", "SQLite databases", "Freelist pages"],
-    relatedTools: ["sqlite-forensics", "binary"],
-    ctaLabel: "Open SQLite Workbench",
-  },
-  {
-    slug: "sqlite-wal-recovery",
-    toolId: "sqlite",
-    locale: "zh-CN",
-    title: "SQLite WAL 恢复与分析 | Forensics++",
-    description:
-      "理解 SQLite WAL 文件：帧、历史行版本与配套文件。在 SQLite 工作台内本地分析。",
-    h1: "SQLite WAL 恢复与分析",
-    intro:
-      "预写日志（-wal）会在变更合并进主数据库之前记录最近的改动。Forensics++ 在 SQLite 工作台内读取 WAL 帧，全程在浏览器中完成。",
-    what: "SQLite -wal 文件：WAL 帧、校验和、页号，以及已提交与未提交帧。",
-    extracts: [
-      "带页号与校验和的 WAL 帧",
-      "尚未合并进数据库的历史行版本",
-      "配套文件（-wal、-shm）上下文",
-      "可能包含残留已删除数据的可恢复片段",
-    ],
-    input: ["配套的 -wal 文件", "对应的主 .sqlite/.db 文件"],
-    useCases: ["恢复从未提交的活动", "在数据库压缩前重建近期改动", "将 WAL 历史与应用行为关联"],
-    limitations: [
-      "WAL 分析在 SQLite 工作台内进行，不是独立工具",
-      "恢复属于启发式片段恢复，不保证完整记录",
-      "缺失或不匹配的主数据库会限制帧的解读",
-    ],
-    maturity: "稳定",
-    validation: "Fixture 校验",
-    relatedArtifacts: ["WAL 文件", "SQLite 数据库", "空闲列表页"],
-    relatedTools: ["sqlite-forensics", "binary"],
-    ctaLabel: "打开 SQLite 工作台",
-  },
 
   // ───────────────────────────── APK ─────────────────────────────
   {
@@ -255,26 +186,26 @@ export const seoPages = [
     locale: "en",
     title: "APK Signature Analyzer | Forensics++",
     description:
-      "Analyze Android APK signing in your browser. Verify v1–v3.1 schemes, inspect certificate chains, and check signature consistency locally.",
+      "Analyze Android APK signing in your browser. Verify v1–v4 signing schemes, inspect certificates, and check signature consistency locally.",
     h1: "APK Signature Analyzer",
     intro:
       "Forensics++ analyzes Android packages (.apk, .apks, .xapk) and their signing directly in the browser. Nothing is uploaded.",
-    what: "Android artifacts: Manifest (permissions, components, package), signing blocks, certificate chains, alignment, and suspicious configuration.",
+    what: "Android artifacts: Manifest (permissions, components, package), signing blocks, certificates, alignment, and suspicious configuration.",
     extracts: [
       "Manifest: package name, permissions, activities, services, receivers",
-      "Signing scheme verification for v1 (JAR), v2, v3, and v3.1",
-      "Per-signer certificate chains with SHA-256 fingerprints",
+      "Signing scheme verification for v1 (JAR), v2, v3, v3.1, and v4 (with companion .idsig)",
+      "Per-signer certificates with SHA-256 fingerprints and public-key match (no full X.509 chain validation)",
       "Signature / public-key / certificate consistency checks",
       "Alignment and configuration flags worth reviewing",
     ],
     input: [".apk, .apks, .xapk files", ".xml manifests", ".idsig files (accepted as input)"],
     useCases: [
       "APK security assessment",
-      "Confirming signer identity and certificate chain",
+      "Confirming signer identity and certificate fingerprint",
       "Detecting mismatched or inconsistent signatures",
     ],
     limitations: [
-      "Signature verification covers v1–v3.1; v4 (apksigner with .idsig) is accepted as input but not separately verified",
+      "Signature verification covers v1–v4. v4 (apksigner with .idsig) is verified when the companion .idsig is supplied; the APK-only scan reports v4 as requiring that companion",
       "This is static analysis, not dynamic runtime behavior",
       "Obfuscated or packed apps may hide detail until unpacked",
     ],
@@ -290,22 +221,22 @@ export const seoPages = [
     locale: "zh-CN",
     title: "APK 签名分析器 | Forensics++",
     description:
-      "在浏览器中分析 Android APK 签名。校验 v1–v3.1 方案，检查证书链，并在本地核验签名一致性。",
+      "在浏览器中分析 Android APK 签名。校验 v1–v4 签名方案，检查证书，并在本地核验签名一致性。",
     h1: "APK 签名分析器",
     intro:
       "Forensics++ 直接在浏览器中分析 Android 包（.apk、.apks、.xapk）及其签名。不会上传任何内容。",
-    what: "Android 产物：Manifest（权限、组件、包名）、签名块、证书链、对齐信息与可疑配置。",
+    what: "Android 产物：Manifest（权限、组件、包名）、签名块、证书、对齐信息与可疑配置。",
     extracts: [
       "Manifest：包名、权限、Activity、Service、Receiver",
-      "v1（JAR）、v2、v3、v3.1 签名方案校验",
-      "每个签名者的证书链及 SHA-256 指纹",
+      "v1（JAR）、v2、v3、v3.1 及 v4（配合伴随 .idsig）签名方案校验",
+      "每个签名者的证书及 SHA-256 指纹与公钥匹配（不做完整 X.509 链校验）",
       "签名 / 公钥 / 证书一致性检查",
       "值得复核的对齐与配置标志",
     ],
     input: [".apk、.apks、.xapk 文件", ".xml Manifest", ".idsig 文件（作为输入接受）"],
-    useCases: ["APK 安全评估", "确认签名者身份与证书链", "发现不匹配或不一致的签名"],
+    useCases: ["APK 安全评估", "确认签名者身份与证书指纹", "发现不匹配或不一致的签名"],
     limitations: [
-      "签名校验覆盖 v1–v3.1；v4（配合 .idsig 的 apksigner）仅作为输入接受，不做单独校验",
+      "签名校验覆盖 v1–v4。v4（配合 .idsig 的 apksigner）在提供伴随 .idsig 时完成校验；仅扫描 APK 时会提示 v4 需要该伴随文件",
       "这是静态分析，不反映运行时动态行为",
       "混淆或加壳应用需先解包才能看到细节",
     ],
@@ -323,7 +254,7 @@ export const seoPages = [
     locale: "en",
     title: "PCAP Analyzer and Network Capture Forensics | Forensics++",
     description:
-      "Parse pcap and pcapng captures in your browser. Reassemble TCP, extract HTTP/DNS/TLS sessions, and flag IOCs locally.",
+      "Parse pcap and pcapng captures in your browser. Reassemble TCP streams, extract HTTP/DNS/TLS sessions, and extract potential indicators locally.",
     h1: "PCAP Analyzer and Network Capture Forensics",
     intro:
       "Forensics++ parses network captures (.pcap, .pcapng) directly in the browser. Sessions are rebuilt locally; the capture is not uploaded.",
@@ -331,9 +262,9 @@ export const seoPages = [
     extracts: [
       "TCP reassembly into sessions",
       "HTTP requests, responses, and hostnames",
-      "DNS queries and resolved names",
+      "DNS queries (names and types)",
       "TLS metadata: SNI, ALPN, supported cipher suites, JA3 fingerprints, certificate SHA-256",
-      "IOC tagging on suspicious endpoints",
+      "Indicator extraction (IPs, domains, URLs, hashes) with local risk heuristics",
     ],
     input: [".pcap, .pcapng files"],
     useCases: [
@@ -358,7 +289,7 @@ export const seoPages = [
     locale: "zh-CN",
     title: "PCAP 分析与网络流量取证 | Forensics++",
     description:
-      "在浏览器中解析 pcap 与 pcapng 捕获文件。重组 TCP，提取 HTTP/DNS/TLS 会话，并在本地标注 IOC。",
+      "在浏览器中解析 pcap 与 pcapng 捕获文件。重组 TCP 流，提取 HTTP/DNS/TLS 会话，并在本地提取潜在指标。",
     h1: "PCAP 分析与网络流量取证",
     intro:
       "Forensics++ 直接在浏览器中解析网络捕获文件（.pcap、.pcapng）。会话在本地方建，捕获文件不会被上传。",
@@ -366,9 +297,9 @@ export const seoPages = [
     extracts: [
       "重组为会话的 TCP 流",
       "HTTP 请求、响应与主机名",
-      "DNS 查询与解析出的名称",
+      "DNS 查询（名称与类型）",
       "TLS 元数据：SNI、ALPN、支持的加密套件、JA3 指纹、证书 SHA-256",
-      "对可疑端点的 IOC 标注",
+      "指标提取（IP、域名、URL、哈希）与本地风险启发式",
     ],
     input: [".pcap、.pcapng 文件"],
     useCases: ["网络取证与流量分诊", "发现异常或意料之外的会话", "提取主机与指标用于后续跟进"],
@@ -394,7 +325,7 @@ export const seoPages = [
       "Inspect Windows registry hives in your browser. Parse regf/hbin structure, decode last-write times, and flag integrity issues locally.",
     h1: "Registry Forensics — Hive Analysis",
     intro:
-      "Forensics++ parses Windows registry hives (.reg, .dat) directly in the browser. Structure is decoded locally; the file is not uploaded.",
+      "Forensics++ parses Windows registry hives (.dat hive files) directly in the browser. Structure is decoded locally; the file is not uploaded.",
     what: "Registry hive files: keys, values, types, and last-write FILETIME timestamps.",
     extracts: [
       "Registry structure (regf/hbin) parsing",
@@ -402,7 +333,7 @@ export const seoPages = [
       "Last-write FILETIME decoded to ISO timestamps",
       "Integrity flags (sequence mismatch, checksum issues)",
     ],
-    input: [".reg, .dat registry hive files"],
+    input: ["Windows Registry hive files (e.g. SYSTEM, SOFTWARE, NTUSER.DAT, UsrClass.dat)"],
     useCases: [
       "Triage of registry-based persistence and configuration",
       "Decoding last-write times for timeline work",
@@ -428,7 +359,7 @@ export const seoPages = [
       "在浏览器中检查 Windows 注册表配置单元。解析 regf/hbin 结构，解码最后写入时间，并在本地标记完整性问题。",
     h1: "注册表取证 — 配置单元分析",
     intro:
-      "Forensics++ 直接在浏览器中解析 Windows 注册表配置单元（.reg、.dat）。结构在本地方码，文件不会被上传。",
+      "Forensics++ 直接在浏览器中解析 Windows 注册表配置单元（.dat 配置单元文件）。结构在本地方码，文件不会被上传。",
     what: "注册表配置单元文件：键、值、类型与最后写入的 FILETIME 时间戳。",
     extracts: [
       "注册表结构（regf/hbin）解析",
@@ -436,7 +367,7 @@ export const seoPages = [
       "最后写入 FILETIME 解码为 ISO 时间戳",
       "完整性标记（序列不匹配、校验和问题）",
     ],
-    input: [".reg、.dat 注册表配置单元文件"],
+    input: ["Windows 注册表配置单元文件（如 SYSTEM、SOFTWARE、NTUSER.DAT、UsrClass.dat）"],
     useCases: ["基于注册表的持久化与配置分诊", "为时间线工作解码最后写入时间", "深入前快速做结构检查"],
     limitations: [
       "这是分诊级检查，不是完整的注册表取证套件",
@@ -463,7 +394,7 @@ export const seoPages = [
       "Forensics++ analyzes firmware images (.bin, .img, .rom, .fw, squashfs, and more) directly in the browser. Extraction is local; the file is not uploaded.",
     what: "Firmware images: filesystems, entry points, architecture hints, and embedded objects found by carving.",
     extracts: [
-      "Filesystem identification (squashfs, ubi, cramfs, and similar)",
+      "Filesystem identification (squashfs, ubi/ubifs, ext, FAT, NTFS, exFAT, ISO9660)",
       "Entry-point and architecture hints",
       "Entropy mapping to locate compressed or encrypted regions",
       "Carved embedded objects with handoff to archive/binary",
@@ -497,7 +428,7 @@ export const seoPages = [
       "Forensics++ 直接在浏览器中分析固件镜像（.bin、.img、.rom、.fw、squashfs 等）。提取在本地进行，文件不会被上传。",
     what: "固件镜像：文件系统、入口点、架构线索，以及通过雕刻发现的嵌入对象。",
     extracts: [
-      "文件系统识别（squashfs、ubi、cramfs 等）",
+      "文件系统识别（squashfs、ubi/ubifs、ext、FAT、NTFS、exFAT、ISO9660）",
       "入口点与架构线索",
       "熵映射以定位压缩或加密区域",
       "雕刻出的嵌入对象，可 handoff 到 archive/binary",
@@ -594,15 +525,15 @@ export const seoPages = [
       "Parse Windows artifacts in your browser. Extract execution traces from LNK, Prefetch, Registry, MFT, and USN journals locally.",
     h1: "Windows Artifact Analyzer",
     intro:
-      "Forensics++ parses common Windows artifacts (.lnk, .pf, .reg, .mft, .j) directly in the browser. Parsing is local; files are not uploaded.",
-    what: "Windows artifacts: LNK shortcuts, Prefetch, Registry, MFT, and USN journal records.",
+      "Forensics++ parses common Windows artifacts (.lnk, .pf, .mft, .j, and .reg Registry Editor exports) directly in the browser. Parsing is local; files are not uploaded.",
+    what: "Windows artifacts: LNK shortcuts, Prefetch files, NTFS $MFT and $UsnJrnl:$J records, and Registry Editor (.reg) exports.",
     extracts: [
-      "LNK: target paths, timestamps, and machine hints",
-      "Prefetch: executed programs and accessed files",
-      "Registry keys and last-write times",
+      "LNK: target paths and timestamps",
+      "Prefetch: executed programs, run counts, and last-run timestamps",
+      "Registry Editor (.reg) exports: keys and suspicious value lines (text triage)",
       "MFT and USN journal execution and timeline traces",
     ],
-    input: [".lnk, .pf, .reg, .mft, .j files"],
+    input: [".lnk (LNK shortcuts), .pf (Prefetch), .mft (NTFS $MFT), .j (NTFS $UsnJrnl:$J), .reg (Registry Editor exports)"],
     useCases: [
       "Reconstructing user and program behavior on a host",
       "Building a host timeline from multiple artifact types",
@@ -628,15 +559,15 @@ export const seoPages = [
       "在浏览器中解析 Windows 工件。在本地从 LNK、Prefetch、注册表、MFT 与 USN 日志提取执行痕迹。",
     h1: "Windows 工件分析器",
     intro:
-      "Forensics++ 直接在浏览器中解析常见 Windows 工件（.lnk、.pf、.reg、.mft、.j）。解析在本地进行，文件不会被上传。",
-    what: "Windows 工件：LNK 快捷方式、Prefetch、注册表、MFT 与 USN 日志记录。",
+      "Forensics++ 直接在浏览器中解析常见 Windows 工件（.lnk、.pf、.mft、.j，以及 .reg 注册表编辑器导出）。解析在本地进行，文件不会被上传。",
+    what: "Windows 工件：LNK 快捷方式、Prefetch 文件、NTFS $MFT 与 $UsnJrnl:$J 记录，以及注册表编辑器（.reg）导出。",
     extracts: [
-      "LNK：目标路径、时间戳与机器线索",
-      "Prefetch：执行过的程序与访问过的文件",
-      "注册表键与最后写入时间",
+      "LNK：目标路径与时间戳",
+      "Prefetch：执行过的程序、运行次数与最后运行时间戳",
+      "注册表编辑器（.reg）导出：键与可疑值行（文本分诊）",
       "MFT 与 USN 日志的执行与时间线痕迹",
     ],
-    input: [".lnk、.pf、.reg、.mft、.j 文件"],
+    input: [".lnk（LNK 快捷方式）、.pf（Prefetch）、.mft（NTFS $MFT）、.j（NTFS $UsnJrnl:$J）、.reg（注册表编辑器导出）"],
     useCases: ["重建主机上的用户与程序行为", "从多种工件类型构建主机时间线", "深入 Windows 取证前的分诊"],
     limitations: [
       "这是针对特定工件的解析，不是完整的 Windows 取证平台",

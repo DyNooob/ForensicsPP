@@ -22,6 +22,21 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { execSync } from "node:child_process";
+
+// Build identity (commit hash + branch) for the Preview notice. Computed at
+// build time so a forensic examiner can tell exactly which build is running.
+// Falls back to "dev" when git is unavailable (e.g. sandboxed/standalone build).
+function readBuildInfo(): { hash: string; branch: string } {
+  try {
+    const hash = execSync("git rev-parse --short HEAD").toString().trim();
+    const branch = execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
+    return { hash: hash || "unknown", branch: branch || "unknown" };
+  } catch {
+    return { hash: "dev", branch: "dev" };
+  }
+}
+const buildInfo = readBuildInfo();
 
 const copyrightBanner = `/*!
  * Forensics++ (ForensicsPP.com)
@@ -57,7 +72,19 @@ function copyrightCssPlugin(): Plugin {
 const singleFileBuild = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SINGLE_FILE === "1";
 
 export default defineConfig({
-  base: "./",
+  // Web build uses root-absolute asset URLs so the SPA fallback (Nginx
+  // `try_files ... /index.html`) and any /tools/<slug>/ deep-link boot the
+  // app correctly from a sub-path. The standalone build inlines everything
+  // (SINGLE_FILE=1) and keeps relative "./" so file:// works offline.
+  base: singleFileBuild ? "./" : "/",
+  define: {
+    "import.meta.env.VITE_BUILD_HASH": JSON.stringify(buildInfo.hash),
+    "import.meta.env.VITE_BUILD_BRANCH": JSON.stringify(buildInfo.branch),
+    // Mirrors the build-time preview flag so the runtime (routeAdapter.isPreview,
+    // the Preview banner, and the belt-and-suspenders noindex effect) agrees
+    // with the build mode. Missing before — the banner silently never showed.
+    "import.meta.env.VITE_PREVIEW": JSON.stringify(process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true" ? "1" : "0")
+  },
   plugins: [react(), copyrightCssPlugin(), ...(singleFileBuild ? [viteSingleFile()] : [])],
   build: {
     target: "es2022",

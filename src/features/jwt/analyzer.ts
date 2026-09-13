@@ -52,13 +52,109 @@ export function signJwtHmac(alg: string, header: string, payload: string, secret
   return `${data}.${base64UrlEncode(hash)}`;
 }
 
+// --- PKCS#1 / SEC1 -> PKCS#8 conversion -------------------------------------
+// Some PEM exports use the legacy PKCS#1 (RSA) or SEC1 (EC) formats instead of
+// PKCS#8. WebCrypto's importKey("pkcs8", ...) requires a PKCS#8 PrivateKeyInfo
+// envelope, so we re-wrap the legacy DER structures before importing. This keeps
+// signJwtAsymmetric working for the common "RSA PRIVATE KEY" / "EC PRIVATE KEY"
+// exports that tools like OpenSSL produce by default.
+interface DerNode {
+  tag: number;
+  valueStart: number;
+  valueEnd: number;
+  fullStart: number;
+  fullEnd: number;
+  value: Uint8Array;
+  raw: Uint8Array;
+}
+
+function readDer(data: Uint8Array, offset = 0): DerNode {
+  const tag = data[offset];
+  let pos = offset + 1;
+  let len = data[pos];
+  pos += 1;
+  if (len & 0x80) {
+    const numBytes = len & 0x7f;
+    len = 0;
+    for (let i = 0; i < numBytes; i++) {
+      len = (len << 8) | data[pos];
+      pos += 1;
+    }
+  }
+  const valueStart = pos;
+  const valueEnd = pos + len;
+  return {
+    tag,
+    valueStart,
+    valueEnd,
+    fullStart: offset,
+    fullEnd: valueEnd,
+    value: data.subarray(valueStart, valueEnd),
+    raw: data.subarray(offset, valueEnd)
+  };
+}
+
+function derLengthBytes(length: number): number[] {
+  if (length < 0x80) return [length];
+  const out: number[] = [];
+  let l = length;
+  while (l > 0) {
+    out.unshift(l & 0xff);
+    l >>= 8;
+  }
+  return [0x80 | out.length, ...out];
+}
+
+function wrapDer(tag: number, content: number[] | Uint8Array): Uint8Array {
+  const arr = content instanceof Uint8Array ? Array.from(content) : content;
+  return new Uint8Array([tag, ...derLengthBytes(arr.length), ...arr]);
+}
+
+const RSA_ENCRYPTION_OID = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
+const EC_PUBLIC_KEY_OID = [0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+const P256_OID = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+const P384_OID = [0x06, 0x05, 0x2b, 0x81, 0x0c, 0x0a, 0x22];
+const P521_OID = [0x06, 0x05, 0x2b, 0x81, 0x0c, 0x0a, 0x23];
+
+function curveOidForAlg(alg: string): number[] {
+  if (alg === "ES256") return [...P256_OID];
+  if (alg === "ES384") return [...P384_OID];
+  if (alg === "ES512") return [...P521_OID];
+  return [...P256_OID];
+}
+
+function rsaPkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
+  const algId = wrapDer(0x30, [...RSA_ENCRYPTION_OID, 0x05, 0x00]);
+  const inner = [0x02, 0x01, 0x00, ...algId, ...wrapDer(0x04, pkcs1)];
+  return wrapDer(0x30, inner);
+}
+
+function ecSec1ToPkcs8(sec1: Uint8Array, alg: string): Uint8Array {
+  const node = readDer(sec1, 0);
+  if (node.tag !== 0x30) throw new Error("Invalid SEC1 private key");
+  let pos = node.valueStart;
+  let curveOid: number[] | null = null;
+  while (pos < node.valueEnd) {
+    const child = readDer(sec1, pos);
+    if (child.tag === 0xa0) {
+      const inner = readDer(sec1, child.valueStart);
+      curveOid = Array.from(inner.raw);
+    }
+    pos = child.fullEnd;
+  }
+  if (!curveOid) curveOid = curveOidForAlg(alg);
+  const algId = wrapDer(0x30, [...EC_PUBLIC_KEY_OID, ...curveOid]);
+  const inner = [0x02, 0x01, 0x00, ...algId, ...wrapDer(0x04, sec1)];
+  return wrapDer(0x30, inner);
+}
+
 function pemKeyBytes(keyText: string, expectedLabels: string[]) {
   const match = keyText.match(/-----BEGIN ([^-]+)-----([\s\S]+?)-----END \1-----/);
   if (!match) throw new Error("Expected a PEM key block (-----BEGIN ...-----)");
   const label = match[1].trim().toUpperCase();
   if (!expectedLabels.includes(label)) throw new Error(`Expected ${expectedLabels.join(" / ")} PEM, found ${label}`);
   const body = match[2].replace(/\s+/g, "");
-  return Uint8Array.from(atob(body), (char) => char.charCodeAt(0));
+  return { label, bytes: Uint8Array.from(atob(body), (char) => char.charCodeAt(0)) };
 }
 
 async function importPrivateKeyForSign(keyText: string, alg: string) {
@@ -70,8 +166,11 @@ async function importPrivateKeyForSign(keyText: string, alg: string) {
     const jwk = JSON.parse(trimmed) as JsonWebKey;
     return crypto.subtle.importKey("jwk", jwk, algorithm as AlgorithmIdentifier, false, ["sign"]);
   }
-  const bytes = pemKeyBytes(trimmed, ["PRIVATE KEY", "EC PRIVATE KEY", "RSA PRIVATE KEY"]);
-  return crypto.subtle.importKey("pkcs8", bytes, algorithm as AlgorithmIdentifier, false, ["sign"]);
+  const { label, bytes } = pemKeyBytes(trimmed, ["PRIVATE KEY", "EC PRIVATE KEY", "RSA PRIVATE KEY"]);
+  let importable = bytes;
+  if (label === "RSA PRIVATE KEY") importable = rsaPkcs1ToPkcs8(bytes);
+  else if (label === "EC PRIVATE KEY") importable = ecSec1ToPkcs8(bytes, alg);
+  return crypto.subtle.importKey("pkcs8", importable, algorithm as AlgorithmIdentifier, false, ["sign"]);
 }
 
 function signParams(alg: string): RsaPssParams | EcdsaParams | Algorithm {
@@ -101,32 +200,6 @@ export function buildNoneToken(header: string, payload: string) {
   return `${base64UrlEncode(header)}.${base64UrlEncode(payload)}.`;
 }
 
-export function stripJwtSignature(token: string) {
-  const parts = token.trim().split(".");
-  if (parts.length < 2) throw new Error("JWT must contain at least header.payload");
-  return `${parts[0]}.${parts[1]}.`;
-}
-
-export type JwtCveRef = { id: string; summary: string };
-
-export function jwtCveReferences(alg: string, headerObject: Record<string, unknown>): JwtCveRef[] {
-  const refs: JwtCveRef[] = [];
-  const family = jwtAlgFamily(alg);
-  if (alg.toLowerCase() === "none") {
-    refs.push({ id: "CVE-2015-9235", summary: "alg=none 签名绕过：若服务端信任 alg 头而非配置固定算法，攻击者可提交无签名令牌越权。" });
-  }
-  if (family === "ES") {
-    refs.push({ id: "CVE-2022-21449", summary: "ECDSA 验证绕过（Psychic Signatures）：未校验签名 r/s 非零，可用全零签名伪造有效令牌。" });
-  }
-  if (family === "RS") {
-    refs.push({ id: "Key Confusion (CVE-2015-9235 类)", summary: "RS256→HS256 密钥混淆：若服务端用 RSA 公钥当 HMAC 密钥验签，攻击者可拿公钥自签 HS256。" });
-  }
-  if (headerObject && (headerObject.jku || headerObject.x5u)) {
-    refs.push({ id: "CVE-2018-0114 (类)", summary: "jku/x5u 远程密钥引用：可能触发 SSRF 或接受攻击者控制的公钥。" });
-  }
-  return refs;
-}
-
 function parseJwtPart(part: string) {
   return JSON.parse(base64UrlDecode(part));
 }
@@ -154,6 +227,7 @@ function formatSecondsDuration(seconds: number) {
 
 function jwtHmacSignature(alg: string, data: string, secret: string) {
   if (alg === "HS256") return base64UrlEncode(CryptoJS.HmacSHA256(data, secret));
+  if (alg === "HS384") return base64UrlEncode(CryptoJS.HmacSHA384(data, secret));
   if (alg === "HS512") return base64UrlEncode(CryptoJS.HmacSHA512(data, secret));
   return "";
 }
@@ -308,7 +382,7 @@ export function inspectJwtToken(token: string, secret: string) {
       messages.push("alg=none: unsigned token");
       findings.push({ level: "warn", title: "Unsigned JWT", detail: "Header alg is none." });
     }
-    if (["HS256", "HS512"].includes(alg) && signature) {
+    if (["HS256", "HS384", "HS512"].includes(alg) && signature) {
       if (!secret) {
         signatureStatus = `secret required (${alg})`;
         findings.push({ level: "info", title: "HMAC secret required", detail: `Enter the shared secret to verify ${alg}.` });
@@ -344,12 +418,6 @@ export function inspectJwtToken(token: string, secret: string) {
     if (typeof payloadObject.iat === "number" && typeof payloadObject.exp === "number" && payloadObject.iat > payloadObject.exp) findings.push({ level: "warn", title: "Invalid claim order", detail: "iat is later than exp." });
     if (String(payloadObject.scope ?? payloadObject.scp ?? "").split(/\s+/).filter(Boolean).length > 8) findings.push({ level: "warn", title: "Broad scope set", detail: stringifyClaim(payloadObject.scope ?? payloadObject.scp) });
 
-  if (jwtAlgFamily(alg) !== "unknown") {
-    for (const ref of jwtCveReferences(alg, headerObject)) {
-      findings.push({ level: "info", title: `Known weakness: ${ref.id}`, detail: ref.summary });
-    }
-  }
-
     rows.push(["signature", signatureStatus], ["exp status", expires], ["nbf status", notBefore]);
 
     return {
@@ -376,9 +444,29 @@ export function inspectJwtToken(token: string, secret: string) {
   }
 }
 
+const JWT_CANDIDATE_RE = /\b[A-Za-z0-9_\-+/=]{4,}\.[A-Za-z0-9_\-+/=]{2,}(?:\.[A-Za-z0-9_\-+/=]+)?(?![A-Za-z0-9_\-+/=])/g;
+
+/**
+ * A token counts as a JWT only when its first two segments decode to JSON
+ * objects. This accepts compact (eyJ...) and pretty-printed (ewog...) headers
+ * alike, and rejects base64 pairs, version numbers, and other log noise.
+ */
+function isJwtShapedToken(token: string) {
+  const parts = token.split(".");
+  if (parts.length < 2 || parts.length > 3) return false;
+  try {
+    const header = JSON.parse(base64UrlDecode(parts[0]));
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return header !== null && typeof header === "object" && payload !== null && typeof payload === "object";
+  } catch {
+    return false;
+  }
+}
+
 export function extractJwtTokens(text: string) {
+  const candidates = text.match(JWT_CANDIDATE_RE) ?? [];
   return uniqueValues(
-    text.match(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?\b/g)?.filter((token) => token.length <= MAX_JWT_TOKEN_CHARS) ?? [],
+    candidates.slice(0, 1000).filter((token) => token.length <= MAX_JWT_TOKEN_CHARS && isJwtShapedToken(token)),
     200
   );
 }

@@ -20,7 +20,7 @@
  */
 
 import React from "react";
-import { Badge, Drawer } from "antd";
+import { Drawer } from "antd";
 import { CodeOutlined, FileAddOutlined, InboxOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { ASegmentedButton, ASegmentedGroup } from "./ui";
 import { GithubIconButton } from "./GithubIconButton";
@@ -97,9 +97,10 @@ export function Topbar({
               title={`${t.evidenceInbox}${evidenceCount ? ` · ${evidenceCount}` : ""}`}
               onClick={onOpenEvidenceInbox}
             >
-              <Badge count={evidenceCount} size="small" offset={[-2, 2]}>
-                <InboxOutlined aria-hidden="true" />
-              </Badge>
+              <InboxOutlined aria-hidden="true" />
+              {evidenceCount > 0 && (
+                <span className="top-action-count" aria-hidden="true">{evidenceCount > 99 ? "99+" : evidenceCount}</span>
+              )}
             </button>
             {activeTool !== "home" && (
               <button

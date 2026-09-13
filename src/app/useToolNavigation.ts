@@ -25,11 +25,10 @@ import {
   getToolTitle as resolveToolTitle,
   maxMountedTools,
   maxRecentTools,
-  toolIdFromHash,
   tools,
   visibleTools,
-  writeToolHash,
 } from "../config/app";
+import { resolveCurrentRoute, writeRoute } from "../core/routeAdapter";
 import type { ToolCategory, ToolDefinition, ToolId } from "../config/app";
 import { resolveRetainedTools } from "../core/runtime";
 import { useStoredState } from "../utils/storage";
@@ -50,7 +49,9 @@ export function useToolNavigation({
   lang: Lang;
 }) {
   const [storedActiveTool, setStoredActiveTool] = useStoredState<ToolId>("app.activeTool", "home", isToolIdValue);
-  const [routeTool, setRouteTool] = React.useState<ToolId | null>(() => toolIdFromHash());
+  const initialRoute = resolveCurrentRoute();
+  const [routeTool, setRouteTool] = React.useState<ToolId | null>(initialRoute.toolId);
+  const [routeUnknown, setRouteUnknown] = React.useState<boolean>(initialRoute.unknown);
   const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
   const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
   const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? canonicalToolId(storedActiveTool) : "home");
@@ -76,9 +77,10 @@ export function useToolNavigation({
   const setActiveTool = (tool: ToolId, options?: { replaceHash?: boolean }) => {
     const canonical = canonicalToolId(tool);
     setRouteTool(canonical);
+    setRouteUnknown(false);
     setStoredActiveTool(canonical);
     rememberToolUse(canonical);
-    writeToolHash(canonical, options?.replaceHash);
+    writeRoute(canonical, { replace: options?.replaceHash });
     if (isNarrowShell) setSidebarCollapsed(true);
   };
   const setToolDirty = React.useCallback((tool: ToolId, dirty: boolean) => {
@@ -158,30 +160,27 @@ export function useToolNavigation({
     ...domainGroups
   ];
   React.useEffect(() => {
-    const hashedTool = toolIdFromHash();
-    if (hashedTool) {
-      setRouteTool(hashedTool);
-      setStoredActiveTool(hashedTool);
-      rememberToolUse(hashedTool);
-      return;
-    }
-    writeToolHash(activeTool, true);
-  }, []);
-  React.useEffect(() => {
-    const handleHashChange = () => {
-      const nextTool = toolIdFromHash();
-      if (!nextTool) return;
-      setRouteTool(nextTool);
-      setStoredActiveTool(nextTool);
-      rememberToolUse(nextTool);
+    const onNavigate = () => {
+      const r = resolveCurrentRoute();
+      setRouteUnknown(r.unknown);
+      setRouteTool(r.toolId);
+      if (r.toolId) {
+        setStoredActiveTool(r.toolId);
+        rememberToolUse(r.toolId);
+      }
     };
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
+    window.addEventListener("popstate", onNavigate);
+    window.addEventListener("hashchange", onNavigate);
+    return () => {
+      window.removeEventListener("popstate", onNavigate);
+      window.removeEventListener("hashchange", onNavigate);
+    };
   }, []);
 
   return {
     activeTool,
     active,
+    routeUnknown,
     toolTitle,
     recentTools,
     favoriteTools,

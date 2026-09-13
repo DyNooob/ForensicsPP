@@ -20,7 +20,7 @@
  */
 
 import { decompressSync, strFromU8 } from "fflate";
-import type { ImageInfo, PngChunkInfo, PngTextEntry } from "../../models";
+import type { BmpStructure, GifFrame, GifStructure, HeifStructure, ImageFinding, ImageFormatLayer, ImageInfo, JpegMarker, JpegStructure, PngChunkInfo, PngTextEntry, TiffEntry, TiffStructure, WebpChunk, WebpStructure } from "../../models";
 import { crc32, findEmbeddedFileSignatures, hexPreview, previewText, readAscii, shannonEntropy } from "../../utils/binary";
 import { formatBytes } from "../../utils/files";
 import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
@@ -615,127 +615,484 @@ function loadBrowserImage(src: string) {
   });
 }
 
-function inspectJpegStructure(bytes: Uint8Array) {
+function readUint16Le(bytes: Uint8Array, offset: number) {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+function readUint16Be(bytes: Uint8Array, offset: number) {
+  return (bytes[offset] << 8) | bytes[offset + 1];
+}
+function readUint32Le(bytes: Uint8Array, offset: number) {
+  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+}
+
+function gifReadSubBlocks(bytes: Uint8Array, offset: number): { bytes: number[]; next: number } {
+  let cursor = offset;
+  const out: number[] = [];
+  while (cursor < bytes.length) {
+    const size = bytes[cursor];
+    cursor += 1;
+    if (size === 0) break;
+    for (let index = 0; index < size && cursor < bytes.length; index += 1) out.push(bytes[cursor + index]);
+    cursor += size;
+  }
+  return { bytes: out, next: cursor };
+}
+
+function parseGifStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; gif: GifStructure } {
   const rows: Array<[string, string]> = [];
-  const findings: Array<{ level: string; title: string; detail: string }> = [];
-  if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) return { rows, findings };
+  const findings: ImageFinding[] = [];
+  const version = readAscii(bytes, 0, 6);
+  const screenWidth = readUint16Le(bytes, 6);
+  const screenHeight = readUint16Le(bytes, 8);
+  const packed = bytes[10];
+  const gctFlag = (packed & 0x80) !== 0;
+  const gctSize = gctFlag ? 2 << (packed & 0x07) : 0;
+  const backgroundIndex = bytes[11];
+  const aspect = bytes[12];
+  let cursor = 13;
+  if (gctFlag) cursor += gctSize * 3;
+  const disposalNames = ["unspecified", "leave-in-place", "restore-background", "restore-previous", "4", "5", "6", "7"];
+  const frames: GifFrame[] = [];
+  const comments: string[] = [];
+  const applicationExtensions: string[] = [];
+  let loopCount: number | null = null;
+  let pendingGce: { disposal: number; transparentFlag: boolean; transparentIndex: number; delay: number } | null = null;
+  let frameIndex = 0;
+  while (cursor < bytes.length) {
+    const block = bytes[cursor];
+    if (block === 0x3b) { cursor += 1; break; }
+    if (block === 0x21) {
+      const label = bytes[cursor + 1];
+      if (label === 0xf9) {
+        const gpacked = bytes[cursor + 3];
+        pendingGce = {
+          disposal: (gpacked >> 2) & 0x07,
+          transparentFlag: (gpacked & 0x01) !== 0,
+          transparentIndex: bytes[cursor + 6],
+          delay: readUint16Le(bytes, cursor + 4)
+        };
+        cursor += 8;
+      } else if (label === 0xfe) {
+        const sub = gifReadSubBlocks(bytes, cursor + 2);
+        const text = new TextDecoder().decode(new Uint8Array(sub.bytes));
+        if (text) comments.push(text);
+        cursor = sub.next;
+      } else if (label === 0xff) {
+        const blockSize = bytes[cursor + 2];
+        const appId = readAscii(bytes, cursor + 3, Math.min(blockSize, 11));
+        const sub = gifReadSubBlocks(bytes, cursor + 3 + blockSize);
+        applicationExtensions.push(appId.trim());
+        if (/NETSCAPE/i.test(appId)) {
+          const lb = bytes.subarray(cursor + 3 + blockSize, cursor + 3 + blockSize + 3);
+          if (lb.length >= 3 && lb[0] === 0x03 && lb[1] === 0x01) loopCount = readUint16Le(lb, 2);
+        }
+        cursor = sub.next;
+      } else {
+        cursor = gifReadSubBlocks(bytes, cursor + 2).next;
+      }
+    } else if (block === 0x2c) {
+      const left = readUint16Le(bytes, cursor + 1);
+      const top = readUint16Le(bytes, cursor + 3);
+      const width = readUint16Le(bytes, cursor + 5);
+      const height = readUint16Le(bytes, cursor + 7);
+      const ipacked = bytes[cursor + 9];
+      const lctFlag = (ipacked & 0x80) !== 0;
+      const lctSize = 2 << (ipacked & 0x07);
+      cursor += 10;
+      if (lctFlag) cursor += lctSize * 3;
+      const gce = pendingGce;
+      frames.push({
+        index: frameIndex,
+        left, top, width, height,
+        disposalMethod: gce ? disposalNames[gce.disposal] ?? `code ${gce.disposal}` : "n/a",
+        transparentFlag: gce ? gce.transparentFlag : false,
+        transparentColorIndex: gce ? gce.transparentIndex : -1,
+        delayCentiseconds: gce ? gce.delay : 0,
+        localColorTable: lctFlag
+      });
+      frameIndex += 1;
+      pendingGce = null;
+      cursor += 1;
+      cursor = gifReadSubBlocks(bytes, cursor).next;
+    } else {
+      cursor += 1;
+    }
+  }
+  const trailingBytes = cursor < bytes.length ? bytes.length - cursor : 0;
+  const gif: GifStructure = {
+    version, screenWidth, screenHeight,
+    globalColorTable: gctFlag, globalColorTableSize: gctSize,
+    backgroundIndex, pixelAspectRatio: aspect,
+    loopCount, frameCount: frames.length, frames,
+    commentCount: comments.length, comments, applicationExtensions, trailingBytes
+  };
+  rows.push(["GIF version", version]);
+  rows.push(["Logical screen", `${screenWidth} × ${screenHeight}`]);
+  rows.push(["Global color table", gctFlag ? `${gctSize} entries` : "absent"]);
+  rows.push(["Frames", String(frames.length)]);
+  rows.push(["Loop count", loopCount === null ? "not specified (play once)" : loopCount === 0 ? "infinite" : String(loopCount)]);
+  rows.push(["Comment blocks", String(comments.length)]);
+  if (frames.length) {
+    const delays = frames.map((frame) => frame.delayCentiseconds);
+    rows.push(["Frame delays (cs)", `${Math.min(...delays)}–${Math.max(...delays)} (${frames.filter((frame) => frame.delayCentiseconds === 0).length} zero)`]);
+    rows.push(["Disposal methods", [...new Set(frames.map((frame) => frame.disposalMethod))].join(", ")]);
+    if (frames.some((frame) => frame.transparentFlag)) rows.push(["Transparent index used", "yes"]);
+  }
+  if (comments.length) findings.push({ level: "info", title: "GIF comment extension", detail: `${comments.length} comment block(s); may carry annotation or hidden text.` });
+  if (applicationExtensions.length) findings.push({ level: "info", title: "GIF application extension", detail: applicationExtensions.join(", ") });
+  if (trailingBytes) findings.push({ level: "warn", title: "Data after GIF trailer", detail: `${trailingBytes} byte(s) follow the 0x3B trailer; possible appended data.` });
+  return { rows, findings, gif };
+}
+
+function parseJpegStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; jpeg: JpegStructure } {
+  const rows: Array<[string, string]> = [];
+  const findings: ImageFinding[] = [];
+  const markers: JpegMarker[] = [];
+  const comments: string[] = [];
+  let app0: JpegStructure["app0"] = null;
+  let hasExif = false;
+  let hasXmp = false;
+  let hasAdobe: boolean | null = null;
+  let sof: JpegStructure["sof"] = null;
+  let hasThumbnail = false;
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) return { rows, findings, jpeg: { markerCount: 0, markers, sof, app0, hasExif, hasXmp, hasAdobe, commentCount: 0, comments, hasThumbnail } };
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let offset = 2;
-  const markers: string[] = [];
   let appSegments = 0;
-  let comments = 0;
-  let sawSos = false;
-  let brokenSegment = "";
-  while (offset + 4 <= bytes.length && markers.length < 256) {
+  let commentCount = 0;
+  while (offset + 4 <= bytes.length && markers.length < 512) {
     while (offset < bytes.length && bytes[offset] !== 0xff) offset += 1;
     while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
     if (offset >= bytes.length) break;
     const marker = bytes[offset];
     const markerOffset = offset - 1;
-    markers.push(`0xFF${marker.toString(16).padStart(2, "0").toUpperCase()}@${markerOffset}`);
-    if (marker >= 0xe0 && marker <= 0xef) appSegments += 1;
-    if (marker === 0xfe) comments += 1;
+    const hex = `0xFF${marker.toString(16).padStart(2, "0").toUpperCase()}`;
+    let label = "marker";
+    if (marker >= 0xe0 && marker <= 0xef) { label = `APP${(marker - 0xe0).toString()}`; appSegments += 1; }
+    else if (marker === 0xfe) label = "COM";
+    else if (marker === 0xda) label = "SOS";
+    else if (marker === 0xd9) label = "EOI";
+    else if (marker === 0xc0 || (marker >= 0xc1 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc)) label = "SOF";
+    else if (marker >= 0xc4 && marker <= 0xcf) label = `marker 0x${marker.toString(16)}`;
+    markers.push({ marker: hex, offset: markerOffset, label });
     if (marker === 0xd9) break;
-    if (marker === 0xda) {
-      sawSos = true;
-      break;
-    }
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      offset += 1;
-      continue;
-    }
-    if (offset + 2 >= bytes.length) {
-      brokenSegment = `marker 0xFF${marker.toString(16).padStart(2, "0").toUpperCase()} has no segment length`;
-      break;
-    }
+    if (marker === 0xda) break;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { offset += 1; continue; }
+    if (offset + 2 >= bytes.length) break;
     const length = view.getUint16(offset + 1);
-    if (length < 2 || offset + 1 + length > bytes.length) {
-      brokenSegment = `marker 0xFF${marker.toString(16).padStart(2, "0").toUpperCase()} length ${length} exceeds file boundary`;
-      break;
+    if (length < 2 || offset + 1 + length > bytes.length) break;
+    const segStart = offset + 1;
+    if (label === "APP0" && length >= 16 && readAscii(bytes, segStart + 2, 5) === "JFIF\0") {
+      const major = bytes[segStart + 7];
+      const minor = bytes[segStart + 8];
+      const unit = bytes[segStart + 9];
+      const dx = readUint16Be(bytes, segStart + 10);
+      const dy = readUint16Be(bytes, segStart + 12);
+      app0 = { version: `${major}.${minor}`, density: unit === 1 ? `${dx}×${dy} DPI` : unit === 2 ? `${dx}×${dy} DPCM` : "none" };
+      if (readUint16Be(bytes, segStart + 14) > 0 || readUint16Be(bytes, segStart + 16) > 0) hasThumbnail = true;
+    } else if (label === "APP1") {
+      const id = readAscii(bytes, segStart + 2, 6);
+      if (id.startsWith("Exif")) hasExif = true;
+      else if (readAscii(bytes, segStart + 2, 4) === "http") hasXmp = true;
+    } else if (label === "APP14" && readAscii(bytes, segStart + 2, 5) === "Adobe") {
+      hasAdobe = true;
+    } else if (label === "COM") {
+      commentCount += 1;
+      const text = new TextDecoder().decode(bytes.subarray(segStart + 2, segStart + length));
+      if (text) comments.push(text.replace(/\0+$/, ""));
+    } else if (label === "SOF") {
+      sof = { precision: bytes[segStart + 2], height: readUint16Be(bytes, segStart + 3), width: readUint16Be(bytes, segStart + 5), components: bytes[segStart + 7] };
     }
     offset += 1 + length;
   }
-  rows.push(["JPEG markers before image data", String(markers.length)]);
-  rows.push(["JPEG APP segments", String(appSegments)]);
-  rows.push(["JPEG comments", String(comments)]);
-  rows.push(["JPEG SOS found", sawSos ? "yes" : "no"]);
-  if (brokenSegment) findings.push({ level: "warn", title: "Broken JPEG segment", detail: brokenSegment });
-  if (!sawSos) findings.push({ level: "warn", title: "JPEG scan data not reached", detail: "The parser did not reach the Start Of Scan marker; the file may be truncated before pixel data." });
-  return { rows, findings };
+  rows.push(["JPEG markers", String(markers.length)]);
+  rows.push(["APP segments", String(appSegments)]);
+  rows.push(["Comments", String(commentCount)]);
+  if (sof) rows.push(["SOF dimensions", `${sof.width} × ${sof.height} @ ${sof.precision}-bit, ${sof.components} comp`]);
+  if (app0) rows.push(["JFIF", `${app0.version} (${app0.density})`]);
+  rows.push(["EXIF (APP1)", hasExif ? "present" : "absent"]);
+  rows.push(["XMP (APP1)", hasXmp ? "present" : "absent"]);
+  rows.push(["Adobe (APP14)", hasAdobe === null ? "absent" : `transform ${hasAdobe}`]);
+  if (hasThumbnail) findings.push({ level: "info", title: "JPEG embedded thumbnail", detail: "An APP0/APP1 thumbnail is present; it may diverge from the main image or carry separate metadata." });
+  if (hasExif) findings.push({ level: "info", title: "JPEG EXIF present", detail: "EXIF metadata is present (parsed separately on the EXIF tab)." });
+  if (commentCount) findings.push({ level: "info", title: "JPEG comment", detail: `${commentCount} COM segment(s); may carry annotation or hidden text.` });
+  return { rows, findings, jpeg: { markerCount: markers.length, markers, sof, app0, hasExif, hasXmp, hasAdobe, commentCount, comments, hasThumbnail } };
 }
 
-function inspectWebpStructure(bytes: Uint8Array) {
+function parseWebpStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; webp: WebpStructure } {
   const rows: Array<[string, string]> = [];
-  const findings: Array<{ level: string; title: string; detail: string }> = [];
-  if (!(readAscii(bytes, 0, 4) === "RIFF" && readAscii(bytes, 8, 4) === "WEBP") || bytes.length < 12) return { rows, findings };
-  const declaredSize = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true) + 8;
-  rows.push(["WEBP declared size", formatBytes(declaredSize)]);
-  if (declaredSize > bytes.length) findings.push({ level: "warn", title: "WEBP appears truncated", detail: `RIFF declares ${formatBytes(declaredSize)}, but the file has ${formatBytes(bytes.length)}.` });
-  if (declaredSize < bytes.length) findings.push({ level: "warn", title: "WEBP trailing bytes", detail: `${formatBytes(bytes.length - declaredSize)} exist after the declared RIFF payload.` });
-  return { rows, findings };
-}
-
-function inspectBmpStructure(bytes: Uint8Array) {
-  const rows: Array<[string, string]> = [];
-  const findings: Array<{ level: string; title: string; detail: string }> = [];
-  if (bytes.length < 14 || bytes[0] !== 0x42 || bytes[1] !== 0x4d) return { rows, findings };
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const declaredSize = view.getUint32(2, true);
-  const pixelOffset = view.getUint32(10, true);
-  rows.push(["BMP declared size", formatBytes(declaredSize)]);
-  rows.push(["BMP pixel offset", String(pixelOffset)]);
-  if (declaredSize > bytes.length) findings.push({ level: "warn", title: "BMP appears truncated", detail: `Header declares ${formatBytes(declaredSize)}, but the file has ${formatBytes(bytes.length)}.` });
-  if (declaredSize > 0 && declaredSize < bytes.length) findings.push({ level: "warn", title: "BMP trailing bytes", detail: `${formatBytes(bytes.length - declaredSize)} exist after the declared BMP payload.` });
-  if (pixelOffset >= bytes.length) findings.push({ level: "warn", title: "BMP pixel offset out of range", detail: `Pixel array offset ${pixelOffset} is outside the file.` });
-  return { rows, findings };
-}
-
-function inspectHeifStructure(bytes: Uint8Array) {
-  const rows: Array<[string, string]> = [];
-  const findings: Array<{ level: string; title: string; detail: string }> = [];
-  if (bytes.length < 12 || readAscii(bytes, 4, 4) !== "ftyp") return { rows, findings };
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let offset = 0;
-  const boxes: string[] = [];
-  while (offset + 8 <= bytes.length && boxes.length < 80) {
-    let size = view.getUint32(offset);
-    const type = readAscii(bytes, offset + 4, 4);
-    let header = 8;
-    if (size === 1 && offset + 16 <= bytes.length) {
-      const high = view.getUint32(offset + 8);
-      const low = view.getUint32(offset + 12);
-      size = high * 0x100000000 + low;
-      header = 16;
-    }
-    if (!size) size = bytes.length - offset;
-    boxes.push(`${type}@${offset}:${formatBytes(size)}`);
-    if (size < header || offset + size > bytes.length) {
-      findings.push({ level: "warn", title: "HEIF/AVIF box exceeds file boundary", detail: `${type}@${offset} declares ${formatBytes(size)}, file has ${formatBytes(bytes.length - offset)} remaining.` });
-      break;
-    }
-    offset += size;
+  const findings: ImageFinding[] = [];
+  const chunks: WebpChunk[] = [];
+  let hasVp8x = false;
+  let canvasWidth = 0;
+  let canvasHeight = 0;
+  let hasAlpha = false;
+  let isAnimation = false;
+  let hasExif = false;
+  let hasXmp = false;
+  let hasIcc = false;
+  if (!(readAscii(bytes, 0, 4) === "RIFF" && readAscii(bytes, 8, 4) === "WEBP") || bytes.length < 12) {
+    return { rows, findings, webp: { chunkCount: 0, chunks, hasVp8x, canvasWidth, canvasHeight, hasAlpha, isAnimation, hasExif, hasXmp, hasIcc } };
   }
-  rows.push(["HEIF/AVIF boxes", boxes.join(", ") || "--"]);
-  if (offset < bytes.length) findings.push({ level: "warn", title: "HEIF/AVIF trailing bytes", detail: `${formatBytes(bytes.length - offset)} remain after parsed boxes.` });
-  return { rows, findings };
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const fourcc = readAscii(bytes, offset, 4);
+    const size = readUint32Le(bytes, offset + 4);
+    const dataOffset = offset + 8;
+    chunks.push({ fourcc, size, offset });
+    if (fourcc === "VP8X" && size >= 10) {
+      hasVp8x = true;
+      const flags = bytes[dataOffset];
+      hasIcc = (flags & 0x20) !== 0;
+      hasAlpha = (flags & 0x10) !== 0;
+      hasExif = (flags & 0x08) !== 0;
+      hasXmp = (flags & 0x04) !== 0;
+      isAnimation = (flags & 0x02) !== 0;
+      canvasWidth = 1 + bytes[dataOffset + 4] + (bytes[dataOffset + 5] << 8) + (bytes[dataOffset + 6] << 16);
+      canvasHeight = 1 + bytes[dataOffset + 7] + (bytes[dataOffset + 8] << 8) + (bytes[dataOffset + 9] << 16);
+    } else if (fourcc === "VP8 " || fourcc === "VP8L") {
+      if (!hasVp8x && fourcc === "VP8L" && dataOffset + 4 <= bytes.length) {
+        canvasWidth = 1 + ((bytes[dataOffset + 1] & 0x3f) | (bytes[dataOffset + 2] << 6) | ((bytes[dataOffset + 3] & 0x0f) << 14));
+        canvasHeight = 1 + ((bytes[dataOffset + 3] >> 4) | (bytes[dataOffset + 4] << 4) | ((bytes[dataOffset + 5] & 0x3f) << 12));
+      }
+    } else if (fourcc === "EXIF") hasExif = true;
+    else if (fourcc === "XMP ") hasXmp = true;
+    else if (fourcc === "ICCP") hasIcc = true;
+    offset = dataOffset + size + (size % 2);
+  }
+  rows.push(["WEBP chunks", String(chunks.length)]);
+  rows.push(["Chunk list", chunks.map((chunk) => chunk.fourcc.trim()).join(", ") || "--"]);
+  if (hasVp8x) {
+    rows.push(["Canvas", `${canvasWidth} × ${canvasHeight}`]);
+    rows.push(["Alpha", hasAlpha ? "yes" : "no"]);
+    rows.push(["Animation", isAnimation ? "yes" : "no"]);
+    rows.push(["EXIF/XMP/ICC", `${hasExif ? "EXIF " : ""}${hasXmp ? "XMP " : ""}${hasIcc ? "ICC" : ""}`.trim() || "none"]);
+  } else {
+    rows.push(["Canvas", canvasWidth ? `${canvasWidth} × ${canvasHeight}` : "simple profile (no VP8X)"]);
+  }
+  if (isAnimation) findings.push({ level: "info", title: "Animated WEBP", detail: "Animation flag is set in VP8X; frame timing lives in ANIM/ANMF chunks not parsed here." });
+  if (hasExif) findings.push({ level: "info", title: "WEBP EXIF present", detail: "EXIF metadata is present (parsed separately on the EXIF tab)." });
+  if (hasIcc) findings.push({ level: "info", title: "WEBP ICC profile", detail: "An embedded ICC color profile is present." });
+  return { rows, findings, webp: { chunkCount: chunks.length, chunks, hasVp8x, canvasWidth, canvasHeight, hasAlpha, isAnimation, hasExif, hasXmp, hasIcc } };
 }
 
-function inspectTiffStructure(bytes: Uint8Array) {
+function parseBmpStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; bmp: BmpStructure } {
   const rows: Array<[string, string]> = [];
-  const findings: Array<{ level: string; title: string; detail: string }> = [];
-  if (bytes.length < 8) return { rows, findings };
+  const findings: ImageFinding[] = [];
+  if (bytes.length < 26 || bytes[0] !== 0x42 || bytes[1] !== 0x4d) {
+    return { rows, findings, bmp: { dibHeaderType: "not BMP", width: 0, height: 0, planes: 0, bpp: 0, compression: 0, compressionName: "n/a", importantColors: 0, colorMasks: null } };
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const headerSize = view.getUint32(14, true);
+  let dibHeaderType = "unknown";
+  if (headerSize === 12) dibHeaderType = "BITMAPCOREHEADER";
+  else if (headerSize === 40) dibHeaderType = "BITMAPINFOHEADER";
+  else if (headerSize === 56) dibHeaderType = "BITMAPV3INFOHEADER";
+  else if (headerSize === 64) dibHeaderType = "BITMAPV4HEADER";
+  else if (headerSize === 108) dibHeaderType = "BITMAPV4HEADER";
+  else if (headerSize === 124) dibHeaderType = "BITMAPV5HEADER";
+  let width = 0;
+  let height = 0;
+  let planes = 0;
+  let bpp = 0;
+  let compression = 0;
+  let importantColors = 0;
+  let colorMasks: BmpStructure["colorMasks"] = null;
+  if (dibHeaderType === "BITMAPCOREHEADER") {
+    width = readUint16Le(bytes, 18);
+    height = readUint16Le(bytes, 20);
+    planes = readUint16Le(bytes, 22);
+    bpp = readUint16Le(bytes, 24);
+  } else if (headerSize >= 40) {
+    width = view.getInt32(18, true);
+    height = view.getInt32(22, true);
+    planes = readUint16Le(bytes, 26);
+    bpp = readUint16Le(bytes, 28);
+    compression = view.getUint32(30, true);
+    importantColors = view.getUint32(50, true);
+    if (headerSize >= 56) {
+      colorMasks = {
+        red: view.getUint32(54, true),
+        green: view.getUint32(58, true),
+        blue: view.getUint32(62, true),
+        alpha: headerSize >= 108 ? view.getUint32(66, true) : 0
+      };
+    }
+  }
+  const compressionNames: Record<number, string> = { 0: "BI_RGB (none)", 1: "BI_RLE8", 2: "BI_RLE4", 3: "BI_BITFIELDS", 4: "BI_JPEG", 5: "BI_PNG", 6: "BI_ALPHABITFIELDS" };
+  const compressionName = compressionNames[compression] ?? `code ${compression}`;
+  rows.push(["DIB header", dibHeaderType]);
+  rows.push(["Dimensions", `${Math.abs(width)} × ${Math.abs(height)}`]);
+  rows.push(["Planes / BPP", `${planes} / ${bpp}`]);
+  rows.push(["Compression", compressionName]);
+  if (colorMasks) rows.push(["Color masks", `R 0x${colorMasks.red.toString(16)} G 0x${colorMasks.green.toString(16)} B 0x${colorMasks.blue.toString(16)}${colorMasks.alpha ? ` A 0x${colorMasks.alpha.toString(16)}` : ""}`]);
+  if (importantColors) rows.push(["Important colors", String(importantColors)]);
+  if (bpp <= 8) findings.push({ level: "info", title: "Indexed BMP", detail: `${bpp}-bit indexed palette; palette entries may carry hidden data.` });
+  if (compression !== 0) findings.push({ level: "info", title: "Compressed BMP", detail: `Compression is ${compressionName}; pixel recovery depends on decoder support.` });
+  return { rows, findings, bmp: { dibHeaderType, width: Math.abs(width), height: Math.abs(height), planes, bpp, compression, compressionName, importantColors, colorMasks } };
+}
+
+function parseTiffStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; tiff: TiffStructure } {
+  const rows: Array<[string, string]> = [];
+  const findings: ImageFinding[] = [];
+  if (bytes.length < 8) return { rows, findings, tiff: { endian: "little", magic: 0, ifd0Offset: 0, entryCount: 0, entries: [], width: null, height: null } };
   const little = readAscii(bytes, 0, 2) === "II";
   const big = readAscii(bytes, 0, 2) === "MM";
-  if (!little && !big) return { rows, findings };
+  if (!little && !big) return { rows, findings, tiff: { endian: "little", magic: 0, ifd0Offset: 0, entryCount: 0, entries: [], width: null, height: null } };
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const magic = view.getUint16(2, little);
-  const ifdOffset = view.getUint32(4, little);
-  rows.push(["TIFF endian", little ? "little" : "big"]);
+  const le = little;
+  const magic = view.getUint16(2, le);
+  const ifd0Offset = view.getUint32(4, le);
+  const typeNames: Record<number, string> = { 1: "BYTE", 2: "ASCII", 3: "SHORT", 4: "LONG", 5: "RATIONAL", 7: "UNDEFINED", 9: "SLONG", 10: "SRATIONAL", 11: "FLOAT", 12: "DOUBLE" };
+  const tagNames: Record<number, string> = { 256: "ImageWidth", 257: "ImageLength", 258: "BitsPerSample", 259: "Compression", 262: "Photometric", 271: "Make", 272: "Model", 274: "Orientation", 277: "SamplesPerPixel", 282: "XResolution", 283: "YResolution", 296: "ResolutionUnit", 305: "Software", 306: "DateTime", 315: "Artist" };
+  const readValue = (type: number, count: number, valueOffset: number): string => {
+    if (type === 2) {
+      const end = bytes.indexOf(0, valueOffset);
+      return readAscii(bytes, valueOffset, end >= 0 ? end - valueOffset : Math.min(count, 64)).replace(/\0+$/, "");
+    }
+    if (type === 3) return String(view.getUint16(valueOffset, le));
+    if (type === 4) return String(view.getUint32(valueOffset, le));
+    if (type === 1) return String(bytes[valueOffset]);
+    if (type === 9) return String(view.getInt32(valueOffset, le));
+    if (type === 8) return String(bytes[valueOffset]);
+    if (type === 11) return view.getFloat32(valueOffset, le).toString();
+    return `(type ${type})`;
+  };
+  const entries: TiffEntry[] = [];
+  let width: number | null = null;
+  let height: number | null = null;
+  if (ifd0Offset + 2 <= bytes.length) {
+    const entryCount = view.getUint16(ifd0Offset, le);
+    for (let index = 0; index < entryCount && ifd0Offset + 2 + index * 12 + 12 <= bytes.length; index += 1) {
+      const entryOffset = ifd0Offset + 2 + index * 12;
+      const tag = view.getUint16(entryOffset, le);
+      const type = view.getUint16(entryOffset + 2, le);
+      const count = view.getUint32(entryOffset + 4, le);
+      const valueOffsetField = entryOffset + 8;
+      const inline = count * ({ 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 11: 4, 12: 8 }[type] ?? 1) <= 4;
+      const valueOffset = inline ? valueOffsetField : view.getUint32(valueOffsetField, le);
+      const value = readValue(type, count, valueOffset);
+      entries.push({ tag, tagName: tagNames[tag] ?? `0x${tag.toString(16)}`, type: typeNames[type] ?? `type ${type}`, count, value });
+      if (tag === 256) width = Number(value);
+      if (tag === 257) height = Number(value);
+    }
+  }
+  rows.push(["TIFF endian", little ? "little (II)" : "big (MM)"]);
   rows.push(["TIFF magic", String(magic)]);
-  rows.push(["First IFD offset", String(ifdOffset)]);
+  rows.push(["IFD0 entries", String(entries.length)]);
+  if (width) rows.push(["ImageWidth", String(width)]);
+  if (height) rows.push(["ImageLength", String(height)]);
+  const make = entries.find((entry) => entry.tag === 271);
+  const model = entries.find((entry) => entry.tag === 272);
+  if (make || model) rows.push(["Camera", `${make?.value ?? "?"} ${model?.value ?? "?"}`.trim()]);
   if (magic !== 42) findings.push({ level: "warn", title: "TIFF magic mismatch", detail: `Expected 42, got ${magic}.` });
-  if (ifdOffset >= bytes.length) findings.push({ level: "warn", title: "TIFF IFD offset out of range", detail: `First IFD offset ${ifdOffset} is outside the file.` });
-  return { rows, findings };
+  if (ifd0Offset >= bytes.length) findings.push({ level: "warn", title: "TIFF IFD offset out of range", detail: `First IFD offset ${ifd0Offset} is outside the file.` });
+  return { rows, findings, tiff: { endian: little ? "little" : "big", magic, ifd0Offset, entryCount: entries.length, entries, width, height } };
+}
+
+function parseHeifStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; heif: HeifStructure } {
+  const rows: Array<[string, string]> = [];
+  const findings: ImageFinding[] = [];
+  const compatibleBrands: string[] = [];
+  let majorBrand = "";
+  let minorVersion = 0;
+  let hasMeta = false;
+  let hasMdia = false;
+  let width: number | null = null;
+  let height: number | null = null;
+  if (bytes.length >= 16 && readAscii(bytes, 4, 4) === "ftyp") {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    majorBrand = readAscii(bytes, 8, 4);
+    minorVersion = view.getUint32(12, false);
+    let offset = 16;
+    while (offset + 4 <= bytes.length) {
+      const brand = readAscii(bytes, offset, 4);
+      if (!brand || /[^ -~]/.test(brand)) break;
+      compatibleBrands.push(brand);
+      offset += 4;
+    }
+  }
+  let offset = 0;
+  while (offset + 8 <= bytes.length && compatibleBrands.length >= 0) {
+    let size = viewSafe(bytes, offset);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (size === 1 && offset + 16 <= bytes.length) size = view.getUint32(offset + 8, false) || bytes.length - offset;
+    if (!size) size = bytes.length - offset;
+    const type = readAscii(bytes, offset + 4, 4);
+    if (type === "meta") hasMeta = true;
+    if (type === "mdia") hasMdia = true;
+    if (type === "ispe") {
+      // ispe is a FullBox: [size][type][version:1][flags:3][image_width:4][image_height:4].
+      // Relative to the box start this is width @ +12 and height @ +16 (big-endian).
+      const view2 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      width = view2.getUint32(offset + 12, false);
+      height = view2.getUint32(offset + 16, false);
+    }
+    if (size < 8 || offset + size > bytes.length) { if (type !== "meta" && type !== "mdia") break; }
+    offset += size;
+    if (offset >= bytes.length) break;
+    if (hasMeta && width) break;
+  }
+  rows.push(["Major brand", majorBrand || "--"]);
+  rows.push(["Minor version", String(minorVersion)]);
+  rows.push(["Compatible brands", compatibleBrands.join(", ") || "--"]);
+  if (width) rows.push(["Dimensions (ispe)", `${width} × ${height}`]);
+  if (hasMeta) rows.push(["meta box", "present"]);
+  if (hasMdia) rows.push(["mdia box", "present"]);
+  if (!hasMeta) findings.push({ level: "info", title: "No meta box", detail: "No meta box parsed; item-derived metadata may be limited." });
+  return { rows, findings, heif: { majorBrand, minorVersion, compatibleBrands, hasMeta, hasMdia, width, height } };
+}
+
+function viewSafe(bytes: Uint8Array, offset: number) {
+  if (offset + 8 > bytes.length) return 0;
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, false);
+}
+
+function buildFormatLayer(bytes: Uint8Array, format: string, trailer: Uint8Array, pngChunks: PngChunkInfo[]): ImageFormatLayer | null {
+  if (format === "GIF") {
+    const parsed = parseGifStructure(bytes);
+    return { format: "GIF", rows: parsed.rows, findings: parsed.findings, gif: parsed.gif };
+  }
+  if (format === "JPEG") {
+    const parsed = parseJpegStructure(bytes);
+    return { format: "JPEG", rows: parsed.rows, findings: parsed.findings, jpeg: parsed.jpeg };
+  }
+  if (format === "WEBP") {
+    const parsed = parseWebpStructure(bytes);
+    return { format: "WEBP", rows: parsed.rows, findings: parsed.findings, webp: parsed.webp };
+  }
+  if (format === "BMP") {
+    const parsed = parseBmpStructure(bytes);
+    return { format: "BMP", rows: parsed.rows, findings: parsed.findings, bmp: parsed.bmp };
+  }
+  if (format === "TIFF") {
+    const parsed = parseTiffStructure(bytes);
+    return { format: "TIFF", rows: parsed.rows, findings: parsed.findings, tiff: parsed.tiff };
+  }
+  if (format === "HEIF/AVIF") {
+    const parsed = parseHeifStructure(bytes);
+    return { format: "HEIF/AVIF", rows: parsed.rows, findings: parsed.findings, heif: parsed.heif };
+  }
+  if (format === "PNG") {
+    const badChunks = pngChunks.filter((chunk) => !chunk.ok);
+    const riskChunks = pngChunks.filter((chunk) => chunk.risk.length);
+    const textEntries = pngChunks.map((chunk) => decodePngTextChunk(bytes, chunk)).filter(Boolean) as PngTextEntry[];
+    const findings: ImageFinding[] = [];
+    if (pngChunks[0]?.type !== "IHDR") findings.push({ level: "warn", title: "PNG IHDR is not first", detail: "Critical PNG chunk order is invalid; viewers may reject or recover differently." });
+    if (!pngChunks.some((chunk) => chunk.type === "IEND")) findings.push({ level: "warn", title: "PNG IEND missing", detail: "The PNG logical end chunk was not parsed; the file may be truncated." });
+    if (badChunks.length) findings.push({ level: "warn", title: "PNG CRC mismatch", detail: badChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
+    if (riskChunks.length) findings.push({ level: "warn", title: "Risky / private PNG chunks", detail: riskChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
+    if (textEntries.length) findings.push({ level: "info", title: "PNG text metadata", detail: textEntries.map((entry) => `${entry.keyword}: ${entry.text.slice(0, 80)}`).join(" / ") });
+    const rows: Array<[string, string]> = [
+      ["PNG chunks", String(pngChunks.length)],
+      ["Critical chunks", pngChunks.filter((chunk) => pngCriticalChunks.has(chunk.type)).map((chunk) => chunk.type).join(", ") || "--"],
+      ["CRC errors", String(badChunks.length)],
+      ["Text chunks", String(textEntries.length)],
+      ["Risk / private", String(riskChunks.length)]
+    ];
+    return { format: "PNG", rows, findings };
+  }
+  return null;
 }
 
 function scoreImageNoise(source: ImagePixelData) {
@@ -1089,50 +1446,14 @@ function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: I
       const parsed = parsePngFile(bytes);
       pngChunks = parsed.chunks;
       pngTextEntries = parsed.chunks.map((chunk) => decodePngTextChunk(bytes, chunk)).filter(Boolean) as PngTextEntry[];
-      const badChunks = parsed.chunks.filter((chunk) => !chunk.ok);
-      const critical = parsed.chunks.filter((chunk) => pngCriticalChunks.has(chunk.type));
-      rows.push(["PNG chunks", String(parsed.chunks.length)]);
-      rows.push(["PNG critical chunks", critical.map((chunk) => chunk.type).join(", ") || "--"]);
-      rows.push(["PNG CRC errors", String(badChunks.length)]);
-      rows.push(["PNG text chunks", String(pngTextEntries.length)]);
-      if (parsed.chunks[0]?.type !== "IHDR") findings.push({ level: "warn", title: "PNG IHDR is not first", detail: "Critical PNG chunk order is invalid; viewers may reject or recover differently." });
-      if (!parsed.chunks.some((chunk) => chunk.type === "IEND")) findings.push({ level: "warn", title: "PNG IEND missing", detail: "The PNG logical end chunk was not parsed; the file may be truncated." });
-      if (badChunks.length) findings.push({ level: "warn", title: "PNG CRC mismatch", detail: badChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
-      if (pngTextEntries.length) findings.push({ level: "warn", title: "PNG text metadata", detail: pngTextEntries.map((entry) => `${entry.keyword}: ${entry.text.slice(0, 80)}`).join(" / ") });
-      const unknownChunks = parsed.chunks.filter((chunk) => !knownPngChunks.has(chunk.type));
-      if (unknownChunks.length) findings.push({ level: "warn", title: "Unusual PNG chunks", detail: unknownChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
     } catch (error) {
       findings.push({ level: "warn", title: "PNG structure parse failed", detail: error instanceof Error ? error.message : String(error) });
     }
   }
-  if (format === "JPEG") {
-    const jpeg = inspectJpegStructure(bytes);
-    rows.push(...jpeg.rows);
-    findings.push(...jpeg.findings);
-  }
-  if (format === "WEBP") {
-    const webp = inspectWebpStructure(bytes);
-    rows.push(...webp.rows);
-    findings.push(...webp.findings);
-  }
-  if (format === "BMP") {
-    const bmp = inspectBmpStructure(bytes);
-    rows.push(...bmp.rows);
-    findings.push(...bmp.findings);
-  }
-  if (format === "TIFF") {
-    const tiff = inspectTiffStructure(bytes);
-    rows.push(...tiff.rows);
-    findings.push(...tiff.findings);
-  }
-  if (format === "HEIF/AVIF") {
-    const heif = inspectHeifStructure(bytes);
-    rows.push(...heif.rows);
-    findings.push(...heif.findings);
-  }
-  if (format === "GIF") {
-    rows.push(["GIF trailer found", logicalEnd >= 0 ? "yes" : "no"]);
-  }
+  // Per-format structural detail (PNG / GIF / JPEG / WEBP / BMP / TIFF /
+  // HEIF-AVIF) is surfaced through the dedicated format layer produced by
+  // buildFormatLayer() and rendered on the Structure page, so it is intentionally
+  // NOT duplicated into the generic container `rows`/`findings` below.
   if (trailer.length) {
     const trailerHits = findEmbeddedFileSignatures(trailer, 0);
     rows.push(["Trailer entropy", `${shannonEntropy(trailer).toFixed(4)} / 8`]);
@@ -1145,7 +1466,8 @@ function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: I
   }
   const metadataFields = imageMetadataFieldCount(exif);
   if (metadataFields > 20) findings.push({ level: "warn", title: "Large metadata surface", detail: `${metadataFields} metadata fields were parsed.` });
-  return { format, logicalEnd, trailer, rows, findings, embeddedHits, pngChunks, pngTextEntries };
+  const formatLayer = buildFormatLayer(bytes, format, trailer, pngChunks);
+  return { format, logicalEnd, trailer, rows, findings, embeddedHits, pngChunks, pngTextEntries, formatLayer };
 }
 
 function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: ImageMetadata, recoveryRows: Array<[string, string]>) {
@@ -1192,7 +1514,8 @@ function analyzeUndecodedImageBytes(bytes: Uint8Array, fileType: string, exif: I
     lsbCandidates: [],
     hiddenPayloads,
     pngTextEntries: container.pngTextEntries,
-    pngChunks: container.pngChunks
+    pngChunks: container.pngChunks,
+    formatLayer: container.formatLayer
   };
 }
 
@@ -1210,7 +1533,8 @@ function analyzeImageBasics(bytes: Uint8Array, fileType: string, exif: ImageMeta
     lsbCandidates: [],
     hiddenPayloads: [],
     pngTextEntries: container.pngTextEntries,
-    pngChunks: container.pngChunks
+    pngChunks: container.pngChunks,
+    formatLayer: container.formatLayer
   };
 }
 
@@ -1227,7 +1551,7 @@ function createImageAnalysisPixels(image: HTMLImageElement): ImagePixelData {
 
 function analyzeImagePixels(bytes: Uint8Array, fileType: string, imageData: ImagePixelData, exif: ImageMetadata) {
   const container = inspectImageContainerBytes(bytes, fileType, exif);
-  const { rows, findings, pngTextEntries, pngChunks, embeddedHits, logicalEnd, trailer } = container;
+  const { rows, findings, pngTextEntries, pngChunks, embeddedHits, logicalEnd, trailer, formatLayer } = container;
   let alphaTransparent = 0;
   let alphaNon255 = 0;
   let redOnes = 0;
@@ -1311,7 +1635,8 @@ function analyzeImagePixels(bytes: Uint8Array, fileType: string, imageData: Imag
     lsbCandidates,
     hiddenPayloads,
     pngTextEntries,
-    pngChunks
+    pngChunks,
+    formatLayer
   };
 }
 
@@ -1351,4 +1676,4 @@ function decodePngTextChunk(bytes: Uint8Array, chunk: PngChunkInfo): PngTextEntr
   return null;
 }
 
-export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, revokeImagePreviewUrl, revokeImagePreviewUrls, tryRebuildPngContainer, decodePngTextChunk };
+export { analyzeImageBasics, analyzeImageBytes, analyzeImagePixels, analyzeUndecodedImageBytes, buildAutoRevealPreviews, buildImageRepairCandidates, bytesToDataUrl, buildFormatLayer, parseGifStructure, parseJpegStructure, parseWebpStructure, parseBmpStructure, parseTiffStructure, parseHeifStructure, carvePayloadBytes, createChannelPreviews, createImageAnalysisPixels, detectImageFormat, emptyImageChannels, getImageLogicalEnd, guessImageDimensions, imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl, loadBrowserImage, payloadMetaForSignature, revokeImageObjectUrls, revokeImagePreviewUrl, revokeImagePreviewUrls, tryRebuildPngContainer, decodePngTextChunk };

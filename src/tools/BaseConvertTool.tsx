@@ -153,7 +153,10 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
   return (
     <div className={`tool-grid baseconvert-workbench baseconvert-simple-workbench ${hasInput ? "has-baseconvert" : "empty-baseconvert"}`}>
       <div className="tool-panel wide-panel baseconvert-simple-input-panel">
-        <ToolPanelHeader title={t.base_conversion} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
+        <ToolPanelHeader title={t.base_conversion} actions={<>
+          <SampleButton toolId="baseconvert" english={english} onLoad={(text) => setValue(text)} />
+          <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
+        </>} />
         <label className="stack-label">{t.inputText}<textarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={t.enter_one_value_or_one_value_per_line} /></label>
         {conversionError && <div className="empty-state error-state" role="alert">{conversionError}</div>}
         <div className="baseconvert-simple-base-row">
