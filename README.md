@@ -9,7 +9,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 1.0.0 beta 5" src="https://img.shields.io/badge/Version-1.0.0--beta.5-4457A6?style=flat-square" />
+    <img alt="Version 1.0.0 beta 6" src="https://img.shields.io/badge/Version-1.0.0--beta.6-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-GitHub-52606D?style=flat-square" /></a>
@@ -50,6 +50,14 @@ Forensics++ 是一个面向取证初筛、CTF/MISC、安全研究和日常证据
 工具之间使用统一的输入、结果、复制、下载和清空交互。大型检材分析优先走 `EvidenceReader` 随机/流式读取；Analyzer 通过统一路由和短生命周期内存 Handoff 复用现有解析器。结构化 `AnalysisEnvelope` 会进入有界 Result Store，并可随 `.fppcase` 1.1 案件包保存分析快照。需要保存的工作区可以在切换工具或刷新页面后继续查看，也可以加入案件报告统一整理。
 
 APK 的“签名修复”是显式重新签名：可导入自己的 PKCS#8 私钥/X.509 证书，或生成仅在本地使用的临时修复身份。没有原开发者私钥时无法恢复原签名身份；重新签名后的 APK 与原证书身份不同。
+
+### 1.0.0-beta.6 更新要点
+
+- **图片格式层取证**：图片工作台现在逐格式展示 GIF/BMP/JPEG/WebP/TIFF/HEIF 的容器结构与风险层（帧、标记、块、TIFF 条目、HEIF 盒）。
+- **JWT 旧式 PEM 兼容**：分析器自动把 PKCS#1（RSA）/ SEC1（EC）私钥转换为 PKCS#8，兼容 OpenSSL 默认导出格式；紧凑与美化（pretty-printed）JWT 头均可解析。
+- **静态可索引路由层 + SPA 404**：每个工具生成可索引静态页（克隆 SPA 外壳并注入路由级 meta），未知路由渲染 404；预览环境（`VITE_PREVIEW=1`）自动 `noindex` 并带含版本/提交哈希/分支的 Preview 横幅。
+- **能力真实性审计**：逐一核对用户可见能力是否可追溯到真实代码 + 测试，移除无法佐证的取证宣称（SQLite 时间线、`.reg` 文本导出、cramfs 检测、Windows 设备线索、双品牌顶栏），并修正若干文案与语言切换标签。
+- **发布与测试工具**：新增能力审计与真 Chrome 生产冒烟脚本、SEO 话术 lint 门禁；测试增至 463 例（82 文件）。
 
 ### 1.0.0-beta.5 更新要点
 
@@ -114,7 +122,7 @@ npm run release:package
 输出文件：
 
 ```text
-release/ForensicsPP-v1.0.0-beta.5-static.zip
+release/ForensicsPP-v1.0.0-beta.6-static.zip
 release/SHA256SUMS.txt
 ```
 
