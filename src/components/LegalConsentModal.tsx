@@ -21,7 +21,7 @@
 
 import React from "react";
 import { Modal } from "antd";
-import { CheckCircleFilled } from "@ant-design/icons";
+import { CheckCircleFilled, SafetyCertificateOutlined } from "@ant-design/icons";
 import { AButton } from "./ui";
 import type { Translation } from "../i18n";
 
@@ -32,19 +32,21 @@ type LegalConsentModalProps = {
 };
 
 export function LegalConsentModal({ t, open, onAccept }: LegalConsentModalProps) {
+  const legalUrl = window.location.protocol === "file:" ? "./legal.html" : "/legal.html";
   return (
     <Modal
       className="legal-consent-modal"
+      wrapClassName="legal-consent-wrap"
       open={open}
       centered
       width={520}
-      title={t.legalNoticeTitle}
+      title={<span className="legal-consent-title"><SafetyCertificateOutlined aria-hidden="true" /><span>{t.legalNoticeTitle}</span></span>}
       closable={false}
       maskClosable={false}
       keyboard={false}
       footer={(
         <div className="legal-consent-actions">
-          <AButton href="./legal.html" target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
+          <AButton href={legalUrl} target="_blank" variant="outlined">{t.viewFullTerms}</AButton>
           <AButton variant="filled" onClick={onAccept}>{t.acceptTerms}</AButton>
         </div>
       )}

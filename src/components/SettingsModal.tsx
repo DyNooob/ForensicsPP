@@ -22,16 +22,16 @@
 import React from "react";
 import {
   BgColorsOutlined,
+  ArrowRightOutlined,
   CodeOutlined,
   CloseOutlined,
   DatabaseOutlined,
   DesktopOutlined,
+  FileTextOutlined,
   GithubOutlined,
   InfoCircleOutlined,
   LinkOutlined,
-  MailOutlined,
   MoonOutlined,
-  QuestionCircleOutlined,
   ReloadOutlined,
   SunOutlined
 } from "@ant-design/icons";
@@ -40,11 +40,8 @@ import type { ThemeMode } from "../models";
 import type { ToolId } from "../config/app";
 import {
   appVersion,
-  feedbackEmail,
-  lastUpdated,
-  projectLicense,
+  buildHash,
   projectLinks,
-  projectRepoName,
   themePresets
 } from "../config/app";
 import { openSourceProjects } from "../config/openSource";
@@ -72,7 +69,6 @@ type SettingsModalProps = {
   openTools: Array<{ id: ToolId; title: string; active: boolean }>;
   onCloseTool: (id: ToolId) => void;
   onCloseAllTools: () => void;
-  onShowGuide: () => void;
 };
 
 function formatStorageMb(bytes: number) {
@@ -116,13 +112,16 @@ export function SettingsModal({
   onAutoSaveEvidenceChange,
   openTools,
   onCloseTool,
-  onCloseAllTools,
-  onShowGuide
+  onCloseAllTools
 }: SettingsModalProps) {
-  const [page, setPage] = React.useState<SettingsPage>("appearance");
+  const [page, setPage] = React.useState<SettingsPage>("project");
   const [storage, setStorage] = React.useState<StorageSnapshot>({ local: 0, usage: 0, quota: 0, estimated: false });
   const [dataPacks, setDataPacks] = React.useState<LookupDataPackStatus[]>([]);
   const [storageRefresh, setStorageRefresh] = React.useState(0);
+
+  React.useEffect(() => {
+    if (open) setPage("project");
+  }, [open]);
 
   React.useEffect(() => {
     if (!open || page !== "storage") return;
@@ -176,9 +175,6 @@ export function SettingsModal({
     activeTool: "正在使用",
     moreOpenTools: "个其他工具已打开",
     relatedLinks: "相关链接",
-    projectAccess: "项目入口",
-    contact: "联系",
-    friendLinks: "友情链接",
     dependenciesTitle: "开源项目",
     dependenciesDesc: `Forensics++ 使用了以下 ${openSourceProjects.length} 个开源项目。`,
     openRepo: "打开仓库"
@@ -211,10 +207,7 @@ export function SettingsModal({
     noOpenTools: "No tools are currently open",
     activeTool: "Active",
     moreOpenTools: "other tools open",
-    relatedLinks: "Links",
-    projectAccess: "Project",
-    contact: "Contact",
-    friendLinks: "Friends",
+    relatedLinks: "Related links",
     dependenciesTitle: "Open-source projects",
     dependenciesDesc: `Forensics++ uses the following ${openSourceProjects.length} open-source projects.`,
     openRepo: "Open Repository"
@@ -233,6 +226,7 @@ export function SettingsModal({
     visibleOpenTools[visibleOpenTools.length - 1] = activeOpenTool;
   }
   const hiddenOpenToolCount = openTools.length - visibleOpenTools.length;
+  const legalUrl = window.location.protocol === "file:" ? "./legal.html" : "/legal.html";
   const dataPackNames: Record<LookupDataPackStatus["id"], string> = lang === "zh"
     ? { ip: "IP 地址库", phone: "手机号段库", id: "行政区划库" }
     : { ip: "IP database", phone: "Mobile prefix database", id: "Administrative divisions" };
@@ -255,8 +249,8 @@ export function SettingsModal({
             selectedKeys={[page]}
             onClick={({ key }) => setPage(key as SettingsPage)}
             items={[
-              { key: "appearance", icon: <BgColorsOutlined />, label: labels.appearance },
               { key: "project", icon: <InfoCircleOutlined />, label: labels.project },
+              { key: "appearance", icon: <BgColorsOutlined />, label: labels.appearance },
               { key: "storage", icon: <DatabaseOutlined />, label: labels.storage },
               { key: "opensource", icon: <CodeOutlined />, label: labels.openSource }
             ]}
@@ -327,41 +321,26 @@ export function SettingsModal({
                   <div><strong>Forensics++</strong><span>Workbench</span></div>
                   <Typography.Text type="secondary">{t.aboutProjectDesc}</Typography.Text>
                 </div>
-                <Button type="primary" href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{labels.openRepo}</Button>
               </div>
-              <div className="settings-project-meta">
-                <div><span>{t.projectVersion}</span><strong>{appVersion}</strong></div>
-                <div><span>{t.projectLicense}</span><strong>{projectLicense}</strong></div>
-                <div><span>{t.lastUpdated}</span><strong>{lastUpdated}</strong></div>
-                <div><span>{t.githubRepo}</span><a href={projectLinks.repo} target="_blank" rel="noreferrer">{projectRepoName}</a></div>
-              </div>
-              <div className="settings-project-resources">
-                <section>
-                  <strong>{labels.projectAccess}</strong>
-                  <div>
-                    <Button href={projectLinks.repo} target="_blank" icon={<GithubOutlined />}>{lang === "zh" ? "代码仓库" : "Repository"}</Button>
-                    <Button href={`${projectLinks.repo}#readme`} target="_blank" icon={<LinkOutlined />}>{t.openReadme}</Button>
+              <div className="settings-project-details">
+                <section className="settings-project-build">
+                  <strong>{lang === "zh" ? "版本信息" : "Build information"}</strong>
+                  <div className="settings-project-meta">
+                    <div><span>{t.projectVersion}</span><code>{appVersion}</code></div>
+                    <div><span>Hash</span><code title={buildHash}>{buildHash.slice(0, 7)}</code></div>
                   </div>
                 </section>
-                <section>
-                  <strong>{labels.contact}</strong>
-                  <a href={`mailto:${feedbackEmail}`}><MailOutlined aria-hidden="true" />{feedbackEmail}</a>
+                <section className="settings-project-related">
+                  <strong>{labels.relatedLinks}</strong>
+                  <div>
+                    <a href="https://www.forensicspp.com" target="_blank" rel="noreferrer">ForensicsPP.com<ArrowRightOutlined aria-hidden="true" /></a>
+                    <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics<ArrowRightOutlined aria-hidden="true" /></a>
+                  </div>
                 </section>
               </div>
-              <div className="settings-project-links">
-                <strong>{labels.friendLinks}</strong>
-                <div>
-                  <a href="https://www.forensicspp.com" target="_blank" rel="noreferrer">ForensicsPP</a>
-                  <a href="https://www.digiforensics.cn" target="_blank" rel="noreferrer">DigiForensics</a>
-                </div>
-              </div>
-              <div className="settings-privacy-card" role="note">
-                <strong>{t.settingsPrivacyTitle}</strong>
-                <div className="settings-privacy-badge">{t.settingsPrivacyNoUpload}</div>
-                <Typography.Text type="secondary">{t.settingsPrivacyNoUploadDesc}</Typography.Text>
-              </div>
-              <div className="settings-guide-action">
-                <Button onClick={onShowGuide} icon={<QuestionCircleOutlined />}>{t.firstRunShowAgain}</Button>
+              <div className="settings-project-actions">
+                <Button type="primary" href={projectLinks.repo} target="_blank" rel="noreferrer" icon={<GithubOutlined />}>{labels.openRepo}</Button>
+                <Button href={legalUrl} target="_blank" rel="noreferrer" icon={<FileTextOutlined />}>{t.viewFullTerms}</Button>
               </div>
             </div>
           )}

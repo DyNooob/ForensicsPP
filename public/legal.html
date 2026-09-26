@@ -72,26 +72,28 @@
         color-scheme: light dark;
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
-        --bg: #f8fafc;
+        --bg: #f3f5f7;
         --surface: #ffffff;
-        --ink: #111827;
-        --muted: #5f6b7a;
-        --line: #d7dde7;
+        --ink: #17212b;
+        --muted: #637180;
+        --line: #d7dde3;
         --accent: #4457a6;
-        --accent-soft: #eef0fa;
-        --danger: #b3261e;
+        --accent-soft: rgba(68, 87, 166, 0.08);
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 12px 30px rgba(15, 23, 42, 0.055);
+        --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.03), 0 6px 18px rgba(15, 23, 42, 0.04);
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #101417;
-          --surface: #151a1d;
-          --ink: #e4e8ee;
-          --muted: #b7c0cb;
-          --line: #394149;
-          --accent: #aeb9ff;
-          --accent-soft: #252b42;
-          --danger: #ffb4ab;
+          --bg: #101923;
+          --surface: #182431;
+          --ink: #e7eef6;
+          --muted: #afc0d2;
+          --line: #34485a;
+          --accent: #9baeff;
+          --accent-soft: rgba(68, 87, 166, 0.2);
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.22), 0 12px 28px rgba(0, 0, 0, 0.18);
+          --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 18px rgba(0, 0, 0, 0.14);
         }
       }
 
@@ -101,8 +103,12 @@
 
       body {
         margin: 0;
-        background: var(--bg);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 90%, var(--accent-soft)) 0, var(--bg) 240px);
         color: var(--ink);
+      }
+
+      html {
+        scroll-behavior: smooth;
       }
 
       a {
@@ -112,20 +118,25 @@
       .page {
         width: min(1120px, calc(100% - 40px));
         margin: 0 auto;
-        padding: 34px 0 42px;
+        padding: 28px 0 42px;
       }
 
       header {
         display: grid;
         gap: 12px;
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 22px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 24px 28px;
+        box-shadow: var(--shadow-soft);
       }
 
       .eyebrow {
         color: var(--accent);
         font-size: 13px;
-        font-weight: 850;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       h1,
@@ -137,15 +148,15 @@
 
       h1 {
         font-size: clamp(30px, 4vw, 48px);
-        line-height: 1.08;
-        letter-spacing: 0;
+        line-height: 1.12;
+        letter-spacing: -0.025em;
       }
 
       header p {
         max-width: 760px;
         color: var(--muted);
-        font-size: 16px;
-        line-height: 1.65;
+        font-size: 14px;
+        line-height: 1.7;
       }
 
       .meta {
@@ -156,42 +167,49 @@
 
       .meta span {
         border: 1px solid var(--line);
-        border-radius: 4px;
-        background: var(--surface);
+        border-radius: 7px;
+        background: var(--bg);
         color: var(--muted);
         padding: 7px 10px;
-        font-size: 13px;
-        font-weight: 750;
+        font-size: 12px;
+        font-weight: 700;
       }
 
       .legal-layout {
         display: grid;
         grid-template-columns: 220px minmax(0, 1fr);
-        gap: 24px;
+        gap: 16px;
         align-items: start;
-        margin-top: 24px;
+        margin-top: 16px;
       }
 
       nav {
         position: sticky;
         top: 24px;
         display: grid;
-        gap: 4px;
-        border-left: 2px solid var(--line);
-        padding-left: 12px;
+        gap: 3px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 14px;
+        box-shadow: var(--shadow-soft);
       }
 
       nav strong {
-        margin-bottom: 6px;
-        font-size: 13px;
+        margin: 2px 8px 7px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
       }
 
       nav a {
-        border-radius: 4px;
+        border-radius: 6px;
         color: var(--muted);
-        padding: 7px 9px;
-        font-size: 14px;
+        padding: 8px 9px;
+        font-size: 13px;
         text-decoration: none;
+        transition: color 140ms ease, background-color 140ms ease;
       }
 
       nav a:hover {
@@ -199,25 +217,33 @@
         color: var(--accent);
       }
 
+      a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      main > section[id] {
+        scroll-margin-top: 24px;
+      }
+
       main {
+        display: grid;
+        gap: 12px;
         min-width: 0;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--surface);
       }
 
       section {
-        padding: 26px 28px;
-      }
-
-      section + section {
-        border-top: 1px solid var(--line);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 22px 24px;
+        box-shadow: var(--shadow-soft);
       }
 
       section h2 {
-        margin-bottom: 12px;
-        font-size: 22px;
+        margin-bottom: 10px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
       }
 
       section h3 {
@@ -228,19 +254,20 @@
       section p,
       li {
         color: var(--muted);
-        font-size: 15px;
-        line-height: 1.72;
+        font-size: 13.5px;
+        line-height: 1.75;
       }
 
       ul {
         display: grid;
-        gap: 7px;
+        gap: 6px;
         margin: 0;
         padding-left: 1.2em;
       }
 
       .notice {
-        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+        background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
       }
 
       .notice p,
@@ -249,7 +276,8 @@
       }
 
       footer {
-        margin-top: 18px;
+        margin-top: 14px;
+        padding: 0 4px;
         color: var(--muted);
         font-size: 13px;
         line-height: 1.6;
@@ -259,26 +287,41 @@
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-        margin-top: 4px;
+        margin-top: 2px;
       }
 
       .button {
         display: inline-flex;
         align-items: center;
-        min-height: 38px;
+        min-height: 36px;
         border: 1px solid var(--line);
-        border-radius: 4px;
+        border-radius: 7px;
         background: var(--surface);
         color: var(--accent);
         padding: 0 12px;
-        font-weight: 800;
+        font-size: 13px;
+        font-weight: 700;
         text-decoration: none;
+        transition: border-color 140ms ease, background-color 140ms ease, transform 120ms ease-out;
+      }
+
+      .button:hover {
+        border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+        background: var(--accent-soft);
+      }
+
+      .button:active {
+        transform: scale(0.98);
       }
 
       @media (max-width: 640px) {
         .page {
           width: min(100% - 20px, 1040px);
           padding-top: 22px;
+        }
+
+        header {
+          padding: 18px;
         }
 
         section {
@@ -302,7 +345,7 @@
           本说明适用于 Forensics++ 网页版本和官方静态发布包，说明使用条件、数据处理方式、证据处理注意事项和责任边界。请在使用前完整阅读。
         </p>
         <div class="meta">
-          <span>说明版本：2026-07-13-v2</span>
+          <span>说明版本：2026-09-26-v3</span>
           <span>产品邮箱：toolab@digiforensics.cn</span>
         </div>
         <div class="actions">
@@ -376,10 +419,10 @@
             <h2>数据与隐私</h2>
             <ul>
               <li>当前官方版本没有为工具检材设置默认上传接口。你选择或拖入的文件由当前浏览器页面读取，项目服务器不接收这些文件作为工具输入。</li>
-              <li>访问网页时，托管平台、内容分发网络或其他网络基础设施可能按其正常运行方式处理 IP 地址、浏览器信息、请求时间、访问路径等连接信息。其处理规则由相应服务提供者决定。</li>
-              <li>本站使用 localStorage 保存界面偏好、最近使用、收藏、法律确认等少量站点状态；工具打开的文件、粘贴的检材文本和查询历史按当前设计仅保留在当前页面会话。旧版本遗留数据会在加载时清理。</li>
+              <li>归属地查询会按需从 jsDelivr 内容分发网络下载 IP 地址、手机号号段和行政区划参考数据，在浏览器本地查询；查询值不会随数据包下载请求发送。标准时间校验会向本站发送不缓存的时间请求。相关服务提供者可能按其政策处理连接 IP、请求时间和路径等网络日志。</li>
+              <li>本站使用 localStorage 保存界面偏好、最近使用、收藏和法律确认；案件报告条目及部分工具状态、草稿可能保存在 localStorage 或 IndexedDB。保存范围因工具而异，清除站点数据或使用工作台的存储清理功能可移除相应本地数据。不要假设关闭页面或刷新会删除已保存内容。</li>
               <li>Service Worker 可能缓存应用代码、样式和其他静态资源，供离线或快速加载使用；该缓存不用于保存你选择的检材文件。</li>
-              <li>关闭工具、刷新或关闭页面、清除站点数据、浏览器回收内存或发生异常，都可能使未导出的输入、修改和结果丢失。本站不是备份或长期保管服务。</li>
+              <li>未保存的输入、修改和结果可能在关闭工具、刷新、关闭页面、浏览器回收内存或发生异常时丢失；保存在浏览器本地的状态也可能被清除或因浏览器策略不可用。本站不是备份或长期保管服务。</li>
               <li>点击 GitHub、友情链接或其他外部地址后，外部网站可能独立处理访问数据；通过邮件反馈时，邮件正文和附件会由邮件服务系统接收。</li>
               <li>浏览器、扩展程序、操作系统、受管理设备策略和本地恶意软件可能接触页面内容，这些环境不由本项目控制。处理敏感、受监管或涉密数据前，应评估环境并采用符合要求的隔离措施。</li>
             </ul>
@@ -448,8 +491,22 @@
       </div>
 
       <footer>
-        <p>最后更新：2026-07-13。请结合适用法律、授权文件、组织制度和具体任务要求判断能否使用本工具。</p>
+        <p>最后更新：2026-09-26。请结合适用法律、授权文件、组织制度和具体任务要求判断能否使用本工具。</p>
       </footer>
     </div>
+    <script>
+      document.querySelectorAll('.legal-layout nav a[href^="#"]').forEach((link) => {
+        link.addEventListener("click", (event) => {
+          const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+          if (!target) return;
+          event.preventDefault();
+          history.pushState(null, "", link.hash);
+          target.scrollIntoView({
+            behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+            block: "start"
+          });
+        });
+      });
+    </script>
   </body>
 </html>

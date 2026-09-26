@@ -4448,17 +4448,37 @@ details.tool-panel:not([open]) > :not(summary) {
 
 .legal-consent-modal .ant-modal-content {
   border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: var(--app-surface);
   padding: 24px;
-  box-shadow: 0 18px 56px rgba(15, 23, 42, 0.2);
+  box-shadow: var(--app-shadow-lg);
+}
+
+.legal-consent-wrap .ant-modal-mask {
+  background: color-mix(in srgb, var(--app-bg) 62%, rgba(15, 23, 42, 0.48));
+  backdrop-filter: blur(2px);
 }
 
 .legal-consent-modal .ant-modal-header {
   margin-bottom: 8px;
+  background: transparent;
 }
 
 .legal-consent-modal .ant-modal-title {
   font-size: 20px;
   line-height: 1.35;
+  color: var(--app-text);
+}
+
+.legal-consent-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.legal-consent-title .anticon {
+  color: var(--app-primary);
+  font-size: 18px;
 }
 
 .legal-consent-body {
@@ -4469,7 +4489,7 @@ details.tool-panel:not([open]) > :not(summary) {
 
 .legal-consent-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   margin: 18px 0 4px;
   padding: 0;
   list-style: none;
@@ -4477,23 +4497,63 @@ details.tool-panel:not([open]) > :not(summary) {
 
 .legal-consent-list li {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
   color: var(--app-text);
+  padding: 10px 12px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
 .legal-consent-list .anticon {
-  margin-top: 3px;
+  margin-top: 1px;
   color: var(--app-primary);
+  font-size: 15px;
+}
+
+.legal-consent-modal .ant-modal-footer {
+  margin-top: 18px;
+  border-top: 1px solid var(--app-line);
+  padding: 16px 0 0;
 }
 
 .legal-consent-actions {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
+
+.legal-consent-actions .ant-btn {
+  min-height: 38px;
+  border-radius: 7px;
+}
+
+.app-clock-message .ant-message-notice-content,
+.ant-message-notice.app-clock-message .ant-message-notice-content {
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
+  color: var(--app-text);
+  padding: 10px 14px;
+}
+
+.app-clock-message .ant-message-custom-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-clock-message .ant-message-success .anticon { color: var(--app-green); }
+.app-clock-message .ant-message-warning .anticon { color: var(--app-warn); }
+.app-clock-message .ant-message-error .anticon { color: var(--app-danger); }
 
 @media (max-width: 560px) {
   .legal-consent-modal {

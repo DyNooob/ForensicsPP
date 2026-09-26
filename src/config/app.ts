@@ -173,7 +173,7 @@ export const releaseDownloadUrl = `${projectLinks.repo}/releases`;
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
 export const lastUpdated = "2026-09-26";
-export const legalVersion = "2026-07-13-v2";
+export const legalVersion = "2026-09-26-v3";
 export const feedbackEmail = "toolab@digiforensics.cn";
 
 /**

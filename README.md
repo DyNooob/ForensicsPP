@@ -65,7 +65,7 @@ APK 的"签名修复"是显式重新签名：可导入自己的 PKCS#8 私钥/X.
 
 - **Local attribution workbench**: batch IP/mobile/Chinese-ID/bank-card lookups with rule validation, CSV export, and pinned on-demand data packs cached for offline reuse. · 本地归属地工作台：批量查询 IP/手机号/身份证号/银行卡，规则核验、CSV 导出与按需离线缓存。
 - **Workbench launcher**: paste a clue on the redesigned home page and route it directly to the matching local tool. · 工作台式主页：粘贴线索后自动识别并进入合适的本地工具。
-- **Clock integrity indicator**: the top bar shows local time and warns clearly when it differs from the same-origin server clock. · 时间完整性提示：顶栏显示本机时间，与同源服务器时间偏差明显时红色告警。
+- **Clock integrity indicator**: the top bar displays a server-time estimate and compares it with the computer clock; clicking it reports whether the difference exceeds two seconds. · 时间校验：顶栏显示服务器校准时间，点击后对比本机时钟；偏差超过两秒时提示。
 - **Image reveal pass**: common steganography, trailing payload, channel, and repair checks run together and start automatically for newly loaded images. · 图片还原：常见隐写、尾部载荷、通道与修复检查集中执行，并在载入新图片后自动分析。
 
 See [CHANGELOG.md](./CHANGELOG.md) for earlier releases and the full change list.
