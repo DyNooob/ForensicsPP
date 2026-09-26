@@ -46,40 +46,71 @@ function sendProgress(requestId: number, pack: ResolvedLookupKind, state: "loadi
 
 async function fetchPinned(url: string) {
   const request = new Request(url, { mode: "cors" });
-  const cache = typeof caches !== "undefined" ? await caches.open(LOOKUP_DATA_CACHE) : null;
-  const cached = await cache?.match(request);
-  if (cached) return cached;
+  let cache: Cache | null = null;
+  if (typeof caches !== "undefined") {
+    try {
+      cache = await caches.open(LOOKUP_DATA_CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+    } catch {
+      // CacheStorage is an optimization; private browsing, quota limits, or
+      // browser policy must not prevent a fresh network lookup.
+      cache = null;
+    }
+  }
   const response = await fetch(request, { cache: "force-cache" });
   if (!response.ok) throw new Error(`data pack request failed (${response.status})`);
-  await cache?.put(request, response.clone());
+  if (cache) {
+    try {
+      await cache.put(request, response.clone());
+    } catch (caught) {
+      // Some CDN responses cannot be persisted by CacheStorage. The original
+      // response is still valid for this lookup, so keep using it in memory.
+      console.warn("Lookup data pack could not be cached", new URL(url).host, caught);
+    }
+  }
   return response;
+}
+
+async function loadPack<T>(requestId: number, pack: ResolvedLookupKind, load: () => Promise<T>) {
+  sendProgress(requestId, pack, "loading");
+  try {
+    return await load();
+  } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : String(caught);
+    sendProgress(requestId, pack, "error", detail);
+    throw caught;
+  }
 }
 
 async function loadIp(requestId: number) {
   if (ipData) return ipData;
-  sendProgress(requestId, "ip", "loading");
-  const response = await fetchPinned(LOOKUP_DATA_PACKS.ip.url);
-  ipData = new Uint8Array(await response.arrayBuffer());
+  ipData = await loadPack(requestId, "ip", async () => {
+    const response = await fetchPinned(LOOKUP_DATA_PACKS.ip.url);
+    return new Uint8Array(await response.arrayBuffer());
+  });
   sendProgress(requestId, "ip", "ready", `${ipData.byteLength}`);
   return ipData;
 }
 
 async function loadPhone(requestId: number) {
   if (phoneData) return phoneData;
-  sendProgress(requestId, "phone", "loading");
-  const response = await fetchPinned(LOOKUP_DATA_PACKS.phone.url);
-  phoneData = new Uint8Array(await response.arrayBuffer());
+  phoneData = await loadPack(requestId, "phone", async () => {
+    const response = await fetchPinned(LOOKUP_DATA_PACKS.phone.url);
+    return new Uint8Array(await response.arrayBuffer());
+  });
   sendProgress(requestId, "phone", "ready", `${phoneData.byteLength}`);
   return phoneData;
 }
 
 async function loadAreas(requestId: number) {
   if (areaData) return areaData;
-  sendProgress(requestId, "id", "loading");
-  const response = await fetchPinned(LOOKUP_DATA_PACKS.id.url);
-  const payload = await response.json() as { areas?: Record<string, AreaRecord[]> };
-  if (!payload.areas || typeof payload.areas !== "object") throw new Error("invalid GB/T 2260 data pack");
-  areaData = payload.areas;
+  areaData = await loadPack(requestId, "id", async () => {
+    const response = await fetchPinned(LOOKUP_DATA_PACKS.id.url);
+    const payload = await response.json() as { areas?: Record<string, AreaRecord[]> };
+    if (!payload.areas || typeof payload.areas !== "object") throw new Error("invalid GB/T 2260 data pack");
+    return payload.areas;
+  });
   sendProgress(requestId, "id", "ready", `${Object.keys(areaData).length}`);
   return areaData;
 }
