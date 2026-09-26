@@ -132,6 +132,11 @@ describe("service worker cache version contract", () => {
     // The activate handler purges by this prefix, so the sentinel must keep it.
     expect(declared?.startsWith("forensicspp-")).toBe(true);
   });
+
+  it("preserves versioned data packs when the app-shell cache rotates", () => {
+    expect(serviceWorkerSource).toContain('"forensicspp-lookup-data-"');
+    expect(serviceWorkerSource).toContain("!PERSISTENT_CACHE_PREFIXES.some");
+  });
 });
 
 describe("service worker offline shell fallback", () => {

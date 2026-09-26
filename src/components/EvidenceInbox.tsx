@@ -20,7 +20,7 @@
  */
 
 import React from "react";
-import { Badge, Button, Card, Drawer, Empty, Select, Space, Tag, Tooltip } from "antd";
+import { Badge, Button, Card, Drawer, Empty, Popconfirm, Select, Space, Tag, Tooltip } from "antd";
 import { CopyOutlined, DeleteOutlined, InboxOutlined, SendOutlined } from "@ant-design/icons";
 import { useEvidenceInbox } from "../app/useEvidenceInbox";
 import { clearEvidenceInbox, noteEvidenceUsed, type EvidenceInboxItem } from "../core/evidence/inbox";
@@ -194,16 +194,18 @@ export function EvidenceInbox({ open, onClose, t, lang, onOpenTool }: EvidenceIn
       onClose={onClose}
       width={440}
       extra={
-        <Button
-          type="text"
-          size="small"
-          danger
+        <Popconfirm
+          title={t.evidenceClearInboxConfirm}
+          okText={t.evidenceClearInbox}
+          cancelText={t.cancelEdit}
+          okButtonProps={{ danger: true }}
           disabled={!count}
-          icon={<DeleteOutlined />}
-          onClick={() => clearEvidenceInbox()}
+          onConfirm={() => clearEvidenceInbox()}
         >
-          {t.evidenceClearInbox}
-        </Button>
+          <Button type="text" size="small" danger disabled={!count} icon={<DeleteOutlined />}>
+            {t.evidenceClearInbox}
+          </Button>
+        </Popconfirm>
       }
     >
       {items.length === 0 ? (

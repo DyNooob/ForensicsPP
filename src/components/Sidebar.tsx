@@ -64,10 +64,17 @@ export function Sidebar({
   return (
     <div className="sidebar-inner">
       <div className="sidebar-head">
-        <a className="brand" href="#home" title="Forensics++">
+        <a
+          className="brand"
+          href="#home"
+          title="Forensics++"
+          onClick={(event) => {
+            event.preventDefault();
+            onSelectTool("home");
+          }}
+        >
           <span>F++</span>
           <strong>{t.product}</strong>
-          <small>{t.subtitle}</small>
         </a>
         <button
           className="sidebar-toggle"
@@ -121,8 +128,6 @@ export function Sidebar({
                     key={tool.id}
                     rounded
                     active={tool.id === activeTool}
-                    description={domainLabel(tool, t)}
-                    description-line={1}
                     title={`${t[tool.name]} - ${t[tool.desc]}`}
                     aria-current={tool.id === activeTool ? "page" : undefined}
                     onClick={() => onSelectTool(tool.id)}

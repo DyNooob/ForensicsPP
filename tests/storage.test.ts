@@ -21,7 +21,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { clearToolSessions, writeToolSession } from "../src/utils/toolSessions";
-import { isStoredValueCompatible, parseStoredState, shouldUseIndexedState } from "../src/utils/storage";
+import { isForensicsDataCache, isStoredValueCompatible, parseStoredState, shouldUseIndexedState } from "../src/utils/storage";
 
 describe("browser state persistence", () => {
   it("keeps small values in localStorage and routes large values to IndexedDB", () => {
@@ -49,6 +49,12 @@ describe("browser state persistence", () => {
     expect(isStoredValueCompatible({}, [])).toBe(false);
     expect(isStoredValueCompatible([], [])).toBe(true);
     expect(isStoredValueCompatible({ value: "ready" }, { value: "" })).toBe(true);
+  });
+
+  it("identifies data-pack caches without matching the app-shell cache", () => {
+    expect(isForensicsDataCache("forensicspp-data-lookup-v1")).toBe(true);
+    expect(isForensicsDataCache("forensicspp-lookup-data-v1")).toBe(true);
+    expect(isForensicsDataCache("forensicspp-v1.0.0")).toBe(false);
   });
 
   it("does not permanently disable IndexedDB writes after clearing without IndexedDB", async () => {

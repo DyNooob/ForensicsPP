@@ -21,6 +21,7 @@
 
 import React from "react";
 import { clearForensicsStorage } from "../utils/storage";
+import { writeRoute } from "../core/routeAdapter";
 
 export function useCacheClear(settingsOpen: boolean) {
   const [cacheClearArmed, setCacheClearArmed] = React.useState(false);
@@ -46,7 +47,7 @@ export function useCacheClear(settingsOpen: boolean) {
     }
     try {
       await clearForensicsStorage();
-      window.location.hash = "#home";
+      writeRoute("home", { replace: true });
       window.location.reload();
     } catch {
       setCacheClearArmed(false);

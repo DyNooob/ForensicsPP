@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
 import {
   COCOA_EPOCH_MS,
@@ -69,6 +70,11 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
   const [submittedInput, setSubmittedInput] = useStoredState("timestamp.submittedInput.v3", "");
   const [submittedBatchInput, setSubmittedBatchInput] = useStoredState("timestamp.submittedBatchInput.v3", "");
   const [page, setPage] = React.useState<TimestampPage>(() => input.trim() ? "single" : batchInput.trim() ? "batch" : "single");
+  useHomeToolDraft("timestamp", active, (draft) => {
+    setInput(draft);
+    setSubmittedInput("");
+    setPage("single");
+  });
   const [selectedCandidateKey, setSelectedCandidateKey] = React.useState("");
   const [batchFilter, setBatchFilter] = React.useState("");
   const [batchFormat, setBatchFormat] = React.useState("");

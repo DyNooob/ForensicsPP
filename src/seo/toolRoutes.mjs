@@ -32,6 +32,7 @@
 
 // toolId -> canonical, indexable slug (used for copy-link / canonical URLs).
 export const TOOL_SLUG = {
+  lookup: "lookup",
   evtx: "evtx-viewer",
   sqlite: "sqlite-forensics",
   android: "apk-signature-analyzer",
@@ -47,6 +48,7 @@ export const TOOL_SLUG = {
 // incoming `/tools/<slug>/` request. `sqlite-wal-recovery` is an alias that
 // resolves to the same `sqlite` workbench (it documents a sub-capability).
 export const SLUG_TO_TOOL = {
+  lookup: "lookup",
   "evtx-viewer": "evtx",
   "sqlite-forensics": "sqlite",
   "sqlite-wal-recovery": "sqlite",

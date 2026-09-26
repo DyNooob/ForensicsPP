@@ -44,6 +44,76 @@ export const SITE = {
 export { SLUG_TO_TOOL } from "./toolRoutes.mjs";
 
 export const seoPages = [
+  // ──────────────────────────── Lookup ───────────────────────────
+  {
+    slug: "lookup",
+    toolId: "lookup",
+    locale: "en",
+    title: "IP, Mobile, ID and Bank Card Lookup | Forensics++",
+    description:
+      "Run batch IP, mobile-prefix, Chinese ID, and bank-card checks in your browser with versioned lookup data cached on demand.",
+    h1: "IP, Mobile, ID and Bank Card Lookup",
+    intro:
+      "Forensics++ checks individual values or batches in the browser. Rule validation is local; versioned attribution data is downloaded only when needed and then cached.",
+    what: "IPv4 addresses, mainland Chinese mobile numbers and ID numbers, and bank-card numbers.",
+    extracts: [
+      "IPv4 attribution from a pinned ip2region data pack",
+      "Mobile-prefix region and carrier records from a pinned phone.dat data pack",
+      "Chinese ID structure, birth date, sequence code, check digit, and administrative-division checks",
+      "Bank BIN, card network, card type, length, and Luhn checks",
+      "CSV export and JSON copy for batch results",
+    ],
+    input: ["One value per line", "Comma-, semicolon-, or tab-separated batches"],
+    useCases: [
+      "Triage a list of network or identity indicators",
+      "Check number structure before follow-up",
+      "Export normalized lookup results",
+    ],
+    limitations: [
+      "Static IP records do not show a device's live location",
+      "Mobile carrier records may be stale after number portability",
+      "ID checks do not verify the holder's identity",
+      "A BIN does not identify a branch or cardholder location",
+    ],
+    maturity: "Triage",
+    validation: "Unit-tested",
+    relatedArtifacts: ["IP addresses", "Mobile numbers", "Chinese ID numbers", "Bank-card numbers"],
+    relatedTools: ["ioc", "urltool"],
+    ctaLabel: "Open Lookup",
+  },
+  {
+    slug: "lookup",
+    toolId: "lookup",
+    locale: "zh-CN",
+    title: "IP、手机号、身份证号与银行卡号查询 | Forensics++",
+    description:
+      "在浏览器中批量检查 IP、手机号段、身份证号和银行卡号；按需下载并缓存固定版本的查询数据。",
+    h1: "IP、手机号、身份证号与银行卡号查询",
+    intro:
+      "Forensics++ 在浏览器中处理单条或批量输入。规则核验在本地执行；固定版本的归属地数据仅在需要时下载并缓存。",
+    what: "IPv4 地址、中国大陆手机号和身份证号，以及银行卡号。",
+    extracts: [
+      "使用固定版本 ip2region 数据包查询 IPv4 记录",
+      "使用固定版本 phone.dat 数据包查询手机号段地区与运营商记录",
+      "检查身份证号结构、出生日期、顺序码、校验位和行政区划代码",
+      "查询银行卡 BIN、卡组织和卡种，并检查长度与 Luhn 规则",
+      "批量结果导出 CSV 或复制 JSON",
+    ],
+    input: ["每行一个值", "使用逗号、分号或制表符分隔的批量输入"],
+    useCases: ["整理网络或身份标识列表", "在后续核查前检查号码结构", "导出规范化查询结果"],
+    limitations: [
+      "静态 IP 记录不代表设备实时位置",
+      "手机号携号转网后运营商记录可能不准确",
+      "身份证号检查不核验持有人身份",
+      "BIN 不代表开户支行或持卡人位置",
+    ],
+    maturity: "分诊",
+    validation: "单元测试",
+    relatedArtifacts: ["IP 地址", "手机号", "中国大陆身份证号", "银行卡号"],
+    relatedTools: ["ioc", "urltool"],
+    ctaLabel: "打开查询工具",
+  },
+
   // ───────────────────────────── EVTX ─────────────────────────────
   {
     slug: "evtx-viewer",

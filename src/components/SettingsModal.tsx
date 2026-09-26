@@ -48,6 +48,7 @@ import {
   themePresets
 } from "../config/app";
 import { openSourceProjects } from "../config/openSource";
+import { inspectLookupDataPacks, type LookupDataPackStatus } from "../features/lookup/dataPacks";
 
 type SettingsPage = "appearance" | "project" | "storage" | "opensource";
 
@@ -120,13 +121,18 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [page, setPage] = React.useState<SettingsPage>("appearance");
   const [storage, setStorage] = React.useState<StorageSnapshot>({ local: 0, usage: 0, quota: 0, estimated: false });
+  const [dataPacks, setDataPacks] = React.useState<LookupDataPackStatus[]>([]);
+  const [storageRefresh, setStorageRefresh] = React.useState(0);
 
   React.useEffect(() => {
     if (!open || page !== "storage") return;
     let active = true;
     void (async () => {
       const local = localStorageBytes();
-      const estimate = await (navigator.storage?.estimate ? navigator.storage.estimate() : Promise.resolve(null)).catch(() => null);
+      const [estimate, packs] = await Promise.all([
+        (navigator.storage?.estimate ? navigator.storage.estimate() : Promise.resolve(null)).catch(() => null),
+        inspectLookupDataPacks()
+      ]);
       if (active) {
         setStorage({
           local,
@@ -134,10 +140,11 @@ export function SettingsModal({
           quota: estimate?.quota ?? 0,
           estimated: Boolean(estimate)
         });
+        setDataPacks(packs);
       }
     })();
     return () => { active = false; };
-  }, [open, page]);
+  }, [open, page, storageRefresh]);
 
   const labels = lang === "zh" ? {
     appearance: "外观",
@@ -158,6 +165,11 @@ export function SettingsModal({
     persistentDesc: "这里显示可跨刷新保留的界面数据和工作区。",
     sessionTitle: "当前会话",
     sessionDesc: "关闭工具会释放内存；支持恢复的工作区仍保存在浏览器。",
+    dataPacks: "静态数据包",
+    checkDataPacks: "检查状态",
+    cachedPack: "已缓存",
+    uncachedPack: "按需下载",
+    cacheUnavailable: "缓存不可用",
     closeTool: "关闭工具",
     closeAll: "全部关闭",
     noOpenTools: "当前没有打开的工具",
@@ -189,6 +201,11 @@ export function SettingsModal({
     persistentDesc: "Interface data and workspaces retained across reloads.",
     sessionTitle: "Current session",
     sessionDesc: "Closing a tool releases memory; restorable workspaces remain in browser storage.",
+    dataPacks: "Static data packs",
+    checkDataPacks: "Check status",
+    cachedPack: "Cached",
+    uncachedPack: "On demand",
+    cacheUnavailable: "Cache unavailable",
     closeTool: "Close tool",
     closeAll: "Close all",
     noOpenTools: "No tools are currently open",
@@ -216,6 +233,9 @@ export function SettingsModal({
     visibleOpenTools[visibleOpenTools.length - 1] = activeOpenTool;
   }
   const hiddenOpenToolCount = openTools.length - visibleOpenTools.length;
+  const dataPackNames: Record<LookupDataPackStatus["id"], string> = lang === "zh"
+    ? { ip: "IP 地址库", phone: "手机号段库", id: "行政区划库" }
+    : { ip: "IP database", phone: "Mobile prefix database", id: "Administrative divisions" };
 
   return (
     <Modal
@@ -354,6 +374,21 @@ export function SettingsModal({
                 <div><span>{labels.availableQuota}</span><strong>{storage.quota ? formatStorageMb(storage.quota) : "--"}</strong></div>
               </div>
               <div className="settings-storage-meter" aria-hidden="true"><span style={{ width: `${storage.estimated && storage.quota ? Math.max(1, Math.min(100, storage.usage / storage.quota * 100)) : 0}%` }} /></div>
+              <section className="settings-data-packs">
+                <div className="settings-session-header">
+                  <div className="settings-section-heading"><strong>{labels.dataPacks}</strong></div>
+                  <Button size="small" icon={<ReloadOutlined />} onClick={() => setStorageRefresh((value) => value + 1)}>{labels.checkDataPacks}</Button>
+                </div>
+                <div className="settings-data-pack-list">
+                  {dataPacks.map((pack) => (
+                    <div className="settings-data-pack-row" key={pack.id}>
+                      <div><strong>{dataPackNames[pack.id]}</strong><span>{pack.source}</span></div>
+                      <code>{pack.version}</code>
+                      <span>{!pack.cacheSupported ? labels.cacheUnavailable : pack.cached ? labels.cachedPack : labels.uncachedPack}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
               <div className="settings-session-header">
                 <div className="settings-section-heading">
                   <strong>{labels.sessionTitle}</strong>

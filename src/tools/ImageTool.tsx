@@ -179,6 +179,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   const abortRef = React.useRef<AbortController | null>(null);
   const guard = useStaleRunGuard(active);
   const channelTimerRef = React.useRef<number | null>(null);
+  const autoHiddenAnalysisRef = React.useRef<number | null>(null);
   const restoreStartedRef = React.useRef(false);
   const sourceRef = React.useRef<{ file: File; bytes: Uint8Array; image: HTMLImageElement | null; exif: Record<string, unknown>; rawDataUrl: string; format: string } | null>(null);
   const workspace = useToolWorkspace<ImageWorkspace>({
@@ -240,6 +241,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     setQrScanning(false);
     setImagePage("overview");
     setLoading(false);
+    autoHiddenAnalysisRef.current = null;
     if (file.size > MAX_IMAGE_FILE_BYTES) {
       setError(isEnglish ? "This image exceeds the 64 MiB browser analysis limit." : "图片超过 64 MiB，无法在浏览器中直接分析。");
       return;
@@ -396,7 +398,12 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         }, [workerBytes.buffer], controller.signal);
       }
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
-      setImageInfo((current) => current ? { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks } : current);
+      setImageInfo((current) => {
+        if (!current) return current;
+        const next = { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks };
+        publishAnalysisResult("image", buildImageEnvelope(next));
+        return next;
+      });
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -404,6 +411,15 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       if (analysisId === analysisIdRef.current) setAdvancedTask("");
     }
   };
+  React.useEffect(() => {
+    if (!active || !imageInfo || loading || advancedTask || !sourceRef.current) return;
+    if (autoHiddenAnalysisRef.current === analysisIdRef.current) return;
+    autoHiddenAnalysisRef.current = analysisIdRef.current;
+    const timer = window.setTimeout(() => void runHiddenAnalysis(), 120);
+    return () => window.clearTimeout(timer);
+    // Run once for each newly loaded image; subsequent page changes must not repeat the scan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, imageInfo?.name, loading]);
   const runChannelAnalysis = () => {
     const source = sourceRef.current;
     if (!active || !source?.image || !imageInfo || advancedTask) return;
@@ -837,7 +853,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </div>}
 
         {imagePage === "hidden" && <div className="tool-panel wide-panel image-simple-hidden-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runHiddenAnalysis()}>{advancedTask === "hidden" ? (isEnglish ? "Scanning..." : "正在扫描...") : (isEnglish ? "Scan hidden data" : "扫描隐藏数据")}</AButton><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
+          <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runHiddenAnalysis()}>{advancedTask === "hidden" ? (isEnglish ? "Scanning..." : "正在扫描...") : (isEnglish ? "Reveal common steganography" : "一键还原常见隐写")}</AButton><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
           <InfoTable rows={imageInfo.hiddenRows} />
           {imageInfo.hiddenPayloads.length > 0 && <><PanelTitle title={t.extractedPayloads} /><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Source" : "来源"}</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th></th></tr></thead><tbody>{imageInfo.hiddenPayloads.map((payload, index) => <tr key={`${payload.offset}-${index}`}><td>{payload.source}</td><td>{payload.offset}</td><td>{payload.label}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview.slice(0, 160) || "--"}</td><td><AButton variant="outlined" onClick={() => downloadHiddenPayload(payload, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div></>}
           {imageInfo.pngTextEntries.length > 0 && <><PanelTitle title={t.pngTextMetadata} /><div className="image-text-result-list">{imageInfo.pngTextEntries.map((entry) => <label key={`${entry.offset}-${entry.keyword}`}>{entry.keyword || entry.chunk}<textarea className="single-textarea compact-textarea" value={entry.text} readOnly /></label>)}</div></>}

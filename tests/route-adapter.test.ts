@@ -32,6 +32,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveToolPath,
   resolveRoute,
+  routeToolOrHome,
   toolToPrettyUrl,
   toolToHashUrl,
   isStandalone,
@@ -79,6 +80,7 @@ describe("resolveRoute (full location resolution)", () => {
     const r = resolveRoute({ protocol: "https:", pathname: "/" });
     expect(r.toolId).toBeNull();
     expect(r.unknown).toBe(false);
+    expect(routeToolOrHome(r.toolId)).toBe("home");
   });
 
   it("standalone (file://): falls back to the hash", () => {

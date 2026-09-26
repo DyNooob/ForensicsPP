@@ -21,7 +21,8 @@
 
 import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
-import { AButton, ALinearProgress, ATextField, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
+import { AButton, ALinearProgress, ATextField, InfoTable, ToolPanelHeader } from "../components/ui";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import type { RegistryHive } from "../features/registry/analyzer";
 import { buildRegistryEnvelope } from "../features/registry/envelope";
 import { copy } from "../i18n";
@@ -128,6 +129,17 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
       }
     }
   };
+  const openRef = React.useRef(open);
+  openRef.current = open;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("registry");
+      if (handoff) void openRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("registry", consume);
+  }, [active]);
   const clear = () => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -151,7 +163,7 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
 
   return <div className="tool-grid browser-tool-workbench registry-browser-workbench">
     <section className="tool-panel wide-panel browser-source-panel">
-      <div className="panel-heading-row"><PanelTitle title={t.registry_hive_browser} />{hive && <span className="status-pill">{hive.keys.length} {t.keys} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
+      <ToolPanelHeader title={t.registry_hive_browser} subtitle={hive ? `${hive.keys.length} ${t.keys} · ${formatBytes(file?.size ?? fileMeta?.size ?? 0)}` : undefined} />
       <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
       {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{t.open_a_registry_hive}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
       <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="text" disabled={!file && !hive} onClick={clear}>{t.clear}</AButton></div>

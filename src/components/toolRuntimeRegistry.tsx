@@ -41,6 +41,7 @@ const BrowserArtifactTool = React.lazy(() => import("../tools/BrowserArtifactToo
 const EvtxTool = React.lazy(() => import("../tools/EvtxTool").then((module) => ({ default: module.EvtxTool })));
 const DocumentForensicsTool = React.lazy(() => import("../tools/DocumentForensicsTool").then((module) => ({ default: module.DocumentForensicsTool })));
 const IocTool = React.lazy(() => import("../tools/IocTool").then((module) => ({ default: module.IocTool })));
+const LookupTool = React.lazy(() => import("../tools/LookupTool").then((module) => ({ default: module.LookupTool })));
 const EmailTool = React.lazy(() => import("../tools/EmailTool").then((module) => ({ default: module.EmailTool })));
 const TimestampTool = React.lazy(() => import("../tools/TimestampTool").then((module) => ({ default: module.TimestampTool })));
 const TimelineTool = React.lazy(() => import("../tools/TimelineTool").then((module) => ({ default: module.TimelineTool })));
@@ -118,6 +119,7 @@ export const toolRuntimeRegistry: Record<ToolId, RuntimeRenderer> = {
   documentforensics: ({ t, active }) => <DocumentForensicsTool t={t} active={active} />,
   android: ({ t, active }) => <AndroidManifestTool t={t} active={active} />,
   ioc: ({ t, active }) => <IocTool t={t} active={active} />,
+  lookup: ({ t, lang, active }) => <LookupTool t={t} lang={lang} active={active} />,
   email: ({ t, active }) => <EmailTool t={t} active={active} />,
   urltool: ({ t, active }) => <UrlTool t={t} active={active} />,
   http: ({ t, active }) => <HttpTool t={t} active={active} />,

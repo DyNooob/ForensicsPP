@@ -29,4 +29,13 @@ describe("central analyzer routing", () => {
     expect(analyzerForArtifact({ label: "ELF", extension: "elf" })).toBe("binary");
     expect(analyzerForArtifact({ label: "APK / ZIP archive", extension: "apk" })).toBe("android");
   });
+
+  it("routes common evidence files opened from the home workbench", () => {
+    expect(analyzerForArtifact({ label: "Security.evtx", extension: "evtx" })).toBe("evtx");
+    expect(analyzerForArtifact({ label: "com.apple.finder.plist", extension: "plist" })).toBe("plist");
+    expect(analyzerForArtifact({ label: "message.eml", extension: "eml", mime: "message/rfc822" })).toBe("email");
+    expect(analyzerForArtifact({ label: "NTUSER.DAT", extension: "dat" })).toBe("registry");
+    expect(analyzerForArtifact({ label: "History" })).toBe("browserartifacts");
+    expect(analyzerForArtifact({ label: "memory.dmp", extension: "dmp" })).toBe("memory");
+  });
 });

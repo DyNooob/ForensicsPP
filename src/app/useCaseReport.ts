@@ -20,7 +20,7 @@
  */
 
 import React from "react";
-import { getToolTitle as resolveToolTitle } from "../config/app";
+import { getToolTitle as resolveToolTitle, tools } from "../config/app";
 import type { ToolDefinition, ToolId } from "../config/app";
 import { copy } from "../i18n";
 import { useStoredState } from "../utils/storage";
@@ -30,6 +30,7 @@ import { fingerprintEvidenceFiles, rememberedEvidenceFiles } from "../features/r
 import { rememberedTimelineEvents } from "../features/reporter/timeline";
 import { currentAnalysisResult, subscribeAnalysisResult } from "../features/analysis/resultStore";
 import { analysisResultText, envelopeReportMarkdown } from "../features/analysis/result";
+import { toolToShareUrl } from "../core/routeAdapter";
 
 function getToolTitle(tool: ToolDefinition, lang: Lang) {
   return resolveToolTitle(tool, lang, copy[lang]);
@@ -156,22 +157,24 @@ export function useCaseReport({
   const clearCaseNotes = () => setCaseNotes([]);
   React.useEffect(() => {
     if (!autoSaveEvidence) return;
-    const unsubscribe = subscribeAnalysisResult("*", () => {
-      const result = currentAnalysisResult(activeTool);
+    const unsubscribe = subscribeAnalysisResult("*", (resultToolId) => {
+      const result = currentAnalysisResult(resultToolId);
       const runId = result?.run.runId;
       if (!result || !runId || capturedRunIds.current.has(runId)) return;
+      const resultTool = tools.find((tool) => tool.id === resultToolId);
+      if (!resultTool) return;
       capturedRunIds.current.add(runId);
       const createdAt = new Date().toISOString();
       const note: CaseNote = {
-        id: `${activeTool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        tool: getToolTitle(active, lang),
+        id: `${resultToolId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tool: getToolTitle(resultTool, lang),
         title: result.summary.title,
         content: analysisResultText(result, t),
         summary: result.summary.text,
         markdown: envelopeReportMarkdown(result, t),
-        description: active ? t[active.desc] : "",
-        route: `#${activeTool}`,
-        sourceUrl: window.location.href,
+        description: t[resultTool.desc],
+        route: `#${resultToolId}`,
+        sourceUrl: toolToShareUrl(resultToolId, window.location.origin),
         ...(result.source.length ? {
           evidenceFiles: result.source.map((file) => ({
             name: file.name,
@@ -190,7 +193,7 @@ export function useCaseReport({
       setCaseNotes((current) => [note, ...current].slice(0, 40));
     });
     return unsubscribe;
-  }, [autoSaveEvidence, activeTool, lang, t, active, setCaseNotes]);
+  }, [autoSaveEvidence, lang, t, setCaseNotes]);
 
   return {
     reportAddBusy,

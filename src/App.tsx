@@ -179,8 +179,8 @@ export function App() {
       </a>
       <aside
         className="tool-sidebar"
-        aria-hidden={sidebarCollapsed && !isNarrowShell ? true : undefined}
-        inert={sidebarCollapsed && !isNarrowShell ? true : undefined}
+        aria-hidden={sidebarCollapsed ? true : undefined}
+        inert={sidebarCollapsed ? true : undefined}
       >
         <Sidebar
           t={t}
@@ -197,6 +197,14 @@ export function App() {
           toolTitle={toolTitle}
         />
       </aside>
+      {isNarrowShell && !sidebarCollapsed && (
+        <button
+          className="sidebar-scrim"
+          type="button"
+          aria-label={t.collapseSidebar}
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
 
       <main className="tool-main" id="main-content" tabIndex={-1}>
         <div className="app-top-region">

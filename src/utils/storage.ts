@@ -70,6 +70,16 @@ export function shouldUseIndexedState(serialized: string) {
   return serialized.length > INDEXED_STATE_THRESHOLD;
 }
 
+export function isForensicsDataCache(cacheName: string) {
+  return cacheName.startsWith("forensicspp-data-") || cacheName.startsWith("forensicspp-lookup-data-");
+}
+
+export async function clearForensicsDataCaches() {
+  if (typeof caches === "undefined") return;
+  const cacheNames = await caches.keys();
+  await Promise.all(cacheNames.filter(isForensicsDataCache).map((cacheName) => caches.delete(cacheName)));
+}
+
 export function parseStoredState<T>(serialized: string | null, isValid?: StoredStateValidator<T>): { found: boolean; value?: T } {
   if (serialized == null) return { found: false };
   try {
@@ -219,6 +229,7 @@ export async function clearForensicsStorage() {
     .forEach((key) => window.localStorage.removeItem(key));
   await Promise.allSettled(indexedStateQueues.values());
   await clearToolSessions();
+  await clearForensicsDataCaches();
   indexedStateKeys.clear();
 }
 

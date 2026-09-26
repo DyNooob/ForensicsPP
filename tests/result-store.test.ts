@@ -28,7 +28,8 @@ import {
   clearAnalysisResults,
   currentAnalysisResult,
   currentAnalysisResults,
-  publishAnalysisResult
+  publishAnalysisResult,
+  subscribeAnalysisResult
 } from "../src/features/analysis/resultStore";
 
 function makeResult(toolId: "binary", source: AnalysisSource[], label: string): AnalysisEnvelope {
@@ -93,5 +94,13 @@ describe("result store — evidence + run dimensions (beta.6 P0-4)", () => {
     publishAnalysisResult("binary", makeResult("binary", evidenceB, "b"));
     const latest = currentAnalysisResults().find((row) => row.toolId === "binary");
     expect(latest?.result.id).toBe("binary-b");
+  });
+
+  it("tells wildcard subscribers which tool produced the result", () => {
+    const notified: string[] = [];
+    const unsubscribe = subscribeAnalysisResult("*", (toolId) => notified.push(toolId));
+    publishAnalysisResult("binary", makeResult("binary", evidenceA, "subscriber"));
+    unsubscribe();
+    expect(notified).toEqual(["binary"]);
   });
 });

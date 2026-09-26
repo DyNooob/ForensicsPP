@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import { analyzeIocs, iocRecordsToStixBundle } from "../features/ioc/analyzer";
 import { buildIocEnvelope } from "../features/ioc/envelope";
@@ -79,6 +80,11 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   const [source, setSource] = useStoredState("ioc.source.v2", "pasted text");
   const [analyzedText, setAnalyzedText] = useStoredState("ioc.analyzedText.v2", "");
   const [analyzedSource, setAnalyzedSource] = useStoredState("ioc.analyzedSource.v2", "pasted text");
+  useHomeToolDraft("ioc", active, (draft) => {
+    setText(draft);
+    setSource("pasted text");
+    setAnalyzedText("");
+  });
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [selectedId, setSelectedId] = React.useState("");

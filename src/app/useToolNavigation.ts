@@ -28,11 +28,11 @@ import {
   tools,
   visibleTools,
 } from "../config/app";
-import { resolveCurrentRoute, writeRoute } from "../core/routeAdapter";
+import { resolveCurrentRoute, routeToolOrHome, writeRoute } from "../core/routeAdapter";
 import type { ToolCategory, ToolDefinition, ToolId } from "../config/app";
 import { resolveRetainedTools } from "../core/runtime";
 import { useStoredState } from "../utils/storage";
-import { isToolIdValue, isToolIdArrayValue } from "../utils/appGuards";
+import { isToolIdArrayValue } from "../utils/appGuards";
 import { copy } from "../i18n";
 import type { Lang } from "../models";
 import type { ToolGroup as SidebarToolGroup } from "../components/Sidebar";
@@ -48,13 +48,12 @@ export function useToolNavigation({
   query: string;
   lang: Lang;
 }) {
-  const [storedActiveTool, setStoredActiveTool] = useStoredState<ToolId>("app.activeTool", "home", isToolIdValue);
   const initialRoute = resolveCurrentRoute();
   const [routeTool, setRouteTool] = React.useState<ToolId | null>(initialRoute.toolId);
   const [routeUnknown, setRouteUnknown] = React.useState<boolean>(initialRoute.unknown);
   const [recentTools, setRecentTools] = useStoredState<ToolId[]>("app.recentTools", [], isToolIdArrayValue);
   const [favoriteTools, setFavoriteTools] = useStoredState<ToolId[]>("app.favoriteTools", [], isToolIdArrayValue);
-  const activeTool = routeTool ?? (tools.some((tool) => tool.id === storedActiveTool) ? canonicalToolId(storedActiveTool) : "home");
+  const activeTool = routeToolOrHome(routeTool);
   const [mountedTools, setMountedTools] = React.useState<ToolId[]>(() => [activeTool]);
   const [dirtyTools, setDirtyTools] = React.useState<ToolId[]>([]);
   const [pendingToolClose, setPendingToolClose] = React.useState<ToolId[] | null>(null);
@@ -78,7 +77,6 @@ export function useToolNavigation({
     const canonical = canonicalToolId(tool);
     setRouteTool(canonical);
     setRouteUnknown(false);
-    setStoredActiveTool(canonical);
     rememberToolUse(canonical);
     writeRoute(canonical, { replace: options?.replaceHash });
     if (isNarrowShell) setSidebarCollapsed(true);
@@ -165,7 +163,6 @@ export function useToolNavigation({
       setRouteUnknown(r.unknown);
       setRouteTool(r.toolId);
       if (r.toolId) {
-        setStoredActiveTool(r.toolId);
         rememberToolUse(r.toolId);
       }
     };

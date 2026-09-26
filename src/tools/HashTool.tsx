@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ACheckbox, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
@@ -93,6 +94,10 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
   const [hashCase, setHashCase] = useStoredState<"lower" | "upper">("hash.case", "lower");
   const [selectedAlgorithms, setSelectedAlgorithms] = useStoredState<string[]>("hash.algorithms", ["sha256"]);
   const [expectedHash, setExpectedHash] = useStoredState("hash.expectedHash.v2", "");
+  useHomeToolDraft("hash", active, (draft) => {
+    setExpectedHash(draft);
+    setMode("file");
+  });
   const [batchRows, setBatchRows] = React.useState<BatchHashRow[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [textHashes, setTextHashes] = React.useState<Record<string, string> | null>(null);

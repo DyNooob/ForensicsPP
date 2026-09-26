@@ -40,11 +40,12 @@ type StoredRun = { current: AnalysisEnvelope | null; runs: AnalysisEnvelope[] };
  */
 const store = new Map<string, Map<ToolId, StoredRun>>();
 const latestByTool = new Map<ToolId, { key: string; result: AnalysisEnvelope }>();
-const listeners = new Map<ToolId | "*", Set<() => void>>();
+type ResultListener = (toolId: ToolId) => void;
+const listeners = new Map<ToolId | "*", Set<ResultListener>>();
 
 function notify(toolId: ToolId) {
-  listeners.get(toolId)?.forEach((listener) => listener());
-  listeners.get("*")?.forEach((listener) => listener());
+  listeners.get(toolId)?.forEach((listener) => listener(toolId));
+  listeners.get("*")?.forEach((listener) => listener(toolId));
 }
 
 function caseSafeValue(value: unknown, depth = 0): unknown {
@@ -170,8 +171,8 @@ export function restoreAnalysisResultSnapshots(value: unknown) {
   return restored;
 }
 
-export function subscribeAnalysisResult(toolId: ToolId | "*", listener: () => void) {
-  const bucket = listeners.get(toolId) ?? new Set<() => void>();
+export function subscribeAnalysisResult(toolId: ToolId | "*", listener: ResultListener) {
+  const bucket = listeners.get(toolId) ?? new Set<ResultListener>();
   bucket.add(listener);
   listeners.set(toolId, bucket);
   return () => {

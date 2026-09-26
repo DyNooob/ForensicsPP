@@ -31,6 +31,7 @@ import {
 } from "../features/browserArtifacts/analyzer";
 import { buildBrowserArtifactEnvelope } from "../features/browserArtifacts/envelope";
 import { useStaleRunGuard } from "../core/runtime";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { publishAnalysisResult } from "../features/analysis/resultStore";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { useToolWorkspace } from "../utils/useToolWorkspace";
@@ -85,7 +86,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
   });
 
   const queueFiles = (files?: FileList | File[] | null) => {
-    if (!active) return;
+    if (!active) return [];
     cancel();
     workspace.clear();
     const next = Array.from(files ?? []).filter((file) => {
@@ -103,7 +104,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       setPage(0);
       setSelectedRecordId("");
       setError(t.no_supported_browser_data_file_was_selected);
-      return;
+      return [];
     }
     const tooLarge = next.find((file) => file.size > MAX_FILE_BYTES);
     const total = next.reduce((sum, file) => sum + file.size, 0);
@@ -117,7 +118,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
       setError(tooLarge
         ? (english ? `${tooLarge.name} exceeds the 128 MiB per-file limit.` : `${tooLarge.name} 超过单文件 128 MiB 限制。`)
         : (t.the_selected_files_exceed_the_256_mib_total_limit));
-      return;
+      return [];
     }
     setSelectedFiles(next);
     setAnalysis(null);
@@ -126,10 +127,12 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     setPage(0);
     setSelectedRecordId("");
     setError("");
+    return next;
   };
 
-  const analyze = async () => {
-    if (!active || !selectedFiles.length || loading) return;
+  const analyze = async (files?: File[]) => {
+    const sourceFiles = files ?? selectedFiles;
+    if (!active || !sourceFiles.length || (!files && loading)) return;
     const requestId = guard.next();
     const controller = new AbortController();
     abortRef.current?.abort();
@@ -140,9 +143,9 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     try {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const inputs: Array<Omit<BrowserArtifactInput, "bytes"> & { bytes: ArrayBuffer }> = [];
-      for (const [index, file] of selectedFiles.entries()) {
+      for (const [index, file] of sourceFiles.entries()) {
         if (controller.signal.aborted) return;
-        setProgress(english ? `Reading ${index + 1}/${selectedFiles.length}: ${file.name}` : `正在读取 ${index + 1}/${selectedFiles.length}：${file.name}`);
+        setProgress(english ? `Reading ${index + 1}/${sourceFiles.length}: ${file.name}` : `正在读取 ${index + 1}/${sourceFiles.length}：${file.name}`);
         inputs.push({
           name: file.name,
           path: file.webkitRelativePath || file.name,
@@ -212,6 +215,21 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
     abortRef.current = null;
     setLoading(false);
     setProgress("");
+  }, [active]);
+  const queueFilesRef = React.useRef(queueFiles);
+  queueFilesRef.current = queueFiles;
+  const analyzeRef = React.useRef(analyze);
+  analyzeRef.current = analyze;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("browserartifacts");
+      if (!handoff) return;
+      const files = queueFilesRef.current([handoff.file]);
+      if (files.length) void analyzeRef.current(files);
+    };
+    consume();
+    return subscribeToolHandoff("browserartifacts", consume);
   }, [active]);
 
   const categoryRecords = React.useMemo(() => analysis && view !== "overview" && view !== "files"

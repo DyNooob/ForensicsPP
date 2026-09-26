@@ -25,6 +25,7 @@
 // hardcode a release version here: a stale literal would make the source SW
 // share a cache namespace with a shipped build.
 const CACHE_VERSION = "forensicspp-dev";
+const PERSISTENT_CACHE_PREFIXES = ["forensicspp-data-", "forensicspp-lookup-data-"];
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -53,7 +54,10 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("forensicspp-") && key !== CACHE_VERSION).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith("forensicspp-") && key !== CACHE_VERSION)
+        .filter((key) => !PERSISTENT_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix)))
+        .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

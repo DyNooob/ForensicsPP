@@ -35,6 +35,7 @@ export const openSourceProjects: OpenSourceProject[] = [
   { name: "Ant Design", category: "runtime", purpose: { zh: "界面组件与主题系统", en: "UI components and theming" }, license: "MIT", repository: "https://github.com/ant-design/ant-design", version: "5" },
   { name: "Ant Design Icons", category: "runtime", purpose: { zh: "界面图标", en: "Interface icons" }, license: "MIT", repository: "https://github.com/ant-design/ant-design-icons", version: "5" },
   { name: "Ant Design React 19 Patch", category: "runtime", purpose: { zh: "React 19 兼容层", en: "React 19 compatibility" }, license: "MIT", repository: "https://github.com/ant-design/v5-patch-for-react-19", version: "1" },
+  { name: "bankcard", category: "runtime", purpose: { zh: "银行卡 BIN 发卡行与卡种识别", en: "Bank-card BIN issuer and card-type lookup" }, license: "MIT", repository: "https://github.com/caijf/bankcard", version: "3.1.9" },
   { name: "bcrypt.js", category: "runtime", purpose: { zh: "bcrypt 生成与本地验证", en: "bcrypt generation and local verification" }, license: "BSD-3-Clause", repository: "https://github.com/dcodeIO/bcrypt.js", version: "3" },
   { name: "CFB", category: "runtime", purpose: { zh: "OLE 复合文件与文档流解析", en: "OLE compound file and document stream parsing" }, license: "Apache-2.0", repository: "https://github.com/SheetJS/js-cfb", version: "1.2" },
   { name: "CryptoJS", category: "runtime", purpose: { zh: "常用摘要、HMAC 与对称密码", en: "Digests, HMAC, and symmetric crypto" }, license: "MIT", repository: "https://github.com/brix/crypto-js", version: "4" },
@@ -58,6 +59,7 @@ export const openSourceProjects: OpenSourceProject[] = [
   { name: "DefinitelyTyped: React", category: "development", purpose: { zh: "React TypeScript 类型定义", en: "React TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react" },
   { name: "DefinitelyTyped: React DOM", category: "development", purpose: { zh: "React DOM TypeScript 类型定义", en: "React DOM TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom" },
   { name: "DefinitelyTyped: CryptoJS", category: "development", purpose: { zh: "CryptoJS TypeScript 类型定义", en: "CryptoJS TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/crypto-js" },
+  { name: "DefinitelyTyped: Node.js", category: "development", purpose: { zh: "Node.js TypeScript 类型定义", en: "Node.js TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node", version: "22" },
   { name: "rc-component QRCode", category: "development", purpose: { zh: "布局审计二维码样本生成", en: "QR fixtures for layout audits" }, license: "MIT", repository: "https://github.com/react-component/qrcode" },
   { name: "SQLite", category: "development", purpose: { zh: "布局审计数据库样本生成", en: "SQLite fixtures for layout audits" }, license: "Public Domain", repository: "https://github.com/sqlite/sqlite" }
 ];

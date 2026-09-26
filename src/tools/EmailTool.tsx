@@ -22,7 +22,8 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { zipSync } from "fflate";
-import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
+import { AButton, ALinearProgress, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import {
   emailAttachmentPreferredExtension,
   emailSummaryValue,
@@ -281,6 +282,17 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
       }
     }
   };
+  const handleFileRef = React.useRef(handleFile);
+  handleFileRef.current = handleFile;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("email");
+      if (handoff) void handleFileRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("email", consume);
+  }, [active]);
 
   const clearEmail = () => {
     guard.next();
@@ -388,7 +400,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   return (
     <div className={`tool-grid email-workbench ${parsed ? "has-email" : "empty-email"}`}>
       <div className="tool-panel wide-panel email-source-panel">
-        <PanelTitle title={parsed ? (t.email_2) : (t.open_email)} />
+        <ToolPanelHeader title={parsed ? (t.email_2) : (t.open_email)} subtitle={parsed ? `${sourceFormat.toUpperCase()} · ${formatBytes(parsed.rawSize)}` : undefined} />
         <input
           className="hidden-file-input"
           ref={inputRef}

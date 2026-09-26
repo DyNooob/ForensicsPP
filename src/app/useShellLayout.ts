@@ -28,12 +28,12 @@ export function useShellLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredState("app.sidebarCollapsed", false, isBooleanValue);
   const [isNarrowShell, setIsNarrowShell] = React.useState(() => {
     if (typeof window === "undefined") return false;
-    return window.matchMedia("(max-width: 900px)").matches;
+    return window.matchMedia("(max-width: 1120px)").matches;
   });
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
 
   React.useEffect(() => {
-    const media = window.matchMedia("(max-width: 900px)");
+    const media = window.matchMedia("(max-width: 1120px)");
     const handleChange = () => {
       setIsNarrowShell(media.matches);
       if (media.matches) setSidebarCollapsed(true);

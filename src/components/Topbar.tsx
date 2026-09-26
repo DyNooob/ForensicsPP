@@ -24,6 +24,7 @@ import { Drawer } from "antd";
 import { CodeOutlined, FileAddOutlined, InboxOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { ASegmentedButton, ASegmentedGroup } from "./ui";
 import { GithubIconButton } from "./GithubIconButton";
+import { ClockHealth } from "./ClockHealth";
 import { useEvidenceInbox } from "../app/useEvidenceInbox";
 import type { ToolDefinition } from "../config/app";
 import type { Translation } from "../i18n";
@@ -82,12 +83,12 @@ export function Topbar({
           {collapsed ? <MenuUnfoldOutlined aria-hidden="true" /> : <MenuFoldOutlined aria-hidden="true" />}
         </button>
         <div className="tool-title-block">
-          <span className="tool-kicker">{t[active.category]}</span>
-          <strong className="page-title">{toolTitle(active)}</strong>
-          <span className="tool-subtitle">{t[active.desc]}</span>
+          {activeTool !== "home" && <span className="tool-kicker">{t[active.category]}</span>}
+          <strong className="page-title">{activeTool === "home" ? t.product : toolTitle(active)}</strong>
           {toolLinkMessage && <span className="tool-link-feedback">{toolLinkMessage}</span>}
         </div>
         <div className="top-actions">
+          <ClockHealth lang={lang} />
           <div className="top-action-group">
             <GithubIconButton label={t.repositoryLabel} />
             <button

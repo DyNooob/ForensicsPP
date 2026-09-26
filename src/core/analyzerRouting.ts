@@ -42,6 +42,12 @@ function bytesContainAscii(bytes: Uint8Array | undefined, text: string) {
 
 export function analyzerForArtifact(input: ArtifactRoutingInput): ToolId {
   const descriptor = `${input.label} ${input.extension ?? ""} ${input.mime ?? ""}`.toLowerCase();
+  if (/\bevtx\b|windows event log/.test(descriptor)) return "evtx";
+  if (/\.plist\b|\bbplist\b|property list/.test(descriptor)) return "plist";
+  if (/\.eml\b|\.msg\b|message\/rfc822|ms-outlook/.test(descriptor)) return "email";
+  if (/\bntuser\.dat\b|\b(?:software|system|sam|security)\.hiv\b|registry hive|\.hiv\b/.test(descriptor)) return "registry";
+  if (/\b(?:history|cookies|login data|web data|places\.sqlite|cookies\.sqlite|bookmarks|preferences|logins\.json)\b/.test(descriptor)) return "browserartifacts";
+  if (/\.dmp\b|\.mdmp\b|\.mem\b|memory dump|minidump/.test(descriptor)) return "memory";
   if (/sqlite|\.db\b/.test(descriptor)) return "sqlite";
   if (/png|jpeg|jpg|gif|webp|bmp|image\//.test(descriptor)) return "image";
   if (/pdf|ole|officedocument|msword|document/.test(descriptor)) return "documentforensics";

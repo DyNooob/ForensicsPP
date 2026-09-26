@@ -1479,18 +1479,6 @@ details.tool-panel:not([open]) > :not(summary) {
   grid-row: 1;
 }
 
-.home-kicker {
-  display: inline-flex;
-  width: fit-content;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 36%, var(--app-line));
-  border-radius: var(--app-radius-sm);
-  background: color-mix(in srgb, var(--app-primary-soft) 72%, var(--app-surface));
-  color: var(--app-primary);
-  padding: 4px 9px;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .home-hero-copy h1,
 .home-hero-copy h2 {
   margin: 4px 0 0;

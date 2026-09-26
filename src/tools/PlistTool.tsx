@@ -21,7 +21,8 @@
 
 import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
-import { AButton, ALinearProgress, ATextField, PanelTitle } from "../components/ui";
+import { AButton, ALinearProgress, ATextField, ToolPanelHeader } from "../components/ui";
+import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import type { PlistWorkerRequest } from "../features/plist/plist.worker";
 import { plistChildren, plistJson, plistPreview, plistType, type PlistValue } from "../features/plist/analyzer";
 import { buildPlistEnvelope } from "../features/plist/envelope";
@@ -128,6 +129,17 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
       if (requestId === requestRef.current) setLoading(false);
     }
   };
+  const openRef = React.useRef(open);
+  openRef.current = open;
+  React.useEffect(() => {
+    if (!active) return;
+    const consume = () => {
+      const handoff = takeToolHandoff("plist");
+      if (handoff) void openRef.current(handoff.file);
+    };
+    consume();
+    return subscribeToolHandoff("plist", consume);
+  }, [active]);
   const clear = () => {
     requestRef.current += 1;
     abortRef.current?.abort();
@@ -144,7 +156,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
   return (
     <div className="tool-grid browser-tool-workbench">
       <div className="tool-panel wide-panel browser-source-panel">
-        <div className="panel-heading-row"><PanelTitle title={t.plist_browser} />{root !== undefined && <span className="status-pill">{format.toUpperCase()} · {formatBytes(file?.size ?? fileMeta?.size ?? 0)}</span>}</div>
+        <ToolPanelHeader title={t.plist_browser} subtitle={root !== undefined ? `${format.toUpperCase()} · ${formatBytes(file?.size ?? fileMeta?.size ?? 0)}` : undefined} />
         <input ref={inputRef} className="hidden-file-input" type="file" aria-hidden="true" tabIndex={-1} accept=".plist,.strings,.xml,application/x-plist" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void open(file); }} />
         {!current && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{file?.name || (t.open_a_plist_file)}</strong><span>XML · bplist00</span></div>}
         <div className="action-row"><AButton variant="filled" disabled={loading} onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="outlined" disabled={root === undefined} onClick={exportData}><DownloadOutlined /> JSON</AButton><AButton variant="text" disabled={!file && root === undefined && !error} onClick={clear}>{t.clear}</AButton></div>

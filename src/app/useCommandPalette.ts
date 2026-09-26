@@ -24,6 +24,7 @@ import { getToolTitle as resolveToolTitle, toolTitleOverrides, visibleTools } fr
 import type { ToolDefinition, ToolId } from "../config/app";
 import { copy } from "../i18n";
 import { clearForensicsStorage } from "../utils/storage";
+import { writeRoute } from "../core/routeAdapter";
 import type { AppCommand, Lang } from "../models";
 
 function getToolTitle(tool: ToolDefinition, lang: Lang) {
@@ -140,7 +141,7 @@ export function useCommandPalette({
         run: () => {
           void clearForensicsStorage().then(() => {
             // Reload so mounted tools cannot write their in-memory state back after the clear.
-            window.location.hash = "#home";
+            writeRoute("home", { replace: true });
             window.location.reload();
           }).catch(() => {
             setCacheClearError(true);

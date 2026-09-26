@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
 import { analyzeBasicJson, type JsonBasicPath, type JsonBasicResult } from "../features/json/basic";
@@ -50,6 +51,10 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
   const [input, setInput] = useStoredState("json.input.v2", "");
   const [analyzedInput, setAnalyzedInput] = useStoredState("json.analyzedInput.v2", "");
   const [storedMode, setStoredMode] = useStoredState("json.outputMode", "format");
+  useHomeToolDraft("json", active, (draft) => {
+    setInput(draft);
+    setAnalyzedInput("");
+  });
   const [filter, setFilter] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("");
   const [selectedPath, setSelectedPath] = React.useState("");

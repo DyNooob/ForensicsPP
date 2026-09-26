@@ -123,6 +123,11 @@ export function resolveCurrentRoute(): RouteResolution {
   });
 }
 
+/** The URL is authoritative: a route with no tool always opens Home. */
+export function routeToolOrHome(toolId: ToolId | null): ToolId {
+  return toolId ?? "home";
+}
+
 /** Canonical online pretty URL for a tool (no origin). Home → `/`. */
 export function toolToPrettyUrl(toolId: ToolId): string {
   const canonical = canonicalToolId(toolId);

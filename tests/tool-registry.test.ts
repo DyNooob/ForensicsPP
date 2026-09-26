@@ -32,7 +32,7 @@ const CATEGORIES = ["analysis", "transform", "network", "system", "integration"]
 const MATURITIES = ["stable", "triage", "experimental"] as const;
 const VALIDATIONS = ["unvalidated", "unit-tested", "fixture-validated", "cross-validated"] as const;
 
-// The 18 canonical forensic analyzers that genuinely publish a structured
+// Canonical forensic analyzers that genuinely publish a structured
 // AnalysisEnvelope (verified by grepping `publishAnalysisResult` calls in
 // src/tools). `bulk` sets supportsResult:false but DOES publish an envelope, so it
 // is included; its envelope carries real byte-offset provenance for scanned artifacts.
@@ -45,6 +45,7 @@ const EXPECTED_ENVELOPE_EMITTERS = [
   "evtx",
   "image",
   "ioc",
+  "lookup",
   "memory",
   "sqlite",
   "windows",
@@ -129,8 +130,8 @@ describe("tool registry metadata model (beta.6 correction)", () => {
       expect(analyzerIds.has(id), `${id} emits an envelope so it must be a forensic analyzer`).toBe(true);
     }
     // Honest metric: X of Y canonical forensic analyzers emit an AnalysisEnvelope.
-    // After B6-B1, all 18 canonical analyzers (including registry/plist/bulk) migrate.
-    expect(emitters.length, "envelope emitter count (X)").toBe(18);
-    expect(canonicalForensicAnalyzers().length, "canonical forensic analyzer count (Y)").toBe(18);
+    // All canonical analyzers (including registry/plist/bulk/lookup) publish an envelope.
+    expect(emitters.length, "envelope emitter count (X)").toBe(19);
+    expect(canonicalForensicAnalyzers().length, "canonical forensic analyzer count (Y)").toBe(19);
   });
 });

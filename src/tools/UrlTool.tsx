@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { useStoredState } from "../utils/storage";
@@ -42,6 +43,7 @@ function safeDecode(value: string) {
 }
 
 export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [input, setInput] = useStoredState("url.input.v4", "");
+  useHomeToolDraft("urltool", active, setInput);
   const parsed = React.useMemo(() => {
     if (!active) return { url: null as URL | null, normalized: "", error: "" };
     const raw = refang(input);
