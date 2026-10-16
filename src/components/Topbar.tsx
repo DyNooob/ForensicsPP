@@ -90,7 +90,7 @@ export function Topbar({
           {toolLinkMessage && <span className="tool-link-feedback">{toolLinkMessage}</span>}
         </div>
         <div className="top-actions">
-          <PasteButton english={lang === "en"} />
+          <PasteButton english={lang === "en"} iconOnly />
           <ClockHealth lang={lang} />
           <div className="top-action-group">
             <GithubIconButton label={t.repositoryLabel} />

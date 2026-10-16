@@ -31,8 +31,20 @@ import { launchTarget } from "../core/launchTarget";
 import { saveHomeToolDraft } from "../app/useHomeToolDraft";
 import type { ToolId } from "../config/app";
 
-export function PasteButton({ english }: { english: boolean }) {
-  return <AButton className="clipboard-paste-button" variant="outlined" aria-label={english ? "Paste image, file or text" : "粘贴图片、文件或文字"} onMouseDown={(event) => event.preventDefault()} onClick={requestClipboardImport} title={english ? "Paste image, file or text · Ctrl/Cmd+V" : "粘贴图片、文件或文字 · Ctrl/Cmd+V"}><span aria-hidden="true">⎘</span><span>{english ? "Paste" : "粘贴"}</span></AButton>;
+function PasteIcon() {
+  return <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3" /><rect x="9" y="2" width="6" height="6" rx="1.5" /><path d="M8 12h8M8 16h6" /></svg>;
+}
+
+export function PasteButton({ english, iconOnly = false }: { english: boolean; iconOnly?: boolean }) {
+  const label = english ? "Paste image, file or text" : "粘贴图片、文件或文字";
+  const shared = {
+    "aria-label": label,
+    title: `${label} · Ctrl/Cmd+V`,
+    onMouseDown: (event: React.MouseEvent<HTMLElement>) => event.preventDefault(),
+    onClick: requestClipboardImport
+  };
+  if (iconOnly) return <button {...shared} type="button" className="top-action-icon clipboard-paste-button"><PasteIcon /></button>;
+  return <AButton {...shared} className="clipboard-paste-button" variant="outlined" icon={<PasteIcon />}>{english ? "Paste" : "粘贴"}</AButton>;
 }
 
 export function ClipboardImport({ activeTool, english, enabled, onSelectTool, onOpenFiles }: {

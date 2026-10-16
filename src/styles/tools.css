@@ -5651,8 +5651,6 @@ textarea {
 .clipboard-context-menu button:hover, .clipboard-context-menu button:focus-visible { background: var(--app-primary-soft); outline: 2px solid var(--app-primary); outline-offset: -2px; }
 .clipboard-context-menu kbd { color: var(--app-muted); font-size: 11px; }
 @media (max-width: 680px) {
-  .tool-topbar .clipboard-paste-button { width: 36px; padding-inline: 8px; }
-  .tool-topbar .clipboard-paste-button span:last-child { display: none; }
   .image-simple-overview { grid-template-columns: minmax(0, 1fr); }
   .image-viewer-toolbar { align-items: flex-start; }
   .image-viewer-viewport { height: 320px; }
