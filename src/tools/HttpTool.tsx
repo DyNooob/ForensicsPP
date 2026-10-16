@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { formatBytes } from "../utils/files";
@@ -161,6 +162,7 @@ function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
 }
 
 export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?: boolean }) {  const [text, setText] = useStoredState("http.text.v4", "");
+  useHomeToolDraft("http", active, setText);
   const [error, setError] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestRef = React.useRef(0);

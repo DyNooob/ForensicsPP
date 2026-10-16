@@ -22,7 +22,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const projectRoot = join(__dirname, "..");
 const serviceWorkerSource = readFileSync(join(projectRoot, "public/sw.js"), "utf8");
@@ -65,9 +65,10 @@ class FakeCache {
  * returns the registered fetch listener plus the cache it writes through, so the
  * offline fallback can be exercised for real instead of pattern-matched.
  */
-function loadServiceWorker(): { dispatchFetch: (request: unknown) => Promise<Response>; cache: FakeCache } {
+function loadServiceWorker(options: { online?: boolean; cacheUnavailable?: boolean; writeFailure?: boolean; fetch?: () => Promise<Response>; bootstrap?: string[] } = {}): { dispatchFetch: (request: unknown) => Promise<Response>; cache: FakeCache; install: () => Promise<void> } {
   const cache = new FakeCache();
   const listeners = new Map<string, FetchListener>();
+  if (options.writeFailure) cache.put = async () => { throw new Error("quota exceeded"); };
   const sandbox = {
     self: {
       addEventListener: (type: string, listener: FetchListener) => listeners.set(type, listener),
@@ -77,30 +78,37 @@ function loadServiceWorker(): { dispatchFetch: (request: unknown) => Promise<Res
       clients: { claim: () => undefined }
     },
     caches: {
-      open: async () => cache,
+      open: async () => { if (options.cacheUnavailable) throw new Error("cache unavailable"); return cache; },
       keys: async () => [] as string[],
       delete: async () => true,
       match: async (input: unknown) => cache.match(input)
     },
     // Offline: every network attempt rejects, which is exactly the state that
     // produced the reported synthetic 504 storm.
-    fetch: async () => {
+    fetch: options.fetch ?? (async () => {
+      if (options.online) return new Response("network response");
       throw new TypeError("Failed to fetch");
-    },
+    }),
+    setTimeout,
+    clearTimeout,
     Response,
     URL,
     console
   };
-  runInNewContext(serviceWorkerSource, sandbox);
+  runInNewContext(serviceWorkerSource.replace("const BUILD_ASSETS = [];", `const BUILD_ASSETS = ${JSON.stringify(options.bootstrap ?? [])};`), sandbox);
   const fetchListener = listeners.get("fetch");
   if (!fetchListener) throw new Error("sw.js registered no fetch listener");
   return {
     cache,
+    install: () => new Promise<void>((resolve, reject) => listeners.get("install")?.({
+      waitUntil: (promise: Promise<void>) => promise.then(resolve, reject)
+    })),
     dispatchFetch: (request: unknown) =>
       new Promise<Response>((resolve, reject) => {
         let settled = false;
         fetchListener({
           request,
+          waitUntil: (promise: Promise<unknown>) => { void promise.catch(reject); },
           respondWith: (value: Promise<Response> | Response) => {
             settled = true;
             Promise.resolve(value).then(resolve, reject);
@@ -140,6 +148,14 @@ describe("service worker cache version contract", () => {
 });
 
 describe("service worker offline shell fallback", () => {
+  it("replays an embedded CyberChef document and never substitutes the workbench", async () => {
+    const { cache, dispatchFetch } = loadServiceWorker();
+    cache.seed("./index.html", "<title>Forensics++</title>");
+    const request = { ...navigateRequest, url: `${SCOPE}cyberchef/CyberChef_v11.5.0.html` };
+    expect((await dispatchFetch(request)).status).toBe(504);
+    cache.seed("./cyberchef/CyberChef_v11.5.0.html", "<title>CyberChef</title>");
+    expect(await (await dispatchFetch(request)).text()).toBe("<title>CyberChef</title>");
+  });
   it("serves the cached shell offline when every asset it references is replayable", async () => {
     const { cache, dispatchFetch } = loadServiceWorker();
     cache.seed(
@@ -190,5 +206,84 @@ describe("service worker registration gate", () => {
   it("drops leftover dev registrations so a stale cache cannot keep booting", () => {
     expect(registrationSource).toContain("getRegistrations");
     expect(registrationSource).toContain("unregister");
+  });
+});
+
+describe("service worker degraded storage", () => {
+  const assetRequest = { method: "GET", url: `${SCOPE}assets/entry.js`, mode: "cors", destination: "script" };
+
+  it("returns successful network data when CacheStorage is unavailable", async () => {
+    const { dispatchFetch } = loadServiceWorker({ online: true, cacheUnavailable: true });
+    const response = await dispatchFetch(assetRequest);
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("network response");
+  });
+
+  it("does not discard network data when a cache write exceeds quota", async () => {
+    const { dispatchFetch } = loadServiceWorker({ online: true, writeFailure: true });
+    const response = await dispatchFetch(assetRequest);
+    await expect(response.text()).resolves.toBe("network response");
+  });
+
+  it("answers offline navigation even when cache access is blocked", async () => {
+    const { dispatchFetch } = loadServiceWorker({ cacheUnavailable: true });
+    expect((await dispatchFetch(navigateRequest)).status).toBe(504);
+  });
+
+  it("pre-caches the application shell during installation", async () => {
+    const { cache, install } = loadServiceWorker();
+    await install();
+    expect(await cache.match(`${SCOPE}index.html`)).toBeTruthy();
+    expect(serviceWorkerSource).toContain("...BUILD_ASSETS");
+  });
+});
+
+describe("service worker slow network", () => {
+  it("replays lazy vendor modules only from the CDN declared by this build", async () => {
+    const base = "https://static.digiforensics.cn";
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const { cache, dispatchFetch } = loadServiceWorker({ bootstrap: [`${base}/assets/vendor-react-aB12_cd3.js`], fetch });
+    const url = `${base}/assets/vendor-jsqr-aB12_cd3.js`;
+    cache.seed(url, "cached CDN module");
+    expect(await (await dispatchFetch({ method: "GET", url, mode: "cors" })).text()).toBe("cached CDN module");
+    expect(fetch).not.toHaveBeenCalled();
+    for (const url of ["https://other.example/assets/vendor-jsqr-aB12_cd3.js", `${base}/data/areas.json`, `${base}/other/assets/vendor-jsqr-aB12_cd3.js`]) {
+      await expect(dispatchFetch({ method: "GET", url, mode: "cors" })).rejects.toThrow("did not respond");
+    }
+  });
+
+  it("uses cached content-hashed assets without waiting for the network", async () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const { cache, dispatchFetch } = loadServiceWorker({ fetch });
+    cache.seed("./assets/image.worker-aB12_cd3.js", "cached worker");
+    const response = await dispatchFetch({ method: "GET", url: `${SCOPE}assets/image.worker-aB12_cd3.js`, mode: "cors" });
+    expect(await response.text()).toBe("cached worker");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still refreshes unversioned assets from the network", async () => {
+    const { cache, dispatchFetch } = loadServiceWorker({ online: true });
+    cache.seed("./cyberchef/assets/main.js", "old vendor code");
+    const response = await dispatchFetch({ method: "GET", url: `${SCOPE}cyberchef/assets/main.js`, mode: "cors" });
+    expect(await response.text()).toBe("network response");
+  });
+
+  it("boots a complete cached shell after three seconds of stalled networking", async () => {
+    vi.useFakeTimers();
+    try {
+      const { cache, dispatchFetch } = loadServiceWorker({ fetch: () => new Promise<Response>(() => {}) });
+      cache.seed("./index.html", '<script src="/assets/index-aB12_cd3.js"></script>');
+      cache.seed("./assets/index-aB12_cd3.js", "cached entry");
+      const pending = dispatchFetch(navigateRequest);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(await (await pending).text()).toContain("index-aB12_cd3.js");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not interrupt first visits without a complete cached shell", async () => {
+    const { dispatchFetch } = loadServiceWorker({ online: true });
+    expect(await (await dispatchFetch(navigateRequest)).text()).toBe("network response");
   });
 });

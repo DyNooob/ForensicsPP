@@ -25,6 +25,8 @@
 // hardcode a release version here: a stale literal would make the source SW
 // share a cache namespace with a shipped build.
 const CACHE_VERSION = "forensicspp-dev";
+// Build-time list of the entry JS, modulepreloads and CSS required to boot.
+const BUILD_ASSETS = [];
 const PERSISTENT_CACHE_PREFIXES = ["forensicspp-data-", "forensicspp-lookup-data-"];
 const CORE_ASSETS = [
   "./",
@@ -45,7 +47,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
-      .then((cache) => cache.addAll(CORE_ASSETS))
+      .then((cache) => cache.addAll([...CORE_ASSETS, ...BUILD_ASSETS]))
       .then(() => self.skipWaiting())
   );
 });
@@ -69,6 +71,23 @@ function offlineResponse() {
   });
 }
 
+// A content hash identifies immutable bytes, so a cached build asset never
+// needs a network round trip. Unversioned files still use network-first.
+function isCdnVendorAsset(url) {
+  if (!/\/assets\/vendor-[\w-]+\.(?:js|css)$/.test(url.pathname)) return false;
+  return BUILD_ASSETS.some((asset) => {
+    const bootstrap = new URL(asset, self.registration.scope);
+    return bootstrap.origin !== self.location.origin && bootstrap.origin === url.origin &&
+      /\/assets\/vendor-[\w-]+\.(?:js|css)$/.test(bootstrap.pathname) &&
+      bootstrap.pathname.slice(0, bootstrap.pathname.lastIndexOf("/") + 1) === url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1);
+  });
+}
+
+function isImmutableAsset(url) {
+  const assetPath = new URL("./assets/", self.registration.scope).pathname;
+  return (url.pathname.startsWith(assetPath) || isCdnVendorAsset(url)) && /-[\w-]{8}\.(?:js|css|wasm)$/.test(url.pathname);
+}
+
 // A cached app shell is only worth serving offline when every build asset it
 // references can still be replayed from cache. After a rebuild the shell held in
 // cache may point at content hashes that no longer exist on disk or on the
@@ -88,7 +107,8 @@ async function bootableShell(cache) {
   const references = new Set();
   const pattern = /(?:src|href)="([^"]*assets\/[^"]+\.(?:js|css))"/g;
   let match;
-  while ((match = pattern.exec(html))) references.add(match[1]);
+  const markup = html.replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, "$1</script>");
+  while ((match = pattern.exec(markup))) references.add(match[1]);
   for (const reference of references) {
     if (!(await cache.match(new URL(reference, shellUrl).href))) return undefined;
   }
@@ -100,43 +120,77 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  // Only the vendor CDN declared by this build may enter the shell cache.
+  // Lookup data packs and unrelated external requests keep their own handling.
+  if (url.origin !== self.location.origin && !isCdnVendorAsset(url)) return;
 
-  if (request.mode === "navigate") {
+  const embeddedDocument = url.pathname.startsWith(new URL("./cyberchef/", self.registration.scope).pathname);
+  if (request.mode === "navigate" && !embeddedDocument) {
     event.respondWith(
       (async () => {
+        let timer;
         try {
-          return await fetch(request);
+          const network = fetch(request);
+          // Handle rejection while CacheStorage is being inspected too.
+          const networkResult = network.then((response) => ({ response }), () => ({ response: null }));
+          const cache = await caches.open(CACHE_VERSION).catch(() => null);
+          const shell = cache ? await bootableShell(cache).catch(() => undefined) : undefined;
+          if (shell) {
+            const result = await Promise.race([
+              networkResult,
+              new Promise((resolve) => { timer = setTimeout(() => resolve({ response: shell }), 3000); })
+            ]);
+            return result.response || shell;
+          }
+          return (await networkResult).response || offlineResponse();
         } catch (networkError) {
-          const cache = await caches.open(CACHE_VERSION);
-          const shell = await bootableShell(cache);
-          return shell || offlineResponse();
+          try {
+            const cache = await caches.open(CACHE_VERSION);
+            return (await bootableShell(cache)) || offlineResponse();
+          } catch {
+            return offlineResponse();
+          }
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
         }
       })()
     );
     return;
   }
 
-  // Network-first for app assets (JS/CSS/fonts/wasm). This guarantees a
-  // rebuilt app always fetches current chunks instead of stale cached ones
-  // whose content hash no longer matches index.html. Cache is only a fallback
-  // for offline use, so the local-first promise still holds.
+  // Reuse immutable build assets immediately. All other URLs remain
+  // network-first with an offline fallback in this build's cache.
   event.respondWith(
     (async () => {
-      const cache = await caches.open(CACHE_VERSION);
+      if (isImmutableAsset(url)) {
+        try {
+          const cache = await caches.open(CACHE_VERSION);
+          const cached = await cache.match(request);
+          if (cached?.ok) return cached;
+        } catch {
+          // A storage failure must not prevent the network request.
+        }
+      }
       try {
         const response = await fetch(request);
-        if (response && response.ok) cache.put(request, response.clone());
+        if (response && response.ok) {
+          // A quota/policy failure must never discard a successful response.
+          const copy = response.clone();
+          const save = caches.open(CACHE_VERSION)
+            .then((cache) => cache.put(request, copy))
+            .catch(() => undefined);
+          event.waitUntil(save);
+        }
         return response;
       } catch (networkError) {
-        const cached = await cache.match(request);
-        if (cached) return cached;
-        // Not cached and offline: answer embedded documents with the app shell
-        // when it is still bootable, other missing assets with a neutral 504 so
-        // the caller can recover.
-        if (request.destination === "document") {
-          const shell = await bootableShell(cache);
-          if (shell) return shell;
+        try {
+          const cache = await caches.open(CACHE_VERSION);
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          // Embedded documents must never receive the Forensics++ shell.
+          // A missing CyberChef build gets the same neutral failure as assets.
+        } catch {
+          // CacheStorage can be unavailable in private/restricted sessions.
         }
         return offlineResponse();
       }

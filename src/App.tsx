@@ -63,6 +63,8 @@ export function App() {
   const { themeMode, setThemeMode, resolvedThemeColor, appliedTheme, displayThemeColor, applyThemeColor, resetThemeAppearance } = useAppearance();
   const { acceptedLegalVersion, setAcceptedLegalVersion } = useLegalConsent();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [settingsInitialized, setSettingsInitialized] = React.useState(false);
+  React.useEffect(() => { if (settingsOpen) setSettingsInitialized(true); }, [settingsOpen]);
   const { cacheClearArmed, cacheClearError, setCacheClearError, clearLocalWorkspace } = useCacheClear(settingsOpen);
   const [reporterOpen, setReporterOpen] = React.useState(false);
   const [toolLinkMessage, setToolLinkMessage] = React.useState("");
@@ -328,10 +330,10 @@ export function App() {
         </React.Suspense>
       )}
 
-      {settingsOpen && (
+      {(settingsOpen || settingsInitialized) && (
         <React.Suspense fallback={<div className="tool-loading-state" role="status" aria-live="polite">{t.loadingTool}</div>}>
           <SettingsModal
-            open
+            open={settingsOpen}
             lang={lang}
             t={t}
             themeMode={themeMode}

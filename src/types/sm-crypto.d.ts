@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-declare module "sm-crypto" {
-  export const sm3: (input: string | Uint8Array | number[]) => string;
+declare module "sm-crypto/src/sm3/index.js" {
+  const sm3: (input: string | Uint8Array | number[]) => string;
+  export default sm3;
 }

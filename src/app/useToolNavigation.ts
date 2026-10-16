@@ -28,6 +28,7 @@ import {
   tools,
   visibleTools,
 } from "../config/app";
+import { toolMatchesQuery } from "../utils/toolSearch";
 import { resolveCurrentRoute, routeToolOrHome, writeRoute } from "../core/routeAdapter";
 import type { ToolCategory, ToolDefinition, ToolId } from "../config/app";
 import { resolveRetainedTools } from "../core/runtime";
@@ -128,19 +129,7 @@ export function useToolNavigation({
       return normalized.includes(tool) ? normalized.filter((item) => item !== tool) : [tool, ...normalized].slice(0, maxRecentTools);
     });
   };
-  const filteredTools = visibleTools.filter((tool) => {
-    const text = [
-      copy.zh[tool.name],
-      copy.zh[tool.desc],
-      copy.zh[tool.category],
-      copy.en[tool.name],
-      copy.en[tool.desc],
-      copy.en[tool.category],
-      ...(tool.accepts ?? []),
-      ...(tool.capabilities ?? [])
-    ].join(" ").toLowerCase();
-    return text.includes(query.toLowerCase());
-  });
+  const filteredTools = visibleTools.filter((tool) => toolMatchesQuery(tool, query));
   const favoriteNavTools = favoriteTools
     .map((id) => filteredTools.find((tool) => tool.id === id))
     .filter((tool): tool is (typeof tools)[number] => Boolean(tool))

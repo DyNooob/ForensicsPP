@@ -95,8 +95,11 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
   const [selectedAlgorithms, setSelectedAlgorithms] = useStoredState<string[]>("hash.algorithms", ["sha256"]);
   const [expectedHash, setExpectedHash] = useStoredState("hash.expectedHash.v2", "");
   useHomeToolDraft("hash", active, (draft) => {
-    setExpectedHash(draft);
-    setMode("file");
+    if (/^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})$/i.test(draft.trim())) {
+      setExpectedHash(draft); changeMode("file");
+    } else {
+      changeMode("text"); handleTextChange(draft);
+    }
   });
   const [batchRows, setBatchRows] = React.useState<BatchHashRow[]>([]);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);

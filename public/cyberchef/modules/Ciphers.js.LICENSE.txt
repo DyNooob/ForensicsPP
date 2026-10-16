@@ -23,7 +23,9 @@
 
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
-/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/facebook/regenerator/blob/main/LICENSE */
+/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */
+
+/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
 /**
   Blowfish.js from Dojo Toolkit 1.8.1 (https://github.com/dojo/dojox/tree/1.8/encoding)
@@ -104,6 +106,24 @@
 /**
  * @author Matt C [me@mitt.dev]
  * @copyright Crown Copyright 2020
+ * @license Apache-2.0
+ */
+
+/**
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2025
+ * @license Apache-2.0
+ */
+
+/**
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2026
+ * @license Apache-2.0
+ */
+
+/**
+ * @author cktgh [chankaitung@gmail.com]
+ * @copyright Crown Copyright 2026
  * @license Apache-2.0
  */
 
@@ -211,6 +231,38 @@
  */
 
 /**
+ * Complete implementation of PRESENT block cipher encryption/decryption with
+ * ECB and CBC block modes.
+ *
+ * PRESENT is an ultra-lightweight block cipher designed for constrained environments.
+ * Standardised in ISO/IEC 29192-2:2019.
+ *
+ * Reference: "PRESENT: An Ultra-Lightweight Block Cipher"
+ * https://link.springer.com/chapter/10.1007/978-3-540-74735-2_31
+ *
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2026
+ * @license Apache-2.0
+ */
+
+/**
+ * Complete implementation of RC6 block cipher encryption/decryption with
+ * configurable word size (w), rounds (r), and key length (b).
+ *
+ * RC6 was an AES finalist designed by Ron Rivest, Matt Robshaw, Ray Sidney, and Yiqun Lisa Yin.
+ * Reference: https://en.wikipedia.org/wiki/RC6
+ * Test Vectors: https://datatracker.ietf.org/doc/html/draft-krovetz-rc6-rc5-vectors-00
+ *
+ * The P and Q constants are derived from mathematical constants e (Euler's number) and
+ * φ (golden ratio) as specified in the IETF draft. Master 256-bit values are scaled to
+ * any word size.
+ *
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2026
+ * @license Apache-2.0
+ */
+
+/**
  * Complete implementation of SM4 cipher encryption/decryption with
  * ECB, CBC, CFB, OFB, CTR block modes.
  * These modes are specified in IETF draft-ribose-cfrg-sm4-09, see:
@@ -222,6 +274,18 @@
  *
  * @author swesven
  * @copyright 2021
+ * @license Apache-2.0
+ */
+
+/**
+ * Complete implementation of Twofish block cipher encryption/decryption with
+ * ECB, CBC, CFB, OFB, CTR block modes.
+ *
+ * Twofish was an AES finalist designed by Bruce Schneier et al.
+ * Reference: https://www.schneier.com/academic/twofish/
+ *
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2026
  * @license Apache-2.0
  */
 
@@ -254,10 +318,10 @@
 /**
  * CyberChef - The Cyber Swiss Army Knife
  *
- * @copyright Crown Copyright 2016-2024
+ * @copyright Crown Copyright 2016-2026
  * @license Apache-2.0
  *
- *   Copyright 2016-2024 Crown Copyright
+ *   Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -322,6 +386,26 @@
  * @copyright Crown Copyright 2018
  * @license Apache-2.0
  *
+ */
+
+/**
+ * TEA and XTEA block cipher implementation.
+ *
+ * TEA (Tiny Encryption Algorithm) — Wheeler & Needham, 1994.
+ * XTEA (Extended TEA) — Wheeler & Needham, 1997.
+ *
+ * Both operate on 64-bit blocks with 128-bit keys.
+ * TEA uses 32 cycles (64 Feistel rounds).
+ * XTEA uses 32 cycles (64 Feistel rounds) with improved key schedule.
+ *
+ * References:
+ *   https://en.wikipedia.org/wiki/Tiny_Encryption_Algorithm
+ *   https://en.wikipedia.org/wiki/XTEA
+ *   https://www.cix.co.uk/~klockstone/teavect.htm
+ *
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2026
+ * @license Apache-2.0
  */
 
 /**

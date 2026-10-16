@@ -11,4 +11,5 @@
 *.wasm binary
 *.gz binary
 
-public/cyberchef/** linguist-vendored
+# Preserve upstream formatting in the official embedded distribution.
+public/cyberchef/** linguist-vendored whitespace=-blank-at-eol

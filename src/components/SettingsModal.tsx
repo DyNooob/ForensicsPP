@@ -24,9 +24,11 @@ import {
   BgColorsOutlined,
   ArrowRightOutlined,
   CodeOutlined,
+  CheckOutlined,
   CloseOutlined,
   DatabaseOutlined,
   DesktopOutlined,
+  DownloadOutlined,
   FileTextOutlined,
   GithubOutlined,
   InfoCircleOutlined,
@@ -45,7 +47,7 @@ import {
   themePresets
 } from "../config/app";
 import { openSourceProjects } from "../config/openSource";
-import { inspectLookupDataPacks, type LookupDataPackStatus } from "../features/lookup/dataPacks";
+import { DataPackError, fetchLookupDataPack, inspectLookupDataPacks, type LookupDataPackId, type LookupDataPackStatus, type PackDownloadProgress } from "../features/lookup/dataPacks";
 
 type SettingsPage = "appearance" | "project" | "storage" | "opensource";
 
@@ -72,7 +74,8 @@ type SettingsModalProps = {
 };
 
 function formatStorageMb(bytes: number) {
-  return `${(Math.max(0, bytes) / 1024 / 1024).toFixed(2)} MB`;
+  const mb = Math.max(0, bytes) / 1024 / 1024;
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(2)} MB`;
 }
 
 function localStorageBytes() {
@@ -118,6 +121,15 @@ export function SettingsModal({
   const [storage, setStorage] = React.useState<StorageSnapshot>({ local: 0, usage: 0, quota: 0, estimated: false });
   const [dataPacks, setDataPacks] = React.useState<LookupDataPackStatus[]>([]);
   const [storageRefresh, setStorageRefresh] = React.useState(0);
+  const [downloads, setDownloads] = React.useState<Partial<Record<LookupDataPackId, PackDownloadProgress & { error?: string; busy: boolean }>>>({});
+  const downloadControllers = React.useRef(new Map<LookupDataPackId, AbortController>());
+
+  React.useEffect(() => {
+    const controllers = downloadControllers.current;
+    // Keep downloads alive when the dialog closes or changes pages.
+    // Reopening it shows their current progress; leaving the app cancels them.
+    return () => { for (const controller of controllers.values()) controller.abort(); controllers.clear(); };
+  }, []);
 
   React.useEffect(() => {
     if (open) setPage("project");
@@ -156,18 +168,28 @@ export function SettingsModal({
     system: "跟随系统",
     reset: "恢复默认",
     clearTitle: "清除本地工作区",
-    clearDesc: "删除界面设置和已保存的本地工作区。",
+    clearDesc: "删除界面设置、已保存的工作区和本地化数据包。",
     siteUsage: "本站占用",
     localStorageUsage: "localStorage",
     availableQuota: "浏览器配额",
     persistentTitle: "浏览器存储",
-    persistentDesc: "这里显示可跨刷新保留的界面数据和工作区。",
+    persistentDesc: "管理保存在此浏览器中的工作区与参考数据。",
     sessionTitle: "当前会话",
     sessionDesc: "关闭工具会释放内存；支持恢复的工作区仍保存在浏览器。",
     dataPacks: "静态数据包",
     checkDataPacks: "检查状态",
-    cachedPack: "已缓存",
-    uncachedPack: "按需下载",
+    cachedPack: "已本地化",
+    localizePack: "本地化",
+    downloadingPack: "下载中",
+    cancelDownload: "取消",
+    retryDownload: "重试",
+    packHint: "点击本地化，将数据包保存到此浏览器；之后查询直接读取本地数据，无需重复下载。",
+    packRetention: "浏览器或清理操作可能移除数据包；更新数据版本后需重新本地化。",
+    downloadUnavailable: "当前环境不支持本地缓存，请使用 HTTPS 或 localhost 打开。",
+    downloadNetwork: "下载失败，请检查网络后重试。",
+    downloadInvalid: "数据包不完整或格式无效，请重试。",
+    downloadStorage: "保存失败，请检查浏览器存储权限和剩余空间。",
+    downloadTimeout: "下载超时，请重试。",
     cacheUnavailable: "缓存不可用",
     closeTool: "关闭工具",
     closeAll: "全部关闭",
@@ -189,18 +211,28 @@ export function SettingsModal({
     system: "System",
     reset: "Reset",
     clearTitle: "Clear local workspace",
-    clearDesc: "Remove interface settings and saved local workspaces.",
+    clearDesc: "Remove interface settings, saved workspaces, and localized data packs.",
     siteUsage: "Site usage",
     localStorageUsage: "localStorage",
     availableQuota: "Browser quota",
     persistentTitle: "Browser storage",
-    persistentDesc: "Interface data and workspaces retained across reloads.",
+    persistentDesc: "Manage workspaces and reference data stored in this browser.",
     sessionTitle: "Current session",
     sessionDesc: "Closing a tool releases memory; restorable workspaces remain in browser storage.",
     dataPacks: "Static data packs",
     checkDataPacks: "Check status",
-    cachedPack: "Cached",
-    uncachedPack: "On demand",
+    cachedPack: "Localized",
+    localizePack: "Localize",
+    downloadingPack: "Downloading",
+    cancelDownload: "Cancel",
+    retryDownload: "Retry",
+    packHint: "Localize a pack to save it in this browser. Later lookups read local data without downloading it again.",
+    packRetention: "Browser eviction or clearing data can remove packs. New pack versions need localization again.",
+    downloadUnavailable: "Local cache is unavailable. Open over HTTPS or localhost.",
+    downloadNetwork: "Download failed. Check your connection and retry.",
+    downloadInvalid: "The pack is incomplete or invalid. Please retry.",
+    downloadStorage: "Could not save. Check storage permissions and available space.",
+    downloadTimeout: "Download timed out. Please retry.",
     cacheUnavailable: "Cache unavailable",
     closeTool: "Close tool",
     closeAll: "Close all",
@@ -218,7 +250,7 @@ export function SettingsModal({
     : page === "project"
       ? [t.aboutProject, ""]
       : page === "storage"
-        ? [labels.storage, t.localCacheDesc]
+        ? [labels.storage, labels.persistentDesc]
         : [labels.dependenciesTitle, labels.dependenciesDesc];
   const activeOpenTool = openTools.find((tool) => tool.active);
   const visibleOpenTools = openTools.slice(0, 8);
@@ -231,27 +263,49 @@ export function SettingsModal({
     ? { ip: "IP 地址库", phone: "手机号段库", id: "行政区划库" }
     : { ip: "IP database", phone: "Mobile prefix database", id: "Administrative divisions" };
 
+  const localize = async (id: LookupDataPackId) => {
+    if (downloadControllers.current.has(id)) return;
+    const controller = new AbortController();
+    downloadControllers.current.set(id, controller);
+    setDownloads((current) => ({ ...current, [id]: { received: 0, total: 0, busy: true } }));
+    try {
+      await fetchLookupDataPack(id, { requireCache: true, signal: controller.signal, onProgress: (progress) => {
+        if (downloadControllers.current.get(id) === controller) setDownloads((current) => ({ ...current, [id]: { ...progress, busy: true } }));
+      } });
+      if (downloadControllers.current.get(id) !== controller) return;
+      setDataPacks((current) => current.map((pack) => pack.id === id ? { ...pack, cached: true } : pack));
+      setDownloads((current) => ({ ...current, [id]: undefined }));
+    } catch (caught) {
+      if (downloadControllers.current.get(id) !== controller) return;
+      const messages = { unavailable: labels.downloadUnavailable, network: labels.downloadNetwork, invalid: labels.downloadInvalid, storage: labels.downloadStorage, timeout: labels.downloadTimeout };
+      setDownloads((current) => ({ ...current, [id]: controller.signal.aborted ? undefined : { received: 0, total: 0, busy: false, error: caught instanceof DataPackError ? messages[caught.code] : labels.downloadNetwork } }));
+    } finally {
+      if (downloadControllers.current.get(id) === controller) { downloadControllers.current.delete(id); setStorageRefresh((value) => value + 1); }
+    }
+  };
+
   return (
     <Modal
       className={`settings-modal settings-page-${page}`}
       open={open}
       centered
       width={920}
-      title={t.settings}
+      title={<div className="settings-dialog-title"><BgColorsOutlined aria-hidden="true" /><span>{t.settings}</span><small>Forensics++</small></div>}
       footer={null}
       onCancel={onClose}
       destroyOnHidden
     >
       <div className="settings-shell">
         <aside className="settings-sidebar">
+          <div className="settings-nav-caption">{lang === "zh" ? "工作台偏好" : "WORKSPACE"}</div>
           <Menu
             mode="inline"
             selectedKeys={[page]}
             onClick={({ key }) => setPage(key as SettingsPage)}
             items={[
-              { key: "project", icon: <InfoCircleOutlined />, label: labels.project },
               { key: "appearance", icon: <BgColorsOutlined />, label: labels.appearance },
               { key: "storage", icon: <DatabaseOutlined />, label: labels.storage },
+              { key: "project", icon: <InfoCircleOutlined />, label: labels.project },
               { key: "opensource", icon: <CodeOutlined />, label: labels.openSource }
             ]}
           />
@@ -271,7 +325,8 @@ export function SettingsModal({
             <div className="settings-form">
               <div className="settings-appearance-preview" aria-hidden="true">
                 <div className="settings-preview-sidebar"><span className="settings-preview-logo">F++</span><i /><i /><i /></div>
-                <div className="settings-preview-main"><span /><div><b /><b /><b /></div><i /><i /></div>
+                <div className="settings-preview-main"><strong>Forensics++</strong><span>{lang === "zh" ? "你的本地分析工作台" : "Your local analysis workspace"}</span><div><b /><b /><b /></div></div>
+                <span className="settings-preview-label">{lang === "zh" ? "实时预览" : "Live preview"}</span>
               </div>
               <div className="settings-form-row">
                 <div className="settings-form-label">{labels.themeMode}</div>
@@ -318,7 +373,7 @@ export function SettingsModal({
               <div className="settings-project-hero">
                 <div className="settings-project-mark">F++</div>
                 <div className="settings-project-identity">
-                  <div><strong>Forensics++</strong><span>Workbench</span></div>
+                  <div><strong>Forensics++</strong><span className="settings-release-badge">1.0 RC</span></div>
                   <Typography.Text type="secondary">{t.aboutProjectDesc}</Typography.Text>
                 </div>
               </div>
@@ -355,18 +410,24 @@ export function SettingsModal({
               <div className="settings-storage-meter" aria-hidden="true"><span style={{ width: `${storage.estimated && storage.quota ? Math.max(1, Math.min(100, storage.usage / storage.quota * 100)) : 0}%` }} /></div>
               <section className="settings-data-packs">
                 <div className="settings-session-header">
-                  <div className="settings-section-heading"><strong>{labels.dataPacks}</strong></div>
+                  <div className="settings-section-heading"><strong>{labels.dataPacks}</strong><Typography.Text type="secondary">{labels.packHint}</Typography.Text></div>
                   <Button size="small" icon={<ReloadOutlined />} onClick={() => setStorageRefresh((value) => value + 1)}>{labels.checkDataPacks}</Button>
                 </div>
                 <div className="settings-data-pack-list">
                   {dataPacks.map((pack) => (
-                    <div className="settings-data-pack-row" key={pack.id}>
-                      <div><strong>{dataPackNames[pack.id]}</strong><span>{pack.source}</span></div>
-                      <code>{pack.version}</code>
-                      <span>{!pack.cacheSupported ? labels.cacheUnavailable : pack.cached ? labels.cachedPack : labels.uncachedPack}</span>
+                    <div className="settings-data-pack-row" key={pack.id} data-pack={pack.id}>
+                      <span className="settings-pack-icon" aria-hidden="true"><DatabaseOutlined /></span>
+                      <div className="settings-pack-info"><strong>{dataPackNames[pack.id]}</strong><span>{pack.source}</span><code>{pack.version}</code></div>
+                      <div className="settings-pack-action">
+                        {pack.cached ? <span className="settings-pack-cached"><CheckOutlined />{labels.cachedPack}</span> : <Button size="small" icon={<DownloadOutlined />} loading={downloads[pack.id]?.busy} disabled={!pack.cacheSupported} title={!pack.cacheSupported ? labels.downloadUnavailable : undefined} aria-label={`${labels.localizePack}: ${dataPackNames[pack.id]}`} onClick={() => void localize(pack.id)}>{downloads[pack.id]?.busy ? labels.downloadingPack : downloads[pack.id]?.error ? labels.retryDownload : labels.localizePack}</Button>}
+                        {downloads[pack.id]?.busy && <><span role="status">{formatStorageMb(downloads[pack.id]!.received)}{downloads[pack.id]!.total > 0 && ` / ${formatStorageMb(downloads[pack.id]!.total)}`}</span><Button type="text" size="small" onClick={() => downloadControllers.current.get(pack.id)?.abort()}>{labels.cancelDownload}</Button></>}
+                        {!pack.cacheSupported && <span>{labels.cacheUnavailable}</span>}
+                      </div>
+                      {downloads[pack.id]?.error && <div className="settings-pack-error" role="alert">{downloads[pack.id]!.error}</div>}
                     </div>
                   ))}
                 </div>
+                <Typography.Text className="settings-pack-retention" type="secondary">{labels.packRetention}</Typography.Text>
               </section>
               <div className="settings-session-header">
                 <div className="settings-section-heading">
@@ -435,7 +496,7 @@ export function SettingsModal({
               <div className="settings-dependency-table">
                 {openSourceProjects.map((project) => (
                   <a className="settings-dependency-item" href={project.repository} target="_blank" rel="noreferrer" key={`${project.category}-${project.name}`}>
-                    <span>{project.name}</span><LinkOutlined aria-hidden="true" />
+                    <div><strong>{project.name}</strong><span>{project.purpose[lang]}</span><code>{[project.version, project.license].filter(Boolean).join(" · ")}</code></div><LinkOutlined aria-hidden="true" />
                   </a>
                 ))}
               </div>

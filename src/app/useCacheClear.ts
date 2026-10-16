@@ -21,6 +21,7 @@
 
 import React from "react";
 import { clearForensicsStorage } from "../utils/storage";
+import { clearHomeToolDrafts } from "./useHomeToolDraft";
 import { writeRoute } from "../core/routeAdapter";
 
 export function useCacheClear(settingsOpen: boolean) {
@@ -47,6 +48,7 @@ export function useCacheClear(settingsOpen: boolean) {
     }
     try {
       await clearForensicsStorage();
+      clearHomeToolDrafts();
       writeRoute("home", { replace: true });
       window.location.reload();
     } catch {

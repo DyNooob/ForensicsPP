@@ -23,12 +23,13 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
+import { buildAssetIdentity } from "./build-assets.mjs";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(projectRoot, "dist");
 const copyrightMarker = "Forensics++ (ForensicsPP.com)";
 const packageJson = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
+const cyberChef = JSON.parse(await readFile(join(projectRoot, "src/config/cyberchef.json"), "utf8"));
 
 const requiredFiles = [
   "index.html",
@@ -42,7 +43,11 @@ const requiredFiles = [
   "site.webmanifest",
   "sitemap.xml",
   "sw.js",
-  "cyberchef/CyberChef_v10.19.4.html"
+  cyberChef.entry,
+  "cyberchef/assets/main.js",
+  "cyberchef/assets/main.css",
+  "cyberchef/LICENSE.txt",
+  "cyberchef/UPSTREAM.txt"
 ];
 
 const forbiddenNames = new Set([
@@ -88,6 +93,7 @@ try {
 
 try {
   const indexHtml = await readFile(join(distRoot, "index.html"), "utf8");
+  if (indexHtml.includes("__VITE_PRELOAD__")) errors.push("index.html contains unresolved Vite preload placeholders");
   if (!indexHtml.includes(`<meta name="version" content="${packageJson.version}"`)) errors.push("index.html version metadata does not match package.json");
   if (!indexHtml.includes(`"softwareVersion": "${packageJson.version}"`)) errors.push("index.html structured-data version does not match package.json");
   // Web build uses root-absolute /assets/ so SPA deep-links and the
@@ -119,15 +125,13 @@ try {
 
 try {
   const serviceWorker = await readFile(join(distRoot, "sw.js"), "utf8");
-  const assetsDir = join(distRoot, "assets");
-  let fingerprint = "static";
-  try {
-    const names = (await readdir(assetsDir)).filter((name) => /\.(js|css)$/.test(name)).sort();
-    fingerprint = createHash("sha1").update(names.join("|")).digest("hex").slice(0, 10);
-  } catch {}
+  const { fingerprint, bootstrap } = await buildAssetIdentity(distRoot);
   const expectedCacheVersion = `forensicspp-v${packageJson.version}-${fingerprint}`;
   if (!serviceWorker.includes(`const CACHE_VERSION = "${expectedCacheVersion}";`)) {
     errors.push("sw.js cache version does not match package.json + asset fingerprint");
+  }
+  if (!serviceWorker.includes(`const BUILD_ASSETS = ${JSON.stringify(bootstrap)};`)) {
+    errors.push("sw.js bootstrap assets do not match index.html");
   }
 } catch {
   // The required-file check above reports a missing sw.js.
@@ -154,8 +158,8 @@ if (totalBytes > 100 * 1024 * 1024) errors.push("release artifact exceeds 100 Mi
 
 const generatedProjectAssets = files.filter((file) => {
   const outputPath = relative(distRoot, file);
-  return /^assets\/(?:index-|(?:[A-Z][A-Za-z]+Tool|entropy\.worker)-).*\.js$/.test(outputPath)
-    || /^assets\/index-.*\.css$/.test(outputPath);
+  return /^(?:assets\/)?(?:index-|(?:[A-Z][A-Za-z]+Tool|entropy\.worker)-).*\.js$/.test(outputPath)
+    || /^(?:assets\/)?index-.*\.css$/.test(outputPath);
 });
 
 for (const path of generatedProjectAssets) {

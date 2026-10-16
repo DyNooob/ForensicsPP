@@ -7,11 +7,17 @@
 
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
-/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/facebook/regenerator/blob/main/LICENSE */
+/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */
 
 /**
  * @author 0xThiebaut [thiebaut.dev]
  * @copyright Crown Copyright 2023
+ * @license Apache-2.0
+ */
+
+/**
+ * @author MP Gowtham [gowthamrockerzzz@gmail.com]
+ * @copyright Crown Copyright 2026
  * @license Apache-2.0
  */
 
@@ -93,10 +99,10 @@
 /**
  * CyberChef - The Cyber Swiss Army Knife
  *
- * @copyright Crown Copyright 2016-2024
+ * @copyright Crown Copyright 2016-2026
  * @license Apache-2.0
  *
- *   Copyright 2016-2024 Crown Copyright
+ *   Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,6 +151,21 @@
  * @copyright Crown Copyright 2018
  * @license Apache-2.0
  *
+ */
+
+/**
+ * XPRESS (MS-XCA) decompression.
+ *
+ * @author MP Gowtham [gowthamrockerzzz@gmail.com]
+ * @copyright Crown Copyright 2026
+ * @license Apache-2.0
+ *
+ * Implements the two XPRESS variants from:
+ * https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-xca/
+ * (2.1 XPRESS Algorithm Details, 2.2 LZ77+Huffman Algorithm Details)
+ *
+ * Cross-validated against the reference decoder in The Sleuth Kit
+ * (tsk/fs/xpress.c) and go-ntfs (parser/xpress.go).
  */
 
 /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */

@@ -47,6 +47,9 @@ export const toolSamples: Record<string, ToolSample> = {
   "score": 0.87
 }`
   },
+  urltool: { zh: "hxxps://example[.]org/report?id=42&next=%2Fcase%2Fsample", en: "hxxps://example[.]org/report?id=42&next=%2Fcase%2Fsample" },
+  timestamp: { zh: "1719795600000", en: "1719795600000" },
+  regex: { zh: "2026-10-13T08:21:00Z source=https://example.org/report?case=sample\n2026-10-13T08:22:00Z source=https://example.net/review", en: "2026-10-13T08:21:00Z source=https://example.org/report?case=sample\n2026-10-13T08:22:00Z source=https://example.net/review" },
   codec: {
     zh: "SGVsbG8sIEZvcmVuc2ljcysr",
     en: "SGVsbG8sIEZvcmVuc2ljcysr"

@@ -28,6 +28,7 @@
 //   - standalone (file://) falls back to the hash
 
 import { describe, it, expect } from "vitest";
+import { tools, canonicalToolId } from "../src/config/app";
 
 import {
   resolveToolPath,
@@ -126,5 +127,19 @@ describe("environment helpers", () => {
     // than hardcoding one environment.
     const expected = process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true";
     expect(isPreview()).toBe(expected);
+  });
+});
+
+describe("all tool navigation", () => {
+  it("round-trips every visible workbench's generated URL", () => {
+    for (const tool of tools.filter((tool) => !tool.hidden && tool.id !== "home")) {
+      expect(resolveToolPath(toolToPrettyUrl(tool.id)), tool.id).toEqual({ toolId: tool.id, unknown: false });
+    }
+  });
+
+  it("keeps direct legacy tool-id paths usable after consolidation", () => {
+    for (const id of ["png", "qr", "strings", "yara"] as const) {
+      expect(resolveToolPath(`/tools/${id}/`)).toEqual({ toolId: canonicalToolId(id), unknown: false });
+    }
   });
 });

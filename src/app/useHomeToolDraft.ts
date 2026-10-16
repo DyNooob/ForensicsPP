@@ -20,51 +20,61 @@
  */
 
 import React from "react";
-import type { ToolId } from "../config/app";
+import type { TextLaunchTool } from "../core/launchTarget";
 
-export type HomeDraftTool = Extract<ToolId, "lookup" | "urltool" | "hash" | "timestamp" | "json" | "ioc">;
-
-type HomeToolDraft = {
-  input: string;
-  createdAt: number;
-};
-
+export type HomeDraftTool = TextLaunchTool;
 const keyFor = (tool: HomeDraftTool) => `forensicspp:home-draft:${tool}`;
+const drafts = new Map<HomeDraftTool, { serialized: string; input: string }>();
+let sequence = 0;
 
-export function saveHomeToolDraft(tool: HomeDraftTool, input: string) {
-  if (typeof sessionStorage === "undefined" || !input.trim()) return;
-  const draft: HomeToolDraft = { input, createdAt: Date.now() };
-  sessionStorage.setItem(keyFor(tool), JSON.stringify(draft));
+function legacyStorage(): Storage | undefined {
+  try { return typeof sessionStorage === "undefined" ? undefined : sessionStorage; }
+  catch { return undefined; }
 }
 
-export function readHomeToolDraft(tool: HomeDraftTool, storage: Pick<Storage, "getItem"> = sessionStorage) {
-  const serialized = storage.getItem(keyFor(tool));
+// Drafts are transient handoffs, including personal identifiers and JWTs.
+// Keep new values in memory so browser-storage policy cannot break navigation.
+export function saveHomeToolDraft(tool: HomeDraftTool, input: string) {
+  if (!input.trim()) return;
+  const serialized = JSON.stringify({ input, sequence: ++sequence });
+  drafts.set(tool, { serialized, input });
+}
+
+export function readHomeToolDraft(tool: HomeDraftTool, storage?: Pick<Storage, "getItem">) {
+  const pending = drafts.get(tool);
+  if (pending) return pending;
+  let serialized: string | null | undefined;
+  try { serialized = (storage ?? legacyStorage())?.getItem(keyFor(tool)); }
+  catch { return null; }
   if (!serialized) return null;
   try {
-    const draft = JSON.parse(serialized) as Partial<HomeToolDraft>;
-    return typeof draft.input === "string" && draft.input.trim() ? { serialized, input: draft.input } : null;
+    const draft = JSON.parse(serialized) as { input?: unknown } | null;
+    return draft && typeof draft.input === "string" && draft.input.trim() ? { serialized, input: draft.input } : null;
   } catch {
     return serialized.trim() ? { serialized, input: serialized } : null;
   }
 }
 
+export function consumeHomeToolDraft(tool: HomeDraftTool, serialized: string) {
+  if (drafts.get(tool)?.serialized === serialized) drafts.delete(tool);
+  try {
+    const storage = legacyStorage();
+    if (storage?.getItem(keyFor(tool)) === serialized) storage.removeItem(keyFor(tool));
+  } catch { /* Legacy storage is optional. */ }
+}
+
+export function clearHomeToolDrafts() { drafts.clear(); }
+
 export function useHomeToolDraft(tool: HomeDraftTool, active: boolean, applyDraft: (input: string) => void) {
   const applyDraftRef = React.useRef(applyDraft);
   applyDraftRef.current = applyDraft;
-
   React.useEffect(() => {
-    if (!active || typeof sessionStorage === "undefined") return;
-    const draft = readHomeToolDraft(tool, sessionStorage);
+    if (!active) return;
+    const draft = readHomeToolDraft(tool);
     if (!draft) return;
     applyDraftRef.current(draft.input);
-
-    // Defer consumption so React StrictMode's development remount receives
-    // the same payload before the live mount removes it.
-    const timer = window.setTimeout(() => {
-      if (sessionStorage.getItem(keyFor(tool)) === draft.serialized) {
-        sessionStorage.removeItem(keyFor(tool));
-      }
-    }, 0);
+    // Defer consumption so StrictMode remounts still receive the same payload.
+    const timer = window.setTimeout(() => consumeHomeToolDraft(tool, draft.serialized), 0);
     return () => window.clearTimeout(timer);
   }, [active, tool]);
 }

@@ -21,8 +21,19 @@
 
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { viteSingleFile } from "vite-plugin-singlefile";
+import { standalonePlugin } from "./scripts/standalone-plugin";
+import { normalizeVendorCdn, vendorAssetUrl, vendorCdnPlugin } from "./scripts/vendor-cdn";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+// Browser shim for node's `crypto` builtin. Several dependencies (notably
+// bcryptjs' ESM entry) import node `crypto` at module top level. bcryptjs
+// declares `browser: { "crypto": false }`, but that hint is dead because the
+// package also ships an `exports` map, which Vite honors instead — so the node
+// builtin leaks into the browser bundle and the bundler emits a runtime
+// "Could not dynamically require 'crypto'" throw. Aliasing the *exact* specifier
+// `crypto` to a Web-Crypto-backed shim fixes it without touching node-side code.
+const browserCryptoShim = fileURLToPath(new URL("./src/shims/node-crypto-browser.ts", import.meta.url));
 
 // Build identity (commit hash + branch) for the Preview notice. Computed at
 // build time so a forensic examiner can tell exactly which build is running.
@@ -66,12 +77,22 @@ function copyrightCssPlugin(): Plugin {
 // Workers from file:// (origin "null"), so worker-backed forensic tools
 // require serving over HTTP (npm run preview or any static server). This is
 // an offline distribution, NOT a single self-contained file.
-// vite-plugin-singlefile forces inlineDynamicImports=true, which conflicts
+// Inlining forces inlineDynamicImports=true, which conflicts
 // with manualChunks, so we drop manualChunks in this mode. The default
 // `npm run build` stays multi-chunk and is unaffected.
 const singleFileBuild = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SINGLE_FILE === "1";
+// Opt in only after uploading the matching vendor package. Offline/standalone
+// releases always keep their dependencies local.
+const vendorCdn = singleFileBuild ? "" : normalizeVendorCdn(process.env.VENDOR_CDN_URL);
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      // Match the exact "crypto" specifier only (anchored regex), so
+      // "crypto-js" / "crypto.subtle" are never rewritten.
+      { find: /^crypto$/, replacement: browserCryptoShim }
+    ]
+  },
   // Web build uses root-absolute asset URLs so the SPA fallback (Nginx
   // `try_files ... /index.html`) and any /tools/<slug>/ deep-link boot the
   // app correctly from a sub-path. The standalone build inlines everything
@@ -85,7 +106,12 @@ export default defineConfig({
     // with the build mode. Missing before — the banner silently never showed.
     "import.meta.env.VITE_PREVIEW": JSON.stringify(process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true" ? "1" : "0")
   },
-  plugins: [react(), copyrightCssPlugin(), ...(singleFileBuild ? [viteSingleFile()] : [])],
+  plugins: [react(), copyrightCssPlugin(), ...(vendorCdn ? [vendorCdnPlugin(vendorCdn)] : []), ...(singleFileBuild ? [standalonePlugin()] : [])],
+  experimental: vendorCdn ? {
+    renderBuiltUrl(filename) {
+      return vendorAssetUrl(vendorCdn, filename);
+    }
+  } : undefined,
   build: {
     target: "es2022",
     rollupOptions: {

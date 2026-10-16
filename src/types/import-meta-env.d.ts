@@ -23,6 +23,7 @@
 // Vite-specific module shapes it needs by hand (see assets.d.ts) instead of
 // pulling in `vite/client`, so only the build-mode flag is declared here.
 interface ImportMetaEnv {
+  readonly BASE_URL: string;
   /** True for `vite build` output, therefore also for `vite preview`. */
   readonly PROD: boolean;
   /** True for the `vite` dev server. */

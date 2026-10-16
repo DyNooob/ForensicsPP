@@ -53,7 +53,7 @@ export function LegalConsentModal({ t, open, onAccept }: LegalConsentModalProps)
     >
       <p className="legal-consent-body">{t.legalNoticeBody}</p>
       <ul className="legal-consent-list">
-        {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview, t.legalDataCare].map((item) => (
+        {[t.legalAuthorization, t.legalLawfulUse, t.legalOutputReview, t.legalDataCare, t.legalLocalData].map((item) => (
           <li key={item}><CheckCircleFilled aria-hidden="true" /><span>{item}</span></li>
         ))}
       </ul>

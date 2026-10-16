@@ -21,7 +21,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { writeFile, mkdir, mkdtemp, readdir, rm, unlink } from "node:fs/promises";
+import { writeFile, mkdir, mkdtemp, readdir, rm, unlink, readFile } from "node:fs/promises";
 import { request } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -37,47 +37,15 @@ const height = Number(process.env.AUDIT_HEIGHT || 900);
 const saveScreenshots = process.env.AUDIT_SCREENSHOTS === "1";
 const defaultThemeMode = process.env.AUDIT_THEME === "dark" ? "dark" : "light";
 const screenshotDir = process.env.AUDIT_SCREENSHOT_DIR || "layout-audit-screenshots";
-const legalVersion = "2026-07-13-v2";
+const appConfigSource = await readFile(new URL("../src/config/app.ts", import.meta.url), "utf8");
+const legalVersion = /export const legalVersion = "([^"]+)"/.exec(appConfigSource)?.[1];
+if (!legalVersion) throw new Error("Could not resolve current legal consent version");
 const legacyEvidenceCleanupVersion = "2026-07-13-v1";
 
-const allTools = [
-  "home",
-  "cyberchef",
-  "image",
-  "codec",
-  "crypto",
-  "jwt",
-  "password",
-  "sql",
-  "sqlite",
-  "registry",
-  "plist",
-  "browserartifacts",
-  "evtx",
-  "documentforensics",
-  "android",
-  "ioc",
-  "email",
-  "urltool",
-  "http",
-  "qr",
-  "fileid",
-  "png",
-  "archive",
-  "binary",
-  "windows",
-  "strings",
-  "entropy",
-  "hash",
-  "timestamp",
-  "timeline",
-  "baseconvert",
-  "uuid",
-  "json",
-  "regex",
-  "pcap",
-  "yara"
-];
+const definitionSource = appConfigSource.slice(appConfigSource.indexOf("const toolDefinitions = ["), appConfigSource.indexOf("] as const;"));
+const allTools = definitionSource.split("\n")
+  .filter((line) => line.includes('{ id: "') && !line.includes("hidden: true"))
+  .map((line) => /id: "([^"]+)"/.exec(line)?.[1]).filter(Boolean);
 const requestedTools = process.env.AUDIT_TOOLS?.split(",").map((tool) => tool.trim()).filter(Boolean) ?? [];
 const tools = requestedTools.length ? allTools.filter((tool) => requestedTools.includes(tool)) : allTools;
 
@@ -560,7 +528,7 @@ function visiblePanelAuditExpression(tool) {
   return `(() => {
     const e = document.documentElement;
     const body = document.querySelector(".tool-body");
-    const container = body?.firstElementChild;
+    const container = body?.querySelector('.tool-retained-view:not([hidden]) > *') ?? body?.firstElementChild;
     const rect = (node) => {
       if (!node) return null;
       const r = node.getBoundingClientRect();
@@ -724,6 +692,7 @@ async function captureViewport(client, filename) {
   await writeFile(join(screenshotDir, filename), Buffer.from(shot.data, "base64"));
 }
 
+let auditNavigationSequence = 0;
 async function loadToolState(client, tool, options = {}) {
   const {
     lang = "zh",
@@ -732,8 +701,7 @@ async function loadToolState(client, tool, options = {}) {
     cleanHome = false,
     legalAccepted = true
   } = options;
-  await client.send("Runtime.evaluate", {
-    expression: `
+  const startupSource = `
       localStorage.setItem("forensicspp:app.lang", JSON.stringify(${JSON.stringify(lang)}));
       localStorage.setItem("forensicspp:app.activeTool", JSON.stringify(${JSON.stringify(tool)}));
       localStorage.setItem("forensicspp:app.themeMode", JSON.stringify(${JSON.stringify(themeMode)}));
@@ -748,18 +716,25 @@ async function loadToolState(client, tool, options = {}) {
         localStorage.setItem("forensicspp:app.recentTools", JSON.stringify([]));
         localStorage.setItem("forensicspp:app.favoriteTools", JSON.stringify([]));
       }
-      location.hash = ${JSON.stringify(tool)};
-    `,
-    awaitPromise: true
-  });
-  await client.send("Page.reload", { ignoreCache: true });
+    `;
+  const startupScript = await client.send("Page.addScriptToEvaluateOnNewDocument", { source: startupSource });
+  // A unique document URL forces a fresh mount after setting preferences,
+  // without racing a fragment navigation against Page.reload.
+  const navigationUrl = new URL(baseUrl);
+  navigationUrl.searchParams.set("fppAudit", String(++auditNavigationSequence));
+  navigationUrl.hash = tool;
+  await client.send("Page.navigate", { url: navigationUrl.href });
   await wait(tool === "cyberchef" ? 1800 : 500);
   const toolReady = await waitForRuntimeValue(
     client,
     `Boolean(location.hash === ${JSON.stringify(`#${tool}`)} && document.querySelector(${JSON.stringify(`.tool-retained-view[data-tool-id="${tool}"]:not([hidden])`)}) && document.querySelector('.page-title')?.textContent && !document.querySelector(${JSON.stringify(`.tool-retained-view[data-tool-id="${tool}"]:not([hidden]) .tool-loading-state`)}))`,
-    tool === "cyberchef" ? 12000 : 8000
+    20000
   );
-  if (!toolReady) throw new Error(`Tool did not become active: ${tool}`);
+  await client.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: startupScript.identifier });
+  if (!toolReady) {
+    const detail = await client.send("Runtime.evaluate", { expression: `JSON.stringify({ url: location.href, title: document.querySelector('.page-title')?.textContent, active: [...document.querySelectorAll('.tool-retained-view:not([hidden])')].map((node) => node.getAttribute('data-tool-id')), text: document.querySelector('.tool-body')?.innerText?.slice(-600) })`, returnByValue: true });
+    throw new Error(`Tool did not become active: ${tool}; ${detail.result.value}`);
+  }
 }
 
 async function clickRuntimeButton(client, expression, readyExpression) {
@@ -906,6 +881,9 @@ async function auditThemeSwitch(client) {
     `document.querySelector('button[aria-label="设置"]')?.click();`,
     "Boolean(document.querySelector('.settings-modal'))"
   );
+  await clickRuntimeButton(client,
+    `[...document.querySelectorAll('.settings-sidebar .ant-menu-item')].find((node) => (node.textContent || '').trim() === '外观')?.click();`,
+    "Boolean(document.querySelector('.settings-appearance-preview'))");
   await clickRuntimeButton(
     client,
     `[...document.querySelectorAll('.settings-main .ant-segmented-item')].find((node) => (node.textContent || '').trim() === '黑暗')?.click();`,
@@ -916,7 +894,7 @@ async function auditThemeSwitch(client) {
     expression: `(() => ({
       mode: document.documentElement.dataset.themeMode,
       stored: JSON.parse(localStorage.getItem('forensicspp:app.themeMode') || 'null'),
-      background: getComputedStyle(document.body).backgroundColor,
+      background: getComputedStyle(document.getElementById("root")).backgroundColor,
       surface: getComputedStyle(document.querySelector('.settings-modal .ant-modal-content')).backgroundColor,
       sidebar: getComputedStyle(document.querySelector('.tool-sidebar')).backgroundColor
     }))()`,
@@ -932,7 +910,7 @@ async function auditThemeSwitch(client) {
     expression: `(() => ({
       mode: document.documentElement.dataset.themeMode,
       stored: JSON.parse(localStorage.getItem('forensicspp:app.themeMode') || 'null'),
-      background: getComputedStyle(document.body).backgroundColor,
+      background: getComputedStyle(document.getElementById("root")).backgroundColor,
       surface: getComputedStyle(document.querySelector('.settings-modal .ant-modal-content')).backgroundColor,
       sidebar: getComputedStyle(document.querySelector('.tool-sidebar')).backgroundColor
     }))()`,
@@ -1051,7 +1029,7 @@ async function auditHashWorkflow(client) {
   });
   await clickRuntimeButton(
     client,
-    `[...document.querySelectorAll('.hash-workbench button')].find((node) => ['计算哈希', 'Calculate'].includes((node.textContent || '').trim()))?.click();`,
+    `[...document.querySelectorAll('.hash-workbench button')].find((node) => ['计算', '计算哈希', 'Calculate'].includes((node.textContent || '').trim()))?.click();`,
     "Boolean(document.querySelector('.hash-simple-text-result'))"
   );
   const after = await client.send("Runtime.evaluate", {
@@ -1338,7 +1316,7 @@ async function auditCollapsedToolCenter(client) {
     expression: `(() => {
       const main = document.querySelector(".tool-main");
       const body = document.querySelector(".tool-body");
-      const container = body?.firstElementChild;
+      const container = body?.querySelector('.tool-retained-view:not([hidden]) > *') ?? body?.firstElementChild;
       const mainRect = main?.getBoundingClientRect();
       const containerRect = container?.getBoundingClientRect();
       const delta = mainRect && containerRect
@@ -1831,7 +1809,7 @@ async function auditLoadedFileTools(client, selectedTools = null) {
   const fixture = await createFileToolFixtures();
   const results = [];
   try {
-    for (const state of loadedFileToolStates.filter((item) => !selectedTools || selectedTools.includes(item.tool))) {
+    for (const state of loadedFileToolStates.filter((item) => allTools.includes(item.tool) && (!selectedTools || selectedTools.includes(item.tool)))) {
       if (process.env.AUDIT_VERBOSE === "1") console.log(`Auditing loaded file: ${state.tool}`);
       await loadToolState(client, state.tool);
       const document = await client.send("DOM.getDocument", { depth: 1 });
@@ -1972,21 +1950,14 @@ const seededToolStates = [
   {
     tool: "crypto",
     readyClass: ".crypto-simple-workbench.has-crypto .crypto-simple-result-panel",
-    afterLoad: `(() => { const input=document.querySelector('.crypto-simple-text-field textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set; if(input&&setter){setter.call(input,'KHOOR ZRUOG'); input.dispatchEvent(new Event('input',{bubbles:true}));} setTimeout(()=>[...document.querySelectorAll('button')].find((node)=>(node.textContent||'').trim()==='执行')?.click(),50); })()`,
+    afterLoad: `(() => { [...document.querySelectorAll('.crypto-simple-input-panel button')].find((node) => (node.textContent || '').trim() === '载入示例')?.click(); setTimeout(() => document.querySelector('.crypto-simple-primary-action button')?.click(), 100); })()`,
     values: {}
   },
   {
     tool: "jwt",
-    readyClass: ".jwt-simple-workbench.has-jwt .jwt-simple-output",
+    readyClass: ".jwt-workbench.has-jwt .jwt-overview-panel",
     values: {},
-    afterLoad: `(() => {
-      const input = document.querySelector('.jwt-simple-token-input');
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      if (input && setter) {
-        setter.call(input, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYXNlLTAwMSIsImlhdCI6MTcxOTc5NTYwMH0.signature");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    })()`
+    afterLoad: `(() => { [...document.querySelectorAll('.jwt-input-panel button')].find((node) => (node.textContent || '').trim() === '载入示例')?.click(); })()`
   },
   {
     tool: "android",
@@ -2074,7 +2045,7 @@ const seededToolStates = [
 
 async function auditSeededToolStates(client) {
   const results = [];
-  for (const fixture of seededToolStates) {
+  for (const fixture of seededToolStates.filter((item) => tools.includes(item.tool))) {
     if (process.env.AUDIT_VERBOSE === "1") console.log(`Auditing seeded tool: ${fixture.tool}`);
     await client.send("Runtime.evaluate", {
       expression: `

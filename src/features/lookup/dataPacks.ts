@@ -69,10 +69,93 @@ export async function inspectLookupDataPacks(): Promise<LookupDataPackStatus[]> 
       id,
       version: pack.version,
       source: pack.source,
-      cached: Boolean(await cache.match(pack.url)),
+      cached: Boolean((await cache.match(pack.url))?.ok),
       cacheSupported: true
     })));
   } catch {
     return packs.map(([id, pack]) => ({ id, version: pack.version, source: pack.source, cached: false, cacheSupported: false }));
+  }
+}
+
+export type PackDownloadProgress = { received: number; total: number };
+export class DataPackError extends Error {
+  constructor(public code: "unavailable" | "network" | "invalid" | "storage" | "timeout") {
+    super(`lookup data pack: ${code}`);
+  }
+}
+
+/** Shared by Settings and the lookup Worker: only complete packs enter the cache. */
+export async function fetchLookupDataPack(id: LookupDataPackId, options: {
+  requireCache?: boolean;
+  signal?: AbortSignal;
+  onProgress?: (progress: PackDownloadProgress) => void;
+} = {}): Promise<Response> {
+  const request = new Request(LOOKUP_DATA_PACKS[id].url, { mode: "cors", credentials: "omit" });
+  let cache: Cache | null = null;
+  try {
+    if (typeof caches !== "undefined") cache = await caches.open(LOOKUP_DATA_CACHE);
+    const cached = await cache?.match(request);
+    if (cached?.ok) return cached;
+  } catch { cache = null; }
+  if (options.requireCache && !cache) throw new DataPackError("unavailable");
+
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 60_000);
+  try {
+    const response = await fetch(request, { cache: "force-cache", signal: controller.signal });
+    if (!response.ok || !response.body) throw new DataPackError("network");
+    const total = Number(response.headers.get("content-length")) || 0;
+    const limit = 64 * 1024 * 1024;
+    if (total > limit) throw new DataPackError("invalid");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    let lastProgress = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > limit) throw new DataPackError("invalid");
+        chunks.push(value);
+        if (Date.now() - lastProgress > 100) {
+          options.onProgress?.({ received, total });
+          lastProgress = Date.now();
+        }
+      }
+    } finally { await reader.cancel().catch(() => undefined); }
+    const bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+    // Reject CDN error documents and truncated packs before persisting them.
+    if (id === "id") {
+      try {
+        const payload = JSON.parse(new TextDecoder().decode(bytes));
+        if (!payload.areas || typeof payload.areas !== "object" || Array.isArray(payload.areas) || !Object.keys(payload.areas).length) throw new Error();
+      } catch { throw new DataPackError("invalid"); }
+    } else if (id === "ip" ? bytes.length < 256 + 65536 * 8 : bytes.length < 17 || new DataView(bytes.buffer).getUint32(4, true) < 8 || new DataView(bytes.buffer).getUint32(4, true) >= bytes.length) {
+      throw new DataPackError("invalid");
+    }
+    const complete = new Response(bytes, { headers: { "Content-Type": id === "id" ? "application/json" : "application/octet-stream" } });
+    if (cache) {
+      try {
+        await cache.put(request, complete.clone());
+        if (options.requireCache && !(await cache.match(request))?.ok) throw new Error();
+      } catch { if (options.requireCache) throw new DataPackError("storage"); }
+    }
+    options.onProgress?.({ received, total: received });
+    return complete;
+  } catch (caught) {
+    if (timedOut) throw new DataPackError("timeout");
+    if (caught instanceof DataPackError || options.signal?.aborted) throw caught;
+    throw new DataPackError("network");
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", abort);
   }
 }

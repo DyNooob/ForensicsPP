@@ -19,6 +19,8 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import cyberChef from "./cyberchef.json";
+
 export type OpenSourceProject = {
   name: string;
   category: "runtime" | "embedded" | "development";
@@ -44,16 +46,16 @@ export const openSourceProjects: OpenSourceProject[] = [
   { name: "jsQR", category: "runtime", purpose: { zh: "二维码识别", en: "QR code decoding" }, license: "Apache-2.0", repository: "https://github.com/cozmo/jsQR", version: "1.4" },
   { name: "postal-mime", category: "runtime", purpose: { zh: "EML 与 MIME 邮件解析", en: "EML and MIME parsing" }, license: "MIT-0", repository: "https://github.com/postalsys/postal-mime", version: "2" },
   { name: "PDF.js", category: "runtime", purpose: { zh: "PDF 结构、元数据与附件解析", en: "PDF structure, metadata, and attachment parsing" }, license: "Apache-2.0", repository: "https://github.com/mozilla/pdf.js", version: "6" },
-  { name: "sm-crypto", category: "runtime", purpose: { zh: "SM2、SM3、SM4 国密算法", en: "SM2, SM3, and SM4 algorithms" }, license: "MIT", repository: "https://github.com/JuneAndGreen/sm-crypto", version: "0.4" },
+  { name: "sm-crypto", category: "runtime", purpose: { zh: "SM3 国密摘要", en: "SM3 digests" }, license: "MIT", repository: "https://github.com/JuneAndGreen/sm-crypto", version: "0.5" },
   { name: "sql-formatter", category: "runtime", purpose: { zh: "SQL 格式化", en: "SQL formatting" }, license: "MIT", repository: "https://github.com/sql-formatter-org/sql-formatter", version: "15" },
   { name: "sql.js", category: "runtime", purpose: { zh: "浏览器内 SQLite 数据库", en: "SQLite in the browser" }, license: "MIT", repository: "https://github.com/sql-js/sql.js", version: "1" },
   { name: "TS-EVTX", category: "runtime", purpose: { zh: "Windows EVTX 与 BinXML 解析", en: "Windows EVTX and BinXML parsing" }, license: "MIT", repository: "https://github.com/NickSmet/ts-evtx", version: "1.2" },
   { name: "YARA-X", category: "runtime", purpose: { zh: "在浏览器内编译并扫描 YARA 规则", en: "Compile and scan YARA rules in the browser" }, license: "BSD-3-Clause", repository: "https://github.com/VirusTotal/yara-x", version: "1.15" },
   { name: "YAML", category: "runtime", purpose: { zh: "Sigma YAML 规则读取", en: "Sigma YAML rule parsing" }, license: "ISC", repository: "https://github.com/eemeli/yaml", version: "2" },
-  { name: "CyberChef", category: "embedded", purpose: { zh: "内置数据转换工作台", en: "Embedded data transformation workbench" }, license: "Apache-2.0", repository: "https://github.com/gchq/CyberChef", version: "10.19.4", notices: "./cyberchef/assets/main.js.LICENSE.txt" },
+  { name: "CyberChef", category: "embedded", purpose: { zh: "内置数据转换工作台", en: "Embedded data transformation workbench" }, license: "Apache-2.0", repository: "https://github.com/gchq/CyberChef", version: cyberChef.version, notices: "./cyberchef/assets/main.js.LICENSE.txt" },
   { name: "Vite", category: "development", purpose: { zh: "开发服务器与生产构建", en: "Development server and production build" }, license: "MIT", repository: "https://github.com/vitejs/vite", version: "6" },
   { name: "Vite React Plugin", category: "development", purpose: { zh: "React 构建集成", en: "React build integration" }, license: "MIT", repository: "https://github.com/vitejs/vite-plugin-react", version: "5" },
-  { name: "Vite SingleFile Plugin", category: "development", purpose: { zh: "将构建产物内联为单文件 HTML，支持双击离线打开", en: "Inlines the build into a single HTML file for offline double-click use" }, license: "MIT", repository: "https://github.com/richardtallent/vite-plugin-singlefile", version: "2.3.3" },
+  { name: "Puppeteer", category: "development", purpose: { zh: "真实浏览器发布回归验证", en: "Real-browser release regression checks" }, license: "Apache-2.0", repository: "https://github.com/puppeteer/puppeteer" },
   { name: "Vitest", category: "development", purpose: { zh: "解析器与核心逻辑自动测试", en: "Automated tests for parsers and core logic" }, license: "MIT", repository: "https://github.com/vitest-dev/vitest", version: "4" },
   { name: "TypeScript", category: "development", purpose: { zh: "类型检查与源码编译", en: "Type checking and compilation" }, license: "Apache-2.0", repository: "https://github.com/microsoft/TypeScript", version: "5" },
   { name: "DefinitelyTyped: React", category: "development", purpose: { zh: "React TypeScript 类型定义", en: "React TypeScript definitions" }, license: "MIT", repository: "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react" },

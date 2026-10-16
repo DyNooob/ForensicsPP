@@ -20,7 +20,9 @@
  */
 
 import CryptoJS from "crypto-js";
-import { sm3 } from "sm-crypto";
+// Import the digest directly: the package root eagerly initializes SM2's
+// Node-only random generator, which throws in production Web Workers.
+import sm3 from "sm-crypto/src/sm3/index.js";
 import type { HashBundle } from "../models";
 
 export function bytesToWordArray(bytes: Uint8Array) {

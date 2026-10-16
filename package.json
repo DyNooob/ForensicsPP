@@ -1,6 +1,6 @@
 {
   "name": "forensicspp",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-rc.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -25,9 +25,11 @@
     "i18n:extract": "node scripts/i18n-extract.mjs",
     "i18n:check": "node scripts/i18n-check.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
+    "verify:cdn": "node scripts/verify-vendor-cdn.mjs",
     "release:package": "node scripts/package-release.mjs",
     "build": "npm run clean && npm run check:headers && npm run typecheck && vite build && node scripts/finalize-dist.mjs && node scripts/build-seo-pages.mjs && npm run verify:dist && npm run lint:seo",
     "build:standalone": "npm run clean && npm run check:headers && npm run typecheck && SINGLE_FILE=1 vite build && node scripts/finalize-dist.mjs && npm run verify:dist",
+    "build:cdn": "VENDOR_CDN_URL=https://static.digiforensics.cn npm run build && node scripts/package-vendor-cdn.mjs",
     "build:seo": "node scripts/build-seo-pages.mjs",
     "lint:seo": "node scripts/lint-seo.mjs",
     "smoke:prod": "node scripts/smoke-prod.mjs",
@@ -40,7 +42,10 @@
     "perf:baseline": "node scripts/perf-matrix.mjs --write-baseline",
     "perf:check": "node scripts/perf-matrix.mjs --check",
     "validate:fixtures": "node scripts/gen-validation-fixtures.mjs",
-    "validate": "vitest run tests/validation"
+    "validate": "vitest run tests/validation",
+    "smoke:settings": "node scripts/smoke-settings.mjs",
+    "smoke:image": "node scripts/smoke-image.mjs",
+    "smoke:cdn": "node scripts/smoke-cdn.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
@@ -64,7 +69,6 @@
     "sql-formatter": "^15.8.2",
     "sql.js": "^1.14.1",
     "vite": "^6.0.3",
-    "vite-plugin-singlefile": "^2.3.3",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
@@ -73,6 +77,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
+    "puppeteer-core": "^25.13.0",
     "typescript": "~5.7.2",
     "vitest": "^4.1.7"
   }

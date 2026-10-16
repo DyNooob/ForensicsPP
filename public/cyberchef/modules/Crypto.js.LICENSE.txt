@@ -5,17 +5,43 @@
  * @license  MIT
  */
 
-/*! https://mths.be/punycode v1.3.2 by @mathias */
+/*! (c) Stefan Thomas | https://github.com/bitcoinjs/bitcoinjs-lib
+ */
+
+/*! (c) Tom Wu | http://www-cs-students.stanford.edu/~tjw/jsbn/
+ */
+
+/*! Mike Samuel (c) 2009 | code.google.com/p/json-sans-eval
+ */
+
+/*! https://mths.be/punycode v1.4.1 by @mathias */
 
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
-/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/facebook/regenerator/blob/main/LICENSE */
+/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */
 
 /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
 /**
+ * @author Medjedtxm
+ * @copyright Crown Copyright 2025
+ * @license Apache-2.0
+ */
+
+/**
  * @author Tan Zhen Yong [tzy@beyondthesprawl.com]
  * @copyright Crown Copyright 2019
+ * @license Apache-2.0
+ */
+
+/**
+ * @author ThePlayer372-FR []
+ * @license Apache-2.0
+ */
+
+/**
+ * @author Thomas Weißschuh [thomas@t-8ch.de]
+ * @copyright Crown Copyright 2023
  * @license Apache-2.0
  */
 
@@ -28,6 +54,12 @@
 /**
  * @author d98762625 [d98762625@gmail.com]
  * @copyright Crown Copyright 2019
+ * @license Apache-2.0
+ */
+
+/**
+ * @author flakjacket95 [dflack95@gmail.com]
+ * @copyright Crown Copyright 2024
  * @license Apache-2.0
  */
 
@@ -78,6 +110,13 @@
  * @author n1474335 [n1474335@gmail.com]
  * @author john19696 [john19696@protonmail.com]
  * @copyright Crown Copyright 2016
+ * @license Apache-2.0
+ */
+
+/**
+ * @author n1474335 [n1474335@gmail.com]
+ * @author ko80240 [csk.dev@proton.me]
+ * @copyright Crown Copyright 2023
  * @license Apache-2.0
  */
 
@@ -164,6 +203,27 @@
  */
 
 /**
+ * @author p-leriche [philip.leriche@cantab.net]
+ * @copyright Crown Copyright 2025
+ * @license Apache-2.0
+ */
+
+/**
+ * @author r4mos [2k95ljkhg@mozmail.com]
+ * @copyright Crown Copyright 2025
+ * @license Apache-2.0
+ */
+
+/**
+ * Ascon MAC implementation following NIST SP 800-232
+ * Vendor file for CyberChef
+ *
+ * @author Medjedtxm 
+ * @copyright Crown Copyright 2025
+ * @license Apache-2.0
+ */
+
+/**
  * Base64 functions.
  *
  * @author n1474335 [n1474335@gmail.com]
@@ -192,10 +252,10 @@
 /**
  * CyberChef - The Cyber Swiss Army Knife
  *
- * @copyright Crown Copyright 2016-2024
+ * @copyright Crown Copyright 2016-2026
  * @license Apache-2.0
  *
- *   Copyright 2016-2024 Crown Copyright
+ *   Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -246,6 +306,14 @@
  */
 
 /**
+ * Hexadecimal functions.
+ *
+ * @author n1474335 [n1474335@gmail.com]
+ * @copyright Crown Copyright 2016
+ * @license Apache-2.0
+ */
+
+/**
  * JA4 resources.
  *
  * @author n1474335 [n1474335@gmail.com]
@@ -283,6 +351,13 @@
  */
 
 /**
+ * Utilities and operations utilized for SM2 encryption and decryption
+ * @author flakjacket95 [dflack95@gmail.com]
+ * @copyright Crown Copyright 2024
+ * @license Apache-2.0
+ */
+
+/**
  * Various delimiters
  *
  * @author n1474335 [n1474335@gmail.com]
@@ -291,20 +366,10 @@
  */
 
 /**
- * [js-crc]{@link https://github.com/emn178/js-crc}
- *
- * @namespace crc
- * @version 0.2.0
- * @author Chen, Yi-Cyuan [emn178@gmail.com]
- * @copyright Chen, Yi-Cyuan 2015-2017
- * @license MIT
- */
-
-/**
  * [js-sha3]{@link https://github.com/emn178/js-sha3}
  *
- * @version 0.9.3
+ * @version 0.13.0
  * @author Chen, Yi-Cyuan [emn178@gmail.com]
- * @copyright Chen, Yi-Cyuan 2015-2023
+ * @copyright Chen, Yi-Cyuan 2015-2026
  * @license MIT
  */

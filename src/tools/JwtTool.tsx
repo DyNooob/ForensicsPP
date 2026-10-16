@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import {
   AButton,
   APasswordField,
@@ -128,6 +129,10 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
   const [signKey, setSignKey] = React.useState("");
   const [generatedToken, setGeneratedToken] = React.useState("");
   const [signError, setSignError] = React.useState("");
+
+  useHomeToolDraft("jwt", active, (draft) => {
+    setMode("decode"); setTokenInput(draft); setSelectedToken("");
+  });
 
   const verificationRequestRef = React.useRef(0);
 
@@ -295,6 +300,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
               </div>
               <textarea
                 className="single-textarea jwt-token-input"
+                aria-label="JWT"
                 value={tokenInput}
                 onChange={(event) => {
                   setTokenInput(event.currentTarget.value);
@@ -402,14 +408,14 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                 <strong>Header</strong>
                 <AButton variant="text" disabled={!decodeHeader} onClick={() => void copyText(decodeHeader)}>{t.copy_header}</AButton>
               </div>
-              <textarea className="compact-textarea jwt-json" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} />
+              <textarea className="compact-textarea jwt-json" aria-label="JWT Header" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} />
             </div>
             <div className="text-panel jwt-text-panel">
               <div className="text-panel-title">
                 <strong>Payload</strong>
                 <AButton variant="text" disabled={!decodePayload} onClick={() => void copyText(decodePayload)}>{t.copy_payload}</AButton>
               </div>
-              <textarea className="single-textarea jwt-json" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
+              <textarea className="single-textarea jwt-json" aria-label="JWT Payload" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
             </div>
             {decodeError && <div className="empty-state error-state">{decodeError}</div>}
             <div className="button-row">

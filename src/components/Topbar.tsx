@@ -68,6 +68,7 @@ export function Topbar({
   onSetLang
 }: TopbarProps) {
   const [helpOpen, setHelpOpen] = React.useState(false);
+  React.useEffect(() => setHelpOpen(false), [activeTool]);
   const { count: evidenceCount } = useEvidenceInbox();
   return (
     <>

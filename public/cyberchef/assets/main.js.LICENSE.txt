@@ -14,15 +14,17 @@
  * @license  MIT
  */
 
+/*! @license DOMPurify 3.4.15 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.15/LICENSE */
+
 /*! cptable.js (C) 2013-present SheetJS -- http://sheetjs.com */
 
 /*! cputils.js (C) 2013-present SheetJS -- http://sheetjs.com */
 
-/*! https://mths.be/punycode v1.3.2 by @mathias */
+/*! https://mths.be/punycode v1.4.1 by @mathias */
 
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
-/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/facebook/regenerator/blob/main/LICENSE */
+/*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */
 
 /**
  * @author Matt C [matt@artemisbot.uk]
@@ -33,6 +35,26 @@
 /**
  * @author d98762625 [d98762625@gmail.com]
  * @copyright Crown Copyright 2019
+ * @license Apache-2.0
+ */
+
+/**
+ * @author j433866 [j433866@gmail.com]
+ * @copyright Crown Copyright 2019
+ * @license Apache-2.0
+ */
+
+/**
+ * @author n1474335 [n1474335@gmail.com]
+ * @author Matt C [matt@artemisbot.uk]
+ * @copyright Crown Copyright 2016
+ * @license Apache-2.0
+ */
+
+/**
+ * @author n1474335 [n1474335@gmail.com]
+ * @author j433866 [j433866@gmail.com]
+ * @copyright Crown Copyright 2016
  * @license Apache-2.0
  */
 
@@ -104,14 +126,6 @@
  */
 
 /**
- * CodeMirror utilities that are relevant to both the input and output
- *
- * @author n1474335 [n1474335@gmail.com]
- * @copyright Crown Copyright 2022
- * @license Apache-2.0
- */
-
-/**
  * Custom error type for handling Dish type errors.
  * i.e. where the Dish cannot be successfully translated between types
  *
@@ -132,10 +146,10 @@
 /**
  * CyberChef - The Cyber Swiss Army Knife
  *
- * @copyright Crown Copyright 2016-2024
+ * @copyright Crown Copyright 2016-2026
  * @license Apache-2.0
  *
- *   Copyright 2016-2024 Crown Copyright
+ *   Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,6 +185,16 @@
  * File type functions
  *
  * @author n1474335 [n1474335@gmail.com]
+ * @copyright Crown Copyright 2018
+ * @license Apache-2.0
+ *
+ */
+
+/**
+ * Stream class for parsing binary protocols.
+ *
+ * @author n1474335 [n1474335@gmail.com]
+ * @author tlwr [toby@toby.codes]
  * @copyright Crown Copyright 2018
  * @license Apache-2.0
  *
@@ -225,13 +249,6 @@
  * SOFTWARE.
  */
 
-/**!
- * Sortable 1.15.2
- * @author	RubaXa   <trash@rubaxa.org>
- * @author	owenm    <owen23355@gmail.com>
- * @license MIT
- */
-
 //! Copyright (c) JS Foundation and other contributors
 
 //! github.com/moment/moment-timezone
@@ -244,4 +261,4 @@
 
 //! moment.js locale configuration
 
-//! version : 0.5.45
+//! version : 0.6.3

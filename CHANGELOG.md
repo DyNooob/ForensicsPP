@@ -2,6 +2,41 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
+## [1.0.0-rc.1] - 2026-10-13
+
+> Final release candidate before 1.0. 最后一个候选版本，集中修复真实浏览器执行、路由、查询生命周期和离线分发。
+
+### Fixed
+- 修复 CyberChef 深链接页相对路径错误和离线文档回退误显示 Forensics++ 的问题；更新为官方发布 v11.5.0，并核验上游资源 SHA-256。
+- 修复哈希等 Worker 因 `sm-crypto` 根入口初始化 SM2、动态加载 Node `crypto` 而无法启动的问题；改为直接导入 SM3 摘要模块。
+- 完成 bcrypt 浏览器 crypto 兼容层，使用 Web Crypto 安全随机源，按 65,536 字节分块；随机源不可用时明确报错。
+- 修复没有 SEO 专用 slug 的工具地址刷新后进入 404 的问题，所有可见工具与历史合并别名均可解析。
+- 查询工具在清空、编辑、切换类型或离开时终止旧 Worker；切换语言保留进行中的查询，结果与报告沿用该次查询的语言。
+- 超过 5,000 条的查询明确要求拆分批次，避免静默截断；重新执行时清除过时的当前报告快照。
+- 深链接页面正确注册根目录 Service Worker；安装时预缓存入口 JS、模块预加载和 CSS，首次安装后外壳可离线启动。
+- CacheStorage 不可用或写入超限时保留成功的网络响应；离线缓存不可用时返回可处理的错误。
+- 缓存指纹纳入 HTML 内容与 WASM 文件名，修复内联构建或仅元数据变化时复用旧缓存的问题。
+
+### Changed
+- 设置页重整卡片、文字层级、外观预览和手机导航，开源依赖显示用途、版本及许可证。
+- 静态数据包增加“本地化”按钮、下载进度、取消及失败重试；完整下载并保存后才能显示“已本地化”，后续查询复用同一浏览器缓存。
+- 使用条款更新为 2026-10-13-v4，补充本地保存、下载、清理边界、静态查询结果及 CyberChef 网络操作说明。
+- 首页支持自动建议与手动选择目标工具，新增 JWT/HTTP 线索转交；修复时间戳被误当卡号、普通导航覆盖已有输入的问题，空输入不再执行。
+- 首页输入转交改为内存队列，兼容旧草稿并处理浏览器存储被禁用的情况；手动文本哈希和已有摘要核验分别进入对应模式。
+- 归属地结果增加每页 100 条、跨页搜索、规则状态筛选与空筛选恢复；导出仍包含完整批次。
+- 首页和侧栏统一双语搜索，支持工具 ID、算法关键词与合并别名。
+- 补齐全部非首页工具的帮助，新增 URL、时间戳和正则示例；空历史显示“建议工具”，首页恢复语义化主标题。
+- SM3 导入收窄同时减少多个 Worker 的打包代码；查询 Worker 按需创建，空页面不再提前占用 Worker。
+- 时间检查增加 10 秒超时、单调时钟 RTT、缓存响应及本机时钟跳变检查；界面明确显示“服务器时间估计”。
+- 更新 `source-map-js`；移除存在未修复 `braces` 依赖链的单文件插件，使用项目内仅处理固定 HTML 入口的内联打包插件；Worker 与 HTML 同目录，发布检查阻止未解析的 Vite 预加载占位符。
+- JWT 输入、Header 与 Payload 编辑区补齐可访问名称。
+- Chrome 回归依赖纳入锁文件，支持 `CHROME_PATH` 与标准 macOS/Linux 路径；审计工具清单与法律确认版本从当前配置读取。
+- 分别生成 web / standalone 发布包，拒绝版本或构建类型不匹配的打包；保存已有发布包与校验记录。
+- 更新 README、发布指南和版本元数据；明确内联包的 Worker 分析需要本地 HTTP 服务。
+
+### Verification
+- 验证记录见 [RC.1 Release Notes](docs/releases/v1.0.0-rc.1.md)。
+
 ## [1.0.0-beta.7] - 2026-09-26
 
 > Local Intelligence Workbench pre-release. 焦点：浏览器本地归属地查询、身份/卡号规则核验、按需静态数据包、时间偏差告警与工作台式主页。
@@ -455,7 +490,8 @@ Forensics++ follows semantic versioning where practical. This file records user-
 
 - Historical compiled-site release.
 
-[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.4...HEAD
+[Unreleased]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.7...v1.0.0-rc.1
 [1.0.0-beta.5]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/DyNooob/ForensicsPP/compare/v1.0.0-beta.2...v1.0.0-beta.3

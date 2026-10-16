@@ -36,6 +36,6 @@ export function useServiceWorker() {
         .catch(() => undefined);
       return;
     }
-    navigator.serviceWorker.register(new URL("./sw.js", document.baseURI).href).catch(() => undefined);
+    navigator.serviceWorker.register(new URL(`${import.meta.env.BASE_URL}sw.js`, window.location.href).href).catch(() => undefined);
   }, []);
 }

@@ -9,7 +9,7 @@
   <p>
     <a href="https://www.forensicspp.com/"><img alt="Website" src="https://img.shields.io/badge/Website-forensicspp.com-4457A6?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1E6B4B?style=flat-square" /></a>
-    <img alt="Version 1.0.0 beta 7" src="https://img.shields.io/badge/Version-1.0.0--beta.7-4457A6?style=flat-square" />
+    <img alt="Version 1.0.0 RC 1" src="https://img.shields.io/badge/Version-1.0.0--rc.1-4457A6?style=flat-square" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=flat-square" />
     <img alt="Ant Design 5" src="https://img.shields.io/badge/Ant%20Design-5-1677FF?style=flat-square" />
     <a href="https://github.com/DyNooob/ForensicsPP"><img alt="Source repository" src="https://img.shields.io/badge/Source-GitHub-52606D?style=flat-square" /></a>
@@ -30,9 +30,9 @@ Forensics++ is a static web application for forensic triage, CTF/MISC, security 
 
 Forensics++ 是一个用于取证初筛、CTF/MISC、安全研究和数据检查的静态 Web 应用。文件、图片、邮件、数据库、日志、网络与编码工具统一放在同一套界面中；大多数分析直接在浏览器中完成，不依赖 Forensics++ 后端。
 
-The current pre-release is `1.0.0-beta.7`. Source code, tests, build scripts, and release packages are maintained in this repository.
+The current pre-release is `1.0.0-rc.1`. Source code, tests, build scripts, and release packages are maintained in this repository.
 
-当前预发布版本为 `1.0.0-beta.7`。源码、测试、构建脚本和发布包均在本仓库维护。
+当前预发布版本为 `1.0.0-rc.1`。源码、测试、构建脚本和发布包均在本仓库维护。
 
 ## Capabilities
 
@@ -61,12 +61,17 @@ APK 的"签名修复"是显式重新签名：可导入自己的 PKCS#8 私钥/X.
 
 ## Current Release
 
-### 1.0.0-beta.7 · 2026-09-26
+### 1.0.0-rc.1 · 2026-10-13
 
-- **Local attribution workbench**: batch IP/mobile/Chinese-ID/bank-card lookups with rule validation, CSV export, and pinned on-demand data packs cached for offline reuse. · 本地归属地工作台：批量查询 IP/手机号/身份证号/银行卡，规则核验、CSV 导出与按需离线缓存。
-- **Workbench launcher**: paste a clue on the redesigned home page and route it directly to the matching local tool. · 工作台式主页：粘贴线索后自动识别并进入合适的本地工具。
-- **Clock integrity indicator**: the top bar displays a server-time estimate and compares it with the computer clock; clicking it reports whether the difference exceeds two seconds. · 时间校验：顶栏显示服务器校准时间，点击后对比本机时钟；偏差超过两秒时提示。
-- **Image reveal pass**: common steganography, trailing payload, channel, and repair checks run together and start automatically for newly loaded images. · 图片还原：常见隐写、尾部载荷、通道与修复检查集中执行，并在载入新图片后自动分析。
+The final candidate before 1.0 focuses on release reliability and daily workflows. · 1.0 前最后一个候选版本，聚焦稳定性与日常使用体验。
+
+- **Workbench flow**: suggestions can be overridden; JWT/HTTP clues route directly, ordinary navigation preserves existing input, and transient drafts stay in memory. Every tool beyond Home has usage help, with new URL/time/regex samples. · 首页建议可手动修正，普通导航不覆盖输入，补齐帮助与示例。
+- **Settings and local data**: refreshed settings, mobile navigation, and explicit data-pack localization with download progress and retry. Saved packs work after reload without repeated downloads. · 设置界面重整，数据包支持主动本地化，刷新后查询复用本地缓存。
+- **CyberChef and terms**: official CyberChef v11.5.0, repaired embedded URLs, and updated storage/network terms. · 更新 CyberChef v11.5.0、修复打开地址并更新使用条款。
+- **Reliable local lookups**: clearing, editing, or switching tools cancels the old lookup; language changes no longer strand the running task. Oversized batches are rejected explicitly; results support 100-row pages, cross-page search and status filters while export keeps the complete batch. · 查询清空、编辑及工具切换会取消旧任务；切换语言不再导致查询卡住；超限批次明确提示。
+- **Offline shell repair**: deep links register the root service worker, bootstrap assets are cached during installation, and storage failures preserve successful network responses. · 深链接正确注册根目录 Service Worker，安装时缓存启动资源，缓存失败不会阻断在线资源。
+- **Browser crypto**: bcrypt uses secure browser randomness; unavailable secure randomness fails explicitly. · bcrypt 使用安全随机源；安全随机源不可用时明确报错。
+- **Release checks**: portable Chrome smoke checks, updated dependency audit, standard web and inlined distributions with SHA-256 checksums. · 增加可复现浏览器回归、依赖审计，以及带 SHA-256 的网站包和内联分发包。
 
 See [CHANGELOG.md](./CHANGELOG.md) for earlier releases and the full change list.
 
@@ -137,8 +142,10 @@ Generate a ZIP for static hosting or file distribution:
 生成可直接交给静态服务器或文件分发的 ZIP：
 
 ```bash
+npm run build
+npm run release:package -- --variant web
 npm run build:standalone
-npm run release:package
+npm run release:package -- --variant standalone
 ```
 
 Outputs:
@@ -146,13 +153,14 @@ Outputs:
 输出文件：
 
 ```text
-release/ForensicsPP-v1.0.0-beta.7-static.zip
-release/SHA256SUMS.txt
+release/ForensicsPP-v1.0.0-rc.1-web-static.zip
+release/ForensicsPP-v1.0.0-rc.1-standalone-static.zip
+release/SHA256SUMS-v1.0.0-rc.1.txt
 ```
 
-The ZIP contains the prebuilt static site, with no Node.js launcher. With `build:standalone`, all JS/CSS is inlined into a single `index.html` that opens from `file://` after unzip, and can also be deployed to Nginx, Apache, object storage, or any static host. Use `npm run build` instead when you need subdirectory hosting or on-demand multi-chunk loading.
+The ZIP contains a prebuilt static site. `build:standalone` inlines the main UI in `index.html`; worker scripts and bundled tools remain separate files. Double-clicking opens the UI and basic tools, but worker-based analysis requires HTTP hosting. For full local use, serve the unpacked directory, for example with `python3 -m http.server 8080`, then open `http://localhost:8080/`. Use `npm run build` for the website deployment with on-demand chunks; its routes and assets expect hosting at the domain root.
 
-ZIP 内是已经构建好的静态网站，不包含 Node.js 启动器。使用 `build:standalone` 时全部 JS/CSS 内联进单个 `index.html`，解压后双击即可从 `file://` 打开，也可以部署到 Nginx、Apache、对象存储或其他静态托管平台。需要子目录托管或按需加载多 chunk 时改用 `npm run build`。
+ZIP 内是预构建静态站点。`build:standalone` 将主界面内联到 `index.html`，Worker 和内置工具仍为独立文件；双击可打开界面与基础工具，Worker 分析需要 HTTP 服务。完整本地使用可在解压目录执行 `python3 -m http.server 8080`，然后访问 `http://localhost:8080/`。网站部署使用 `npm run build` 获得按需加载版本；其路由与资源要求部署在域名根目录。
 
 ## Data & Privacy
 
@@ -160,9 +168,9 @@ Forensics++ requires no application backend. Files and text are processed in the
 
 Forensics++ 不要求应用后端。文件和文本在当前浏览器中处理；界面设置和可恢复的工具状态由浏览器保存。打开工具不会把原始文件上传到 Forensics++ 服务器。
 
-IP, mobile-prefix, and administrative-division lookup data is downloaded only when the related lookup is used, then cached by the browser. Data-pack source, version, checksum, and cache state are shown under **Settings → Local Data**.
+IP, mobile-prefix, and administrative-division lookup data is downloaded only when the related lookup is used, then cached by the browser. Data-pack source, version, and cache state are shown under **Settings → Local Data**.
 
-IP、手机号段和行政区划数据只在使用对应查询时下载，之后由浏览器缓存。数据源、版本、校验值和缓存状态可在 **设置 → 本地数据** 查看。
+IP、手机号段和行政区划数据只在使用对应查询时下载，之后由浏览器缓存。数据源、版本和缓存状态可在 **设置 → 本地数据** 查看。
 
 Browser storage only improves continuity of use and does not replace formal evidence custody, read-only imaging, evidence intake, or report archiving. Before handling sensitive data, confirm your browser configuration, extensions, and runtime environment meet your requirements.
 

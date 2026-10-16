@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { SampleButton } from "../components/SampleButton";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
 import {
@@ -71,6 +72,9 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
   const [submittedBatchInput, setSubmittedBatchInput] = useStoredState("timestamp.submittedBatchInput.v3", "");
   const [page, setPage] = React.useState<TimestampPage>(() => input.trim() ? "single" : batchInput.trim() ? "batch" : "single");
   useHomeToolDraft("timestamp", active, (draft) => {
+    if (/\r|\n/.test(draft.trim())) {
+      setBatchInput(draft); setSubmittedBatchInput(""); setPage("batch"); return;
+    }
     setInput(draft);
     setSubmittedInput("");
     setPage("single");
@@ -175,7 +179,7 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
 
       {page === "single" && <>
         <div className="tool-panel wide-panel timestamp-simple-input-panel">
-          <ToolPanelHeader title={t.timestamp_input} actions={<AButton variant="text" disabled={!hasInput} onClick={clearSingle}>{t.clear}</AButton>} />
+          <ToolPanelHeader title={t.timestamp_input} actions={<><SampleButton toolId="timestamp" english={english} onLoad={(value) => { setInput(value); setSubmittedInput(""); }} /><AButton variant="text" disabled={!input && !hasInput} onClick={clearSingle}>{t.clear}</AButton></>} />
           <input className="text-input full-input" aria-label={t.timestamp_value} value={input} onChange={(event) => { setInput(event.currentTarget.value); setSubmittedInput(""); setSelectedCandidateKey(""); }} placeholder="1719705600 / 133638048000000000 / 20260706083045Z" />
           <div className="timestamp-preset-row">
             <ASelect aria-label={t.timestamp_format} value={preset} onChange={(value) => setPreset(String(value))} options={currentTimePresets.map((item) => ({ value: item.id, label: item.label }))} />

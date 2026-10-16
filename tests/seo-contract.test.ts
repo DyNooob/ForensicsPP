@@ -194,24 +194,16 @@ describe("SEO built artifacts", () => {
     }
   });
 
-  it("alias route slugs have a shell that canonicalizes to their canonical tool (when built)", () => {
+  it("keeps alias slugs out of static output and points to a canonical shell", () => {
     const base = distBase();
-    const aliases = Object.keys(SLUG_TO_TOOL).filter(
-      (s) => !Object.values(TOOL_SLUG).includes(s)
-    );
+    const aliases = Object.keys(SLUG_TO_TOOL).filter((slug) => !Object.values(TOOL_SLUG).includes(slug));
     for (const slug of aliases) {
-      const htmlPath = join(dist, "tools", slug, "index.html");
-      if (!existsSync(htmlPath)) {
-        console.warn(`alias shell not found: ${slug} — run \`npm run build\` to exercise this check.`);
-        continue;
-      }
-      const html = readFileSync(htmlPath, "utf8");
-      const tool = SLUG_TO_TOOL[slug];
-      const canonicalSlug = TOOL_SLUG[tool];
-      expect(
-        html.includes(`<link rel="canonical" href="${base}/tools/${canonicalSlug}/"`),
-        `${slug} should canonicalize to ${canonicalSlug}`
-      ).toBe(true);
+      expect(existsSync(join(dist, "tools", slug, "index.html")), `${slug} must not duplicate the canonical page`).toBe(false);
+      const canonicalSlug = TOOL_SLUG[SLUG_TO_TOOL[slug]];
+      const canonicalPath = join(dist, "tools", canonicalSlug, "index.html");
+      if (!existsSync(canonicalPath)) continue; // Source-only or standalone check.
+      const html = readFileSync(canonicalPath, "utf8");
+      expect(html.includes(`<link rel="canonical" href="${base}/tools/${canonicalSlug}/"`)).toBe(true);
     }
   });
 

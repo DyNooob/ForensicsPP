@@ -1,0 +1,7 @@
+{
+  "version": "11.5.0",
+  "entry": "cyberchef/CyberChef_v11.5.0.html",
+  "releaseUrl": "https://github.com/gchq/CyberChef/releases/tag/v11.5.0",
+  "archive": "CyberChef_8cd426dd4f40f1423912d5fad91b578a86a65112.zip",
+  "sha256": "f6478925d3eaa16ec08626a85f5b85eed10d531a5e18700615fed7ecb024cccf"
+}

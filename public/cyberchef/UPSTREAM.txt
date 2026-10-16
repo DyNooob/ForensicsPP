@@ -1,0 +1,9 @@
+CyberChef v11.5.0, official GCHQ release
+https://github.com/gchq/CyberChef/releases/tag/v11.5.0
+Archive: CyberChef_8cd426dd4f40f1423912d5fad91b578a86a65112.zip
+SHA-256: f6478925d3eaa16ec08626a85f5b85eed10d531a5e18700615fed7ecb024cccf
+
+Runtime files are unchanged from the official archive. Optional precompressed
+.js/.css/.html .br/.gz replicas are omitted; ordinary static hosts serve the
+uncompressed runtime files. Tesseract compressed language data is retained.
+LICENSE.txt is included from the matching upstream source commit.

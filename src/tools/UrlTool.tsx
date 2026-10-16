@@ -21,18 +21,12 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { SampleButton } from "../components/SampleButton";
+import { parseUrlInput } from "../utils/url";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { useStoredState } from "../utils/storage";
-
-function refang(value: string) {
-  return value.trim()
-    .replace(/^hxxps:/i, "https:")
-    .replace(/^hxxp:/i, "http:")
-    .replace(/\[\.\]|\(\.\)|\{\.\}/g, ".")
-    .replace(/\[:\]/g, ":");
-}
 
 function defang(value: string) {
   return value.replace(/^https:/i, "hxxps:").replace(/^http:/i, "hxxp:").replace(/\./g, "[.]");
@@ -46,11 +40,10 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   useHomeToolDraft("urltool", active, setInput);
   const parsed = React.useMemo(() => {
     if (!active) return { url: null as URL | null, normalized: "", error: "" };
-    const raw = refang(input);
+    const raw = input.trim();
     if (!raw) return { url: null as URL | null, normalized: "", error: "" };
     try {
-      const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
-      const url = new URL(withScheme);
+      const url = parseUrlInput(raw);
       return { url, normalized: url.toString(), error: "" };
     } catch (caught) {
       return { url: null, normalized: "", error: caught instanceof Error ? caught.message : String(caught) };
@@ -78,7 +71,7 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   return (
     <div className={`tool-grid url-workbench ${url ? "has-url" : "empty-url"}`}>
       <div className="tool-panel wide-panel url-source-panel">
-        <PanelTitle title="URL" />
+        <div className="panel-heading-row"><PanelTitle title="URL" /><SampleButton toolId="urltool" english={t.waiting === "Waiting"} onLoad={setInput} /></div>
         <textarea
           className="single-textarea url-source-textarea"
           aria-label={t.url_input}

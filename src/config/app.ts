@@ -19,10 +19,12 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { toolHelp } from "./toolHelp";
+
 const toolDefinitions = [
   { id: "home", category: "system", name: "home", desc: "homeDesc", featured: true, maturity: "stable", resourcePolicy: "retain" },
   { id: "cyberchef", category: "integration", name: "cyberchef", desc: "cyberchefDesc", featured: true, maturity: "stable", resourcePolicy: "retain" },
-  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "png", "crc", "qr", "exif", "metadata", "steganography", "repair"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析图片（png/jpg/gif/webp/bmp）：读取 EXIF 与元数据、检测隐写线索、校验 CRC/完整性、识别二维码。内置 yara 与 strings 能力，可发现嵌入文本与异常区段。", en: "Analyze images (png/jpg/gif/webp/bmp): read EXIF and metadata, surface steganography clues, verify CRC/integrity, and decode QR codes. Built-in yara and strings help surface embedded text and anomalous regions." } },
+  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "png", "crc", "qr", "exif", "metadata", "steganography", "repair"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析图片（png/jpg/gif/webp/bmp）：读取 EXIF 与元数据、检测隐写线索、校验 CRC/完整性、识别二维码。可查看容器异常与尾部数据，并提取常见隐藏线索。", en: "Analyze images (png/jpg/gif/webp/bmp): read EXIF and metadata, surface steganography clues, verify CRC/integrity, and decode QR codes. Inspect container anomalies, trailing data and common hidden-data leads." } },
   { id: "codec", category: "transform", name: "codec", desc: "codecDesc", maturity: "stable" },
   { id: "crypto", category: "transform", name: "crypto", desc: "cryptoDesc", maturity: "stable" },
   { id: "jwt", category: "transform", name: "jwt", desc: "jwtDesc", maturity: "stable" },
@@ -128,7 +130,7 @@ export type ToolDefinition = {
   emitsEnvelope?: boolean;
 };
 
-export const tools: readonly ToolDefinition[] = toolDefinitions;
+export const tools: readonly ToolDefinition[] = toolDefinitions.map((tool) => ({ ...tool, help: toolHelp[tool.id] ?? ("help" in tool ? tool.help : undefined) }));
 export const visibleTools: readonly ToolDefinition[] = tools.filter((tool) => !tool.hidden);
 const toolDefinitionMap = new Map<ToolId, ToolDefinition>(tools.map((tool) => [tool.id, tool]));
 export function getToolDefinitionById(toolId: ToolId) { return toolDefinitionMap.get(toolId) ?? null; }
@@ -165,15 +167,15 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.0-beta.7";
+export const appVersion = "1.0.0-rc.1";
 /** Date this version was published (YYYY-MM-DD). Bump together with `appVersion` on each release. */
-export const appReleaseDate = "2026-09-26";
+export const appReleaseDate = "2026-10-13";
 /** Where users download new releases. */
 export const releaseDownloadUrl = `${projectLinks.repo}/releases`;
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-09-26";
-export const legalVersion = "2026-09-26-v3";
+export const lastUpdated = "2026-10-13";
+export const legalVersion = "2026-10-13-v4";
 export const feedbackEmail = "toolab@digiforensics.cn";
 
 /**

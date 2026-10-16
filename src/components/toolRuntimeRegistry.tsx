@@ -27,10 +27,7 @@ import { copy } from "../i18n";
 const CyberChefTool = React.lazy(() => import("../tools/CyberChefTool").then((module) => ({ default: module.CyberChefTool })));
 const BaseConvertTool = React.lazy(() => import("../tools/BaseConvertTool").then((module) => ({ default: module.BaseConvertTool })));
 const UuidTool = React.lazy(() => import("../tools/UuidTool").then((module) => ({ default: module.UuidTool })));
-const RegexTool = React.lazy(async () => {
-  const [{ RegexTool }, ioc] = await Promise.all([import("../tools/RegexTool"), import("../features/ioc/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof RegexTool>, "classifyIocRisk">) => <RegexTool {...props} classifyIocRisk={ioc.iocRisk} /> };
-});
+const RegexTool = React.lazy(() => import("../tools/RegexTool").then((module) => ({ default: module.RegexTool })));
 const JsonTool = React.lazy(() => import("../tools/JsonTool").then((module) => ({ default: module.JsonTool })));
 const SqlTool = React.lazy(() => import("../tools/SqlTool").then((module) => ({ default: module.SqlTool })));
 const HomeTool = React.lazy(() => import("../tools/HomeTool").then((module) => ({ default: module.HomeTool })));
@@ -48,7 +45,8 @@ const TimelineTool = React.lazy(() => import("../tools/TimelineTool").then((modu
 const PcapTool = React.lazy(() => import("../tools/PcapSimpleTool").then((module) => ({ default: module.PcapTool })));
 const ImageTool = React.lazy(async () => {
   const [{ ImageTool }, image, qr] = await Promise.all([import("../tools/ImageTool"), import("../features/image/analyzer"), import("../features/qr/analyzer")]);
-  return { default: (props: Omit<React.ComponentProps<typeof ImageTool>, "services">) => <ImageTool {...props} services={{ ...image, ...qr }} /> };
+  const services = { ...image, ...qr };
+  return { default: (props: Omit<React.ComponentProps<typeof ImageTool>, "services">) => <ImageTool {...props} services={services} /> };
 });
 const CryptoTool = React.lazy(async () => {
   const [{ CryptoTool }, services] = await Promise.all([import("../tools/CryptoTool"), import("../features/crypto/algorithms")]);

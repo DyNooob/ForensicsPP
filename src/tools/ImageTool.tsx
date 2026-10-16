@@ -146,7 +146,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     buildAutoRevealPreviews, bytesToDataUrl, createChannelPreviews, createImageAnalysisPixels,
     detectImageFormat, emptyImageChannels, guessImageDimensions,
     imageExtensionForMime, imageMimeForFormat, imagePlaceholderDataUrl,
-    loadBrowserImage, revokeImagePreviewUrl
+    loadBrowserImage, revokeImagePreviewUrl, revokeImageObjectUrls
   } = services;
   const isEnglish = t.waiting === "Waiting";
   const [imageInfo, setImageInfo] = React.useState<ImageInfo | null>(null);
@@ -193,8 +193,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     if (channelTimerRef.current !== null) window.clearTimeout(channelTimerRef.current);
-    services.revokeImageObjectUrls();
-  }, [services]);
+    revokeImageObjectUrls();
+  }, [revokeImageObjectUrls]);
 
   React.useEffect(() => {
     if (active) return;

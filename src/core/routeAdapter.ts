@@ -82,7 +82,7 @@ export function resolveToolPath(
   const match = PATH_RE.exec(pathname || "");
   if (!match) return { toolId: null, unknown: false };
   const slug = match[1].toLowerCase();
-  const tool = SLUG_TO_TOOL[slug] ?? LEGACY_TO_TOOL[slug];
+  const tool = SLUG_TO_TOOL[slug] ?? LEGACY_TO_TOOL[slug] ?? (isToolId(slug) ? slug : null);
   if (tool && isToolId(tool)) {
     return { toolId: canonicalToolId(tool as ToolId), unknown: false };
   }

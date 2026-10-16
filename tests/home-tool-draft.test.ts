@@ -19,8 +19,10 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
-import { describe, expect, it } from "vitest";
-import { readHomeToolDraft } from "../src/app/useHomeToolDraft";
+import { afterEach, describe, expect, it } from "vitest";
+import { readHomeToolDraft, saveHomeToolDraft, consumeHomeToolDraft, clearHomeToolDrafts } from "../src/app/useHomeToolDraft";
+
+afterEach(clearHomeToolDrafts);
 
 describe("home tool draft handoff", () => {
   it("reads a structured draft without changing the input", () => {
@@ -37,5 +39,24 @@ describe("home tool draft handoff", () => {
   it("ignores empty or missing drafts", () => {
     expect(readHomeToolDraft("json", { getItem: () => null })).toBeNull();
     expect(readHomeToolDraft("json", { getItem: () => JSON.stringify({ input: "   " }) })).toBeNull();
+  });
+});
+
+describe("transient handoff safety", () => {
+  it("delivers inputs even when browser storage is unavailable", () => {
+    const blocked = { getItem: () => { throw new Error("blocked"); } };
+    saveHomeToolDraft("lookup", "13800138000");
+    expect(readHomeToolDraft("lookup", blocked)?.input).toBe("13800138000");
+    expect(readHomeToolDraft("json", blocked)).toBeNull();
+  });
+  it("does not consume a newer input from an older deferred callback", () => {
+    saveHomeToolDraft("jwt", "old token");
+    const old = readHomeToolDraft("jwt")!;
+    saveHomeToolDraft("jwt", "new token");
+    consumeHomeToolDraft("jwt", old.serialized);
+    const latest = readHomeToolDraft("jwt")!;
+    expect(latest.input).toBe("new token");
+    consumeHomeToolDraft("jwt", latest.serialized);
+    expect(readHomeToolDraft("jwt")).toBeNull();
   });
 });

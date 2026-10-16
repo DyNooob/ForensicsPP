@@ -22,9 +22,10 @@
 import React from "react";
 import { AButton } from "../components/ui";
 import type { Translation } from "../i18n";
+import cyberChef from "../config/cyberchef.json";
 
 export function CyberChefTool({ t, active = true }: { t: Translation; active?: boolean }) {
-  const cyberChefUrl = "./cyberchef/CyberChef_v10.19.4.html";
+  const cyberChefUrl = new URL(`${import.meta.env.BASE_URL}${cyberChef.entry}`, window.location.href).href;
   const [loaded, setLoaded] = React.useState(false);
   const [showFallback, setShowFallback] = React.useState(false);
   const [frameKey, setFrameKey] = React.useState(0);
@@ -70,7 +71,21 @@ export function CyberChefTool({ t, active = true }: { t: Translation; active?: b
             className={loaded ? "is-loaded" : ""}
             title="CyberChef"
             src={cyberChefUrl}
-            onLoad={() => setLoaded(true)}
+            onLoad={(event) => {
+              // A missing asset can be rewritten to the app shell by a host.
+              // Only dismiss the loader for the actual embedded application.
+              try {
+                const document = event.currentTarget.contentDocument;
+                const valid = window.location.protocol === "file:" && !document || Boolean(document?.title.includes("CyberChef") && document.getElementById("input-text"));
+                setLoaded(valid);
+                setShowFallback(!valid);
+              } catch {
+                // file:// documents have opaque origins in some browsers.
+                // Their exact bundled path cannot be rewritten by an SPA host.
+                if (window.location.protocol === "file:") setLoaded(true);
+                else setShowFallback(true);
+              }
+            }}
           />
         )}
         {hasActivated && !loaded && (

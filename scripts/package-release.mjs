@@ -30,7 +30,10 @@ const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const packageJson = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
 const version = packageJson.version;
 const releaseRoot = join(projectRoot, "release");
-const folderName = `ForensicsPP-v${version}-static`;
+const variantIndex = process.argv.indexOf("--variant");
+const variant = variantIndex >= 0 ? process.argv[variantIndex + 1] : "";
+if (variantIndex >= 0 && !["web", "standalone"].includes(variant)) throw new Error("--variant must be web or standalone");
+const folderName = `ForensicsPP-v${version}${variant ? `-${variant}` : ""}-static`;
 const stagingRoot = join(releaseRoot, folderName);
 const zipPath = join(releaseRoot, `${folderName}.zip`);
 const distRoot = join(projectRoot, "dist");
@@ -46,8 +49,12 @@ async function walk(directory) {
   return files;
 }
 
-await stat(join(distRoot, "index.html"));
-await rm(releaseRoot, { recursive: true, force: true });
+const html = await readFile(join(distRoot, "index.html"), "utf8");
+if (!html.includes(`<meta name="version" content="${version}"`)) throw new Error("Build version does not match the release; rebuild dist first");
+const isWeb = /<script[^>]+src="\/assets\//.test(html);
+if (variant === "web" && !isWeb) throw new Error("Web package requires npm run build");
+if (variant === "standalone" && isWeb) throw new Error("Standalone package requires npm run build:standalone");
+await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(stagingRoot, { recursive: true });
 await cp(distRoot, stagingRoot, { recursive: true });
 
@@ -65,7 +72,13 @@ await writeFile(zipPath, zipSync(zipEntries, { level: 9 }));
 const zipBytes = await readFile(zipPath);
 const sha256 = createHash("sha256").update(zipBytes).digest("hex");
 const checksumLine = `${sha256}  ${basename(zipPath)}\n`;
-await writeFile(join(releaseRoot, "SHA256SUMS.txt"), checksumLine, "utf8");
+const checksumPath = join(releaseRoot, "SHA256SUMS.txt");
+const earlier = (await readFile(checksumPath, "utf8").catch(() => "")).split("\n")
+  .filter((line) => line && !line.endsWith(`  ${basename(zipPath)}`));
+const checksumLines = [...earlier, checksumLine.trimEnd()].sort();
+await writeFile(checksumPath, checksumLines.join("\n") + "\n", "utf8");
+await writeFile(join(releaseRoot, `SHA256SUMS-v${version}.txt`),
+  checksumLines.filter((line) => line.includes(`  ForensicsPP-v${version}-`)).join("\n") + "\n", "utf8");
 
 const totalBytes = packagedFiles.reduce(async (sumPromise, path) => (await sumPromise) + (await stat(path)).size, Promise.resolve(0));
 console.log(`Static release package: ${relative(projectRoot, zipPath)}`);

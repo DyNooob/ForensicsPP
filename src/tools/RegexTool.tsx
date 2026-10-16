@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { SampleButton } from "../components/SampleButton";
 import { AButton, ASelect, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import { analyzeRegex, type RegexAnalysis, type RegexMatch } from "../features/regex/analyzer";
 import type { Translation } from "../i18n";
@@ -30,7 +31,6 @@ import { runWorkerTask } from "../utils/workerTask";
 
 type RegexToolProps = {
   t: Translation;
-  classifyIocRisk: (type: string, value: string) => string[];
 };
 
 const presets = [
@@ -58,7 +58,7 @@ function matchesToCsv(matches: RegexMatch[]) {
 const MAX_REGEX_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_REGEX_SOURCE_CHARS = 16 * 1024 * 1024;
 
-export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true }: RegexToolProps & { active?: boolean }) {
+export function RegexTool({ t, active = true }: RegexToolProps & { active?: boolean }) {
   const [pattern, setPattern] = useStoredState("regex.pattern.v3", "");
   const [flags, setFlags] = useStoredState("regex.flags.v3", "gi");
   const [source, setSource] = useStoredState("regex.source.v3", "");
@@ -161,6 +161,7 @@ export function RegexTool({ t, classifyIocRisk: _classifyIocRisk, active = true 
         <ToolPanelHeader
           title={t.regex}
           actions={<>
+            <SampleButton toolId="regex" english={english} onLoad={(text) => { requestRef.current += 1; setSource(text); setFileError(""); setSelectedKey(""); setPattern(presets[1].pattern); setFlags(presets[1].flags); setPreset("URL"); }} />
             <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.uploadRegexText}</AButton>
             <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
           </>}

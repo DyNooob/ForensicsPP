@@ -35,6 +35,7 @@ const packageToProject = {
   "@types/react-dom": "DefinitelyTyped: React DOM",
   "@virustotal/yara-x": "YARA-X",
   "@vitejs/plugin-react": "Vite React Plugin",
+  "puppeteer-core": "Puppeteer",
   antd: "Ant Design",
   bankcard: "bankcard",
   bcryptjs: "bcrypt.js",
@@ -52,7 +53,6 @@ const packageToProject = {
   "sql.js": "sql.js",
   "typescript": "TypeScript",
   "vite": "Vite",
-  "vite-plugin-singlefile": "Vite SingleFile Plugin",
   vitest: "Vitest",
   yaml: "YAML"
 } as const;

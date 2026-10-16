@@ -13,10 +13,19 @@ This checklist is the canonical release path for Forensics++.
 
 ```bash
 npm run verify
-npm run release:package
+npm run smoke:prod
+npm run smoke:settings
+npm run release:package -- --variant web
+npm run build:standalone
+npm run smoke:standalone
+npm run release:package -- --variant standalone
+# Leave dist/ ready for the website deployment.
+npm run build
 npm audit --omit=dev --registry=https://registry.npmjs.org
 git diff --check
 ```
+
+Browser smoke tests require Chrome or Chromium; set `CHROME_PATH` when it is not at a standard macOS/Linux location. The standalone smoke verifies UI/hash routes over `file://` without disabling browser file security. Worker analysis requires serving the unpacked package over HTTP. The web build is for domain-root hosting with SPA fallback for non-indexable tools.
 
 For interface changes, also run the development server and full layout audit:
 
@@ -52,9 +61,9 @@ git tag -a vX.Y.Z -m "Forensics++ vX.Y.Z"
 git push <publishing-remote> vX.Y.Z
 ```
 
-The local release commands verify the source, build `dist/`, create `ForensicsPP-vX.Y.Z-static.zip`, and write `SHA256SUMS.txt`. Publish the ZIP, checksum file and `docs/releases/vX.Y.Z.md` through the configured release service or static file host. Source publication and static package publication are separate steps.
+The local release commands verify the source, build `dist/`, create `ForensicsPP-vX.Y.Z-static.zip`, and write `SHA256SUMS.txt`. Publish both verified variant ZIPs, the checksum file and `docs/releases/vX.Y.Z.md` through the configured release service or static file host. Source publication and static package publication are separate steps.
 
-本地发布命令会重新验证源码、构建 `dist/`、生成静态 ZIP 与 SHA-256 校验文件。将 ZIP、校验文件和对应的中英文 Release Notes 上传到配置的发布服务或静态文件站点。源码发布与静态包发布分开处理。`dist/` 和 `release/` 都不提交到 `main`。
+本地发布命令会重新验证源码、构建 `dist/`、生成静态 ZIP 与 SHA-256 校验文件。将两种分发 ZIP、校验文件和对应的中英文 Release Notes 上传到配置的发布服务或静态文件站点。源码发布与静态包发布分开处理。`dist/` 和 `release/` 都不提交到 `main`。
 
 Do not use `git push --tags` for a release. Push the reviewed version tag explicitly so unrelated local tags are never published.
 

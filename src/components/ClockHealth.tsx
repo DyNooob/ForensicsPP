@@ -21,6 +21,7 @@
 
 import React from "react";
 import { message } from "antd";
+import { estimateClockOffset } from "../utils/clock";
 import type { Lang } from "../models";
 
 type ClockState = {
@@ -55,19 +56,19 @@ export function ClockHealth({ lang }: { lang: Lang }) {
     checkingRef.current = true;
     setState((current) => ({ ...current, status: "checking" }));
     const startedAt = Date.now();
+    const startedTick = performance.now();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await fetch(window.location.href, { method: "HEAD", cache: "no-store", credentials: "same-origin" });
+      const response = await fetch(window.location.href, { method: "HEAD", cache: "no-store", credentials: "same-origin", signal: controller.signal });
       const endedAt = Date.now();
-      const serverDate = response.headers.get("date");
-      const serverTime = serverDate ? Date.parse(serverDate) : Number.NaN;
-      if (!response.ok || !Number.isFinite(serverTime)) throw new Error("server date unavailable");
-      const estimatedServerNow = serverTime + (endedAt - startedAt) / 2;
-      const offsetMs = estimatedServerNow - endedAt;
+      if (!response.ok) throw new Error("server date unavailable");
+      const offsetMs = estimateClockOffset(response.headers, startedAt, endedAt, performance.now() - startedTick);
       const status = Math.abs(offsetMs) > 2_000 ? "warn" : "ok";
       setState({ status, offsetMs, checkedAt: endedAt });
       if (notify) {
         if (status === "ok") {
-          showClockMessage("success", lang === "zh" ? "计算机时间正常。" : "Computer time is correct.");
+          showClockMessage("success", lang === "zh" ? "本机与服务器时间估计的偏差在 2 秒以内。" : "Computer time is within 2s of the server-time estimate.");
         } else {
           const direction = offsetMs > 0
             ? (lang === "zh" ? "慢" : "behind")
@@ -79,8 +80,9 @@ export function ClockHealth({ lang }: { lang: Lang }) {
       }
     } catch {
       setState({ status: "unavailable", offsetMs: 0, checkedAt: Date.now() });
-      if (notify) showClockMessage("error", lang === "zh" ? "无法获取标准时间，请检查网络后重试。" : "Could not check standard time. Check the network and try again.");
+      if (notify) showClockMessage("error", lang === "zh" ? "无法获取服务器时间估计，请检查网络后重试。" : "Could not check server-time estimate. Check the network and try again.");
     } finally {
+      window.clearTimeout(timeout);
       checkingRef.current = false;
     }
   }, [lang]);
@@ -109,12 +111,12 @@ export function ClockHealth({ lang }: { lang: Lang }) {
   }).format(clockNow);
   const date = new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en-GB", { month: "2-digit", day: "2-digit" }).format(clockNow);
   const title = state.status === "warn"
-    ? (lang === "zh" ? `本机时间与标准时间相差约 ${formatOffset(state.offsetMs, lang)}。请在操作系统设置中校时。点击重新校验。` : `Computer time differs from standard time by about ${formatOffset(state.offsetMs, lang)}. Adjust it in OS settings. Click to check again.`)
+    ? (lang === "zh" ? `本机时间与服务器时间估计相差约 ${formatOffset(state.offsetMs, lang)}。请在操作系统设置中校时。点击重新校验。` : `Computer time differs from server-time estimate by about ${formatOffset(state.offsetMs, lang)}. Adjust it in OS settings. Click to check again.`)
     : state.status === "ok"
-      ? (lang === "zh" ? `计算机时间正常，与标准时间偏差 ${formatOffset(state.offsetMs, lang)}。点击重新校验。` : `Computer time is correct; offset ${formatOffset(state.offsetMs, lang)}. Click to check again.`)
+      ? (lang === "zh" ? `本机与服务器时间估计偏差 ${formatOffset(state.offsetMs, lang)}。点击重新校验。` : `Offset from server-time estimate ${formatOffset(state.offsetMs, lang)}. Click to check again.`)
       : state.status === "checking"
-        ? (lang === "zh" ? "正在校验标准时间" : "Checking standard time")
-        : (lang === "zh" ? "无法读取标准时间；当前显示本机时间。点击重试。" : "Standard time unavailable; showing computer time. Click to retry.");
+        ? (lang === "zh" ? "正在校验服务器时间估计" : "Checking server-time estimate")
+        : (lang === "zh" ? "无法读取服务器时间估计；当前显示本机时间。点击重试。" : "Server-time estimate unavailable; showing computer time. Click to retry.");
 
   return (
     <button
@@ -126,7 +128,7 @@ export function ClockHealth({ lang }: { lang: Lang }) {
       aria-live={state.status === "warn" ? "assertive" : "off"}
     >
       <span className="top-clock__dot" aria-hidden="true" />
-      <span className="top-clock__source">{state.checkedAt && state.status !== "unavailable" ? (lang === "zh" ? "标准" : "SYNC") : (lang === "zh" ? "本机" : "LOCAL")}</span>
+      <span className="top-clock__source">{state.checkedAt && state.status !== "unavailable" ? (lang === "zh" ? "服务器" : "SERVER") : (lang === "zh" ? "本机" : "LOCAL")}</span>
       <span className="top-clock__date">{date}</span>
       <strong>{time}</strong>
       {state.status === "warn" && <span className="top-clock__warning">{lang === "zh" ? "时间偏差" : "Clock skew"}</span>}

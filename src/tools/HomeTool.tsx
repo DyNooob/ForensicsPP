@@ -21,8 +21,10 @@
 
 import React from "react";
 import { ArrowRightOutlined, ClockCircleOutlined, FileSearchOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined } from "@ant-design/icons";
-import { saveHomeToolDraft, type HomeDraftTool } from "../app/useHomeToolDraft";
-import { AButton, ASegmentedButton, ASegmentedGroup, ATextField } from "../components/ui";
+import { saveHomeToolDraft } from "../app/useHomeToolDraft";
+import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, ATextField } from "../components/ui";
+import { launchTarget, textLaunchTools, type TextLaunchTool } from "../core/launchTarget";
+import { toolMatchesQuery } from "../utils/toolSearch";
 import { analyzerForArtifact } from "../core/analyzerRouting";
 import { dispatchToolHandoff } from "../core/toolHandoff";
 import {
@@ -44,27 +46,10 @@ type HomeToolProps = {
   setActiveTool: (tool: ToolId) => void;
 };
 
-function launchTarget(value: string): ToolId {
-  const input = value.trim();
-  if (!input) return "lookup";
-  const lines = input.split(/[\r\n,;，；\t]+/).map((item) => item.trim()).filter(Boolean);
-  const lookupLike = lines.length > 0 && lines.every((item) =>
-    /^(?:\d{1,3}\.){3}\d{1,3}$/.test(item) ||
-    /^(?:\+?86)?1[3-9]\d{9}$/.test(item.replace(/[\s-]/g, "")) ||
-    /^\d{15}$/.test(item) ||
-    /^\d{17}[\dXx]$/.test(item) ||
-    /^\d{12,19}$/.test(item.replace(/[\s-]/g, ""))
-  );
-  if (lookupLike) return "lookup";
-  if (/^https?:\/\//i.test(input) || /^[\w.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(input)) return "urltool";
-  if (/^[a-f\d]{32,128}$/i.test(input.replace(/\s/g, ""))) return "hash";
-  if (/^[\d.]{9,19}$/.test(input)) return "timestamp";
-  try { JSON.parse(input); return "json"; } catch { return "ioc"; }
-}
-
 export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps) {
   const [query, setQuery] = React.useState("");
   const [launchInput, setLaunchInput] = React.useState("");
+  const [launchTool, setLaunchTool] = React.useState<TextLaunchTool | "auto">("auto");
   const [dragActive, setDragActive] = React.useState(false);
   const [category, setCategory] = React.useState<"all" | "featured" | "analysis" | "transform" | "network">("all");
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -85,20 +70,20 @@ export function HomeTool({ t, lang, recentTools, setActiveTool }: HomeToolProps)
       if (!matches) return false;
     }
     if (!normalizedQuery) return true;
-    return [titleFor(tool), t[tool.desc], t[tool.category], ...(tool.capabilities ?? []), ...(tool.accepts ?? [])].join(" ").toLowerCase().includes(normalizedQuery);
+    return toolMatchesQuery(tool, normalizedQuery);
   });
 
   const directoryTools = filteredDirectoryTools;
   const categoryLabel = (item: (typeof categories)[number]) => item === "all" ? (lang === "zh" ? "全部" : "All") : t[item];
-  const openTool = (target: ToolId) => {
-    if (["lookup", "urltool", "hash", "timestamp", "json", "ioc"].includes(target) && launchInput.trim()) {
-      saveHomeToolDraft(target as HomeDraftTool, launchInput);
-    }
-    setActiveTool(target);
+  const openTool = (target: ToolId) => setActiveTool(target);
+  const suggestedTool = launchTarget(launchInput);
+  const targetTool = launchTool === "auto" ? suggestedTool : launchTool;
+  const openLaunchTarget = () => {
+    if (!launchInput.trim()) return;
+    saveHomeToolDraft(targetTool, launchInput);
+    setActiveTool(targetTool);
   };
-
-  const openLaunchTarget = () => openTool(launchTarget(launchInput));
-  const detectedTool = searchableTools.find((tool) => tool.id === launchTarget(launchInput));
+  const detectedTool = searchableTools.find((tool) => tool.id === targetTool);
 
   const openEvidenceFile = async (file: File | undefined) => {
     if (!file) return;
@@ -131,7 +116,7 @@ const launchShortcuts: Array<{ id: ToolId; icon: React.ReactNode; zh: string; en
         <div className="home-hero-main">
           <div className="home-hero-copy">
             <div>
-              <h2>{lang === "zh" ? "本地分析工作台" : "Local Analysis Workbench"}</h2>
+              <h1>{lang === "zh" ? "本地分析工作台" : "Local Analysis Workbench"}</h1>
               <p>{lang === "zh" ? "输入内容或文件，选择操作并查看结果。" : "Add text or a file, choose an operation, and inspect the result."}</p>
             </div>
             <button type="button" className="home-open-evidence" onClick={() => fileInputRef.current?.click()}>
@@ -153,8 +138,22 @@ const launchShortcuts: Array<{ id: ToolId; icon: React.ReactNode; zh: string; en
               spellCheck={false}
             />
             <div className="home-command-actions">
-              <span>{launchInput.trim() && detectedTool ? `${lang === "zh" ? "自动选择" : "Auto"} · ${titleFor(detectedTool)}` : (lang === "zh" ? "自动识别内容类型" : "Detect input type automatically")}</span>
-              <AButton variant="filled" onClick={openLaunchTarget}>{lang === "zh" ? "运行" : "Run"}</AButton>
+              <ASelect
+                className="home-target-select"
+                aria-label={lang === "zh" ? "选择分析工具" : "Choose analysis tool"}
+                value={launchTool}
+                onChange={(value) => setLaunchTool(value as TextLaunchTool | "auto")}
+                options={[
+                  { value: "auto", label: launchInput.trim() && detectedTool
+                    ? `${lang === "zh" ? "自动建议" : "Suggested"} · ${titleFor(searchableTools.find((tool) => tool.id === suggestedTool)!)}`
+                    : (lang === "zh" ? "自动识别" : "Auto detect") },
+                  ...textLaunchTools.map((id) => ({ value: id, label: titleFor(searchableTools.find((tool) => tool.id === id)!) }))
+                ]}
+              />
+              <div className="button-row">
+                <AButton variant="text" disabled={!launchInput} onClick={() => setLaunchInput("")}>{t.clear}</AButton>
+                <AButton variant="filled" disabled={!launchInput.trim()} onClick={openLaunchTarget}>{lang === "zh" ? "运行" : "Run"}</AButton>
+              </div>
             </div>
           </div>
           <div className="home-launch-shortcuts">
@@ -203,7 +202,7 @@ const launchShortcuts: Array<{ id: ToolId; icon: React.ReactNode; zh: string; en
             <span>{lang === "zh" ? "自动选择分析器" : "Analyzer selected automatically"}</span>
           </div>
           <div className="home-continue-tools">
-            <div className="home-session-heading"><span>{lang === "zh" ? "最近操作" : "Recent operations"}</span></div>
+            <div className="home-session-heading"><span>{recentValidTools.length ? (lang === "zh" ? "最近操作" : "Recent operations") : (lang === "zh" ? "建议工具" : "Suggested tools")}</span></div>
             {continueTools.map((tool) => (
               <button type="button" key={tool.id} onClick={() => openTool(tool.id)}>
                 <span><strong>{titleFor(tool)}</strong><small>{t[tool.category]}</small></span>

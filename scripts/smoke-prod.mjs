@@ -30,12 +30,9 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { join, extname, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
-import { SLUG_TO_TOOL } from "../src/seo/toolRoutes.mjs";
+import { launchSmokeBrowser, prepareSmokePage } from "./browser-smoke.mjs";
+import { SLUG_TO_TOOL, TOOL_SLUG } from "../src/seo/toolRoutes.mjs";
 
-const require = createRequire(import.meta.url);
-const puppeteer = require("puppeteer-core");
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const root = join(fileURLToPath(import.meta.url), "..", "..", "dist");
 const PORT = 8241;
@@ -109,6 +106,7 @@ const server = createServer(async (req, res) => {
 });
 
 const TOOLS = [
+  "lookup",
   "evtx-viewer",
   "sqlite-forensics",
   "apk-signature-analyzer",
@@ -129,12 +127,8 @@ function check(cond, msg) {
 await new Promise((resolve) => server.listen(PORT, "127.0.0.1", resolve));
 console.log(`static server listening on ${BASE}`);
 
-const browser = await puppeteer.launch({
-  executablePath: CHROME,
-  headless: "new",
-  args: ["--no-sandbox", "--disable-setuid-sandbox"],
-});
-const page = await browser.newPage();
+const browser = await launchSmokeBrowser();
+const page = await prepareSmokePage(browser);
 page.on("pageerror", (e) => { fail++; fails.push("pageerror: " + e.message); });
 
 async function assertToolRoute(slug, canonicalId) {
@@ -175,7 +169,7 @@ async function assertToolRoute(slug, canonicalId) {
 }
 
 console.log("=== Production HTTP + Chrome smoke ===");
-for (const slug of TOOLS) {
+for (const slug of (process.env.SMOKE_RUNTIME_ONLY ? [] : TOOLS)) {
   const id = SLUG_TO_TOOL[slug];
   console.log(`-- /tools/${slug}/`);
   await assertToolRoute(slug, id);
@@ -237,6 +231,169 @@ console.log("-- viewport sanity (no horizontal overflow + sidebar/header present
     check(metrics.overflow <= 2, `${vp.name}: no horizontal overflow (scrollW-clientW=${metrics.overflow})`);
     check(metrics.hasHeader, `${vp.name}: app header present`);
   }
+}
+
+// Non-indexable tools also have generated pretty URLs and must survive refresh.
+console.log("-- all remaining workbench routes");
+const appSource = await readFile(new URL("../src/config/app.ts", import.meta.url), "utf8");
+const definitions = appSource.slice(appSource.indexOf("const toolDefinitions = ["), appSource.indexOf("] as const;"));
+const otherTools = definitions.split("\n").filter((line) => line.includes('{ id: "') && !line.includes("hidden: true"))
+  .map((line) => /id: "([^"]+)"/.exec(line)?.[1]).filter((id) => id && id !== "home" && !TOOL_SLUG[id]);
+for (const id of (process.env.SMOKE_RUNTIME_ONLY ? [] : otherTools)) {
+  await page.goto(`${BASE}/tools/${id}/`, { waitUntil: "networkidle0" });
+  check(!!(await page.$(`[data-tool-id="${id}"]:not([hidden])`)), `${id} direct URL opens workbench`);
+  check(!(await page.$(".tool-error-state, .tool-notfound")), `${id} workbench loaded without error`);
+}
+
+async function clickToolButton(targetPage, id, text) {
+  const clicked = await targetPage.evaluate((tool, label) => {
+    const root = document.querySelector(`[data-tool-id="${tool}"]:not([hidden])`);
+    const button = [...(root?.querySelectorAll("button") || [])].find((el) => el.textContent.trim() === label);
+    if (!button || button.disabled) return false;
+    button.click(); return true;
+  }, id, text);
+  if (!clicked) throw new Error(`Missing enabled button ${id}: ${text}`);
+}
+
+console.log("-- fresh deep-link service worker, actual crypto/lookup/hash execution and offline reload");
+const context = await browser.createBrowserContext();
+const runtimePage = await prepareSmokePage(context);
+await runtimePage.setViewport({ width: 1440, height: 900 });
+runtimePage.on("pageerror", (error) => { fail++; fails.push("runtime pageerror: " + error.stack); });
+try {
+  await runtimePage.goto(`${BASE}/tools/lookup/`, { waitUntil: "networkidle0" });
+  await runtimePage.waitForFunction(() => navigator.serviceWorker.controller, { timeout: 15000 });
+  console.log("  service worker controlled");
+  const swUrl = await runtimePage.evaluate(async () => (await navigator.serviceWorker.ready).active?.scriptURL);
+  check(swUrl === `${BASE}/sw.js`, "fresh deep link registers root service worker");
+
+  // Delay a remote data pack, then clear during the query. No real lookup data
+  // or sensitive identifiers leave this deterministic test.
+  const client = await runtimePage.createCDPSession();
+  await client.send("Fetch.enable", { patterns: [{ urlPattern: "*cdn.jsdelivr.net*" }] });
+  let pendingPack;
+  client.on("Fetch.requestPaused", (event) => { pendingPack = event.requestId; });
+  console.log("  starting delayed phone lookup");
+  await runtimePage.type(".lookup-input", "13800138000");
+  await clickToolButton(runtimePage, "lookup", "Run lookup");
+  const deadline = Date.now() + 10000;
+  while (!pendingPack && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  if (!pendingPack) throw new Error("Lookup did not request the expected data pack");
+  await clickToolButton(runtimePage, "lookup", "Clear");
+  await client.send("Fetch.failRequest", { requestId: pendingPack, errorReason: "Aborted" }).catch(() => {});
+  await client.send("Fetch.disable");
+  check(await runtimePage.$eval(".lookup-input", (el) => el.value === ""), "clear empties lookup input while loading");
+  check(!(await runtimePage.$(".lookup-result-table tbody tr")), "cancelled lookup does not restore old rows");
+  console.log("  cancellation passed; starting bank lookup");
+  await runtimePage.type(".lookup-input", "4111111111111111");
+  await clickToolButton(runtimePage, "lookup", "Run lookup");
+  await runtimePage.waitForSelector(".lookup-result-table tbody tr");
+  check(await runtimePage.$eval(".lookup-result-table", (el) => el.textContent.includes("Rules pass")), "Luhn-valid unmatched BIN stays valid after cancelling a query");
+
+  await clickToolButton(runtimePage, "lookup", "Clear");
+  pendingPack = undefined;
+  await client.send("Fetch.enable", { patterns: [{ urlPattern: "*cdn.jsdelivr.net*" }] });
+  await runtimePage.type(".lookup-input", "13800138000");
+  await clickToolButton(runtimePage, "lookup", "Run lookup");
+  const languageDeadline = Date.now() + 10000;
+  while (!pendingPack && Date.now() < languageDeadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  if (!pendingPack) throw new Error("Missing pending pack for language-switch regression");
+  await runtimePage.evaluate(() => [...document.querySelectorAll(".language-switch button")].find((el) => el.textContent.trim() === "中文").click());
+  const record = Buffer.from("Fixture province|Fixture city|000000|000\0");
+  const indexStart = 8 + record.length;
+  const phonePack = Buffer.alloc(indexStart + 9);
+  phonePack.writeUInt32LE(indexStart, 4);
+  record.copy(phonePack, 8);
+  phonePack.writeUInt32LE(1380013, indexStart);
+  phonePack.writeUInt32LE(8, indexStart + 4);
+  phonePack[indexStart + 8] = 1;
+  await client.send("Fetch.fulfillRequest", { requestId: pendingPack, responseCode: 200,
+    responseHeaders: [{ name: "Access-Control-Allow-Origin", value: "*" }], body: phonePack.toString("base64") });
+  await client.send("Fetch.disable");
+  await runtimePage.waitForSelector(".lookup-result-table tbody tr");
+  check(await runtimePage.$eval(".lookup-result-table", (el) => el.textContent.includes("Fixture city")), "language switch preserves a running lookup");
+  await runtimePage.evaluate(() => [...document.querySelectorAll(".language-switch button")].find((el) => el.textContent.trim() === "EN").click());
+
+  console.log("  lookup execution passed; starting bcrypt");
+  // Pagination bounds DOM work; filtering and paging leave the whole batch available.
+  await runtimePage.locator('.lookup-result-controls .ant-select').click();
+  await runtimePage.waitForSelector('.ant-select-item-option[title="Rules failed"]', { visible: true });
+  await runtimePage.locator('.ant-select-item-option[title="Rules failed"]').click();
+  await runtimePage.waitForFunction(() => document.querySelectorAll('.lookup-result-table tbody tr').length === 0);
+  check(await runtimePage.$eval('.lookup-results-panel', (el) => el.textContent.includes("No results match")), "status filter keeps a clear empty-result state");
+  await clickToolButton(runtimePage, "lookup", "Reset filters");
+  await runtimePage.waitForSelector('.lookup-result-table tbody tr');
+
+  await clickToolButton(runtimePage, "lookup", "Clear");
+  await runtimePage.type(".lookup-input", Array.from({ length: 205 }, (_, i) => `10.0.${Math.floor(i / 256)}.${i % 256}`).join("\n"));
+  await clickToolButton(runtimePage, "lookup", "Run lookup");
+  await runtimePage.waitForSelector(".lookup-result-table tbody tr");
+  check((await runtimePage.$$(".lookup-result-table tbody tr")).length === 100, "large lookup batch renders only one 100-row page");
+  await clickToolButton(runtimePage, "lookup", "Next");
+  await runtimePage.waitForFunction(() => document.querySelector(".lookup-pagination")?.textContent.includes("101–200"));
+  await clickToolButton(runtimePage, "lookup", "Next");
+  await runtimePage.waitForFunction(() => document.querySelectorAll(".lookup-result-table tbody tr").length === 5);
+  check((await runtimePage.$$(".lookup-result-table tbody tr")).length === 5, "final lookup page contains remaining rows");
+  await runtimePage.type(".lookup-result-search", "10.0.0.204");
+  await runtimePage.waitForFunction(() => document.querySelectorAll(".lookup-result-table tbody tr").length === 1);
+  check(true, "search works across pages and resets to the matching result");
+  for (const width of [800, 390]) {
+    await runtimePage.setViewport({ width, height: 900 });
+    check(await runtimePage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2), `loaded lookup remains within ${width}px viewport`);
+  }
+  await runtimePage.setViewport({ width: 1440, height: 900 });
+
+  await runtimePage.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+  await runtimePage.type('textarea[aria-label="Workbench input"]', "1719795600000");
+  check(await runtimePage.$eval(".home-target-select", (el) => el.textContent.includes("Time")), "home recommends timestamps instead of card lookup");
+  await clickToolButton(runtimePage, "home", "Run");
+  await runtimePage.waitForSelector('.timestamp-simple-input-panel');
+  check(await runtimePage.$eval('.timestamp-simple-input-panel input', (el) => el.value === "1719795600000"), "home draft reaches timestamp input intact");
+  await runtimePage.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+  await runtimePage.type('textarea[aria-label="Workbench input"]', "eyJhbGciOiJub25lIn0.eyJzdWIiOiJzYW1wbGUifQ.");
+  await clickToolButton(runtimePage, "home", "Run");
+  await runtimePage.waitForSelector('.jwt-overview-panel');
+  check(await runtimePage.$eval('.jwt-token-input', (el) => el.value.startsWith("eyJ")), "home recognizes and hands off a JWT");
+
+  await runtimePage.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+  await runtimePage.type('textarea[aria-label="Workbench input"]', "sample plain text");
+  await runtimePage.locator(".home-target-select").click();
+  await runtimePage.waitForSelector('.ant-select-item-option[title="Evidence Hash Calculator"]', { visible: true });
+  await runtimePage.locator('.ant-select-item-option[title="Evidence Hash Calculator"]').click();
+  await clickToolButton(runtimePage, "home", "Run");
+  await runtimePage.waitForSelector('.hash-simple-text-input');
+  check(await runtimePage.$eval('.hash-simple-text-input', (el) => el.value === "sample plain text"), "manual hash target opens text hashing instead of digest verification");
+
+  await runtimePage.goto(`${BASE}/tools/password/`, { waitUntil: "networkidle0" });
+  await runtimePage.type('.password-simple-generate-grid input[type="password"]', "release-smoke-password");
+  await clickToolButton(runtimePage, "password", "Generate bcrypt");
+  await runtimePage.waitForFunction(() => /\$2[aby]\$/.test(document.querySelector(".password-simple-output")?.textContent || ""));
+  console.log("  bcrypt execution passed");
+  check(true, "browser bcrypt generates a real hash with secure randomness");
+
+  await runtimePage.goto(`${BASE}/tools/hash/`, { waitUntil: "networkidle0" });
+  await clickToolButton(runtimePage, "hash", "Load sample");
+  await clickToolButton(runtimePage, "hash", "Calculate");
+  const sampleHash = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592";
+  await runtimePage.waitForFunction((digest) => document.querySelector('[data-tool-id="hash"]')?.textContent.includes(digest), {}, sampleHash);
+  console.log("  hash execution passed");
+  check(true, "hash worker computes the expected SHA-256");
+  // Warm Home's lazy chunk, then prove a full navigation works offline.
+  await runtimePage.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+  await runtimePage.setOfflineMode(true);
+  await runtimePage.reload({ waitUntil: "networkidle0" });
+  check(!!(await runtimePage.$('[data-tool-id="home"]:not([hidden])')), "installed app shell boots offline");
+  await runtimePage.goto(`${BASE}/tools/hash/`, { waitUntil: "networkidle0" });
+  await clickToolButton(runtimePage, "hash", "Load sample");
+  await clickToolButton(runtimePage, "hash", "Calculate");
+  await runtimePage.waitForFunction((digest) => document.querySelector('[data-tool-id="hash"]')?.textContent.includes(digest), {}, sampleHash);
+  check(true, "previously loaded hash worker also calculates offline");
+} catch (error) {
+  console.log("Runtime URL:", runtimePage.url());
+  console.log((await runtimePage.$eval("#root", (el) => el.innerText)).slice(-3500));
+  check(false, "runtime regression: " + error.message);
+} finally {
+  await context.close();
 }
 
 await browser.close();
