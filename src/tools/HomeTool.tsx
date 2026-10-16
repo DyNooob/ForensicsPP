@@ -20,6 +20,8 @@
  */
 
 import React from "react";
+import { PasteButton } from "../components/ClipboardImport";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { ArrowRightOutlined, ClockCircleOutlined, FileSearchOutlined, FolderOpenOutlined, PictureOutlined, SearchOutlined } from "@ant-design/icons";
 import { saveHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, ATextField } from "../components/ui";
@@ -129,7 +131,7 @@ const launchShortcuts: Array<{ id: ToolId; icon: React.ReactNode; zh: string; en
               <strong>{lang === "zh" ? "快速分析" : "Quick analysis"}</strong>
               <kbd>Ctrl / ⌘ + Enter</kbd>
             </div>
-            <textarea
+            <AutoTextarea
               value={launchInput}
               onChange={(event) => setLaunchInput(event.currentTarget.value)}
               onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") openLaunchTarget(); }}

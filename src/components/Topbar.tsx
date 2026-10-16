@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { PasteButton } from "./ClipboardImport";
 import { Drawer } from "antd";
 import { CodeOutlined, FileAddOutlined, InboxOutlined, LinkOutlined, MenuFoldOutlined, MenuUnfoldOutlined, QuestionCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { ASegmentedButton, ASegmentedGroup } from "./ui";
@@ -89,6 +90,7 @@ export function Topbar({
           {toolLinkMessage && <span className="tool-link-feedback">{toolLinkMessage}</span>}
         </div>
         <div className="top-actions">
+          <PasteButton english={lang === "en"} />
           <ClockHealth lang={lang} />
           <div className="top-action-group">
             <GithubIconButton label={t.repositoryLabel} />

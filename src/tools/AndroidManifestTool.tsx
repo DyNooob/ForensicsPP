@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { zipSync } from "fflate";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { useStaleRunGuard } from "../core/runtime";
@@ -404,12 +405,12 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
           <strong>{info ? sourceName : t.uploadManifest}</strong>
           <span>{info ? `${info.sourceFormat} · ${formatBytes(info.size)}` : (t.apk_xml_or_binary_axml)}</span>
         </div>
-        {info ? <details className="android-xml-details"><summary>{t.view_decoded_xml}</summary><textarea
+        {info ? <details className="android-xml-details"><summary>{t.view_decoded_xml}</summary><AutoTextarea
           className="single-textarea android-simple-editor manifest-textarea"
           aria-label={t.decoded_androidmanifest_xml}
           value={manifestText}
           readOnly
-        /></details> : <textarea
+        /></details> : <AutoTextarea
           className="single-textarea android-simple-editor manifest-textarea"
           aria-label={t.androidmanifest_xml_input}
           value={manifestText}

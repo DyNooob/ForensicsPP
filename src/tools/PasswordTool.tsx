@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import CryptoJS from "crypto-js";
 import { AButton, AInputNumber, APasswordField, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -258,7 +259,7 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
         {mode === "identify" && (
           <div className="password-simple-section password-identify">
             <label className="stack-label">{t.identifyInput}
-              <textarea className="compact-textarea password-identify-input" value={identifyText} onChange={(event) => setIdentifyText(event.currentTarget.value)} placeholder={t.identifyPlaceholder} spellCheck={false} />
+              <AutoTextarea className="compact-textarea password-identify-input" value={identifyText} onChange={(event) => setIdentifyText(event.currentTarget.value)} placeholder={t.identifyPlaceholder} spellCheck={false} />
             </label>
             {!identifyText.trim() ? (
               <div className="empty-state">{t.identifyEmpty}</div>
@@ -331,8 +332,8 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
 
         {mode === "verify" && (
           <div className="password-simple-section">
-            <label className="stack-label">{t.hashTypeInput}<textarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.paste_the_target_password_hash} /></label>
-            <label className="stack-label">{t.candidatePasswords}<textarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.one_candidate_password_per_line} /></label>
+            <label className="stack-label">{t.hashTypeInput}<AutoTextarea className="compact-textarea password-simple-target" value={targetHash} onChange={(event) => { operationRef.current += 1; setLoading(""); setTargetHash(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.paste_the_target_password_hash} /></label>
+            <label className="stack-label">{t.candidatePasswords}<AutoTextarea className="single-textarea password-simple-candidates" value={candidatePasswords} onChange={(event) => { operationRef.current += 1; setLoading(""); setCandidatePasswords(event.currentTarget.value); setVerifyRows([]); }} placeholder={t.one_candidate_password_per_line} /></label>
             <div className="button-row"><AButton variant="filled" disabled={!targetHash.trim() || !candidates.length || Boolean(loading)} onClick={() => void verify()}>{loading === "verify" ? (t.verifying) : t.verifyCandidates}</AButton></div>
             {(!targetHash.trim() || !candidates.length) && <div className="empty-state">{t.passwordVerifyEmpty}</div>}
             {verifyRows.length > 0 && (

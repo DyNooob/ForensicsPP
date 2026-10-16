@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { rememberTimelineEvents, timelineBounds } from "../features/reporter/timeline";
 import { formatTimelineDuration, timelineToCsv } from "../features/timestamp/analyzer";
@@ -257,7 +258,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
         </div>
         <label className="stack-label">
           {t.source_text}
-          <textarea
+          <AutoTextarea
             className="single-textarea timeline-simple-input"
             value={input}
             onChange={(event) => {

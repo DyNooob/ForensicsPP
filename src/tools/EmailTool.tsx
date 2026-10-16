@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { zipSync } from "fflate";
 import { AButton, ALinearProgress, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
@@ -442,7 +443,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
           <AButton variant="text" disabled={!input.trim() || (sourceFormat === "msg" && !sourceBytes)} onClick={downloadRawEmail}>{sourceFormat.toUpperCase()}</AButton>
           <AButton variant="text" disabled={!input.trim() && !parsed && !error && !loading} onClick={clearEmail}>{t.clear}</AButton>
         </div>
-        <textarea
+        <AutoTextarea
             className="single-textarea email-source-input"
             aria-label={t.raw_eml_source}
             value={input}
@@ -522,7 +523,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
             </div>
             {bodyMode === "html" && safeBodyHtml
               ? <iframe className="email-html-preview" title={t.isolated_email_html_preview} sandbox="" srcDoc={safeBodyHtml} />
-              : <textarea aria-label={t.email_body_preview} className="single-textarea email-body-preview" value={limitReportText(bodyText || "--", 20000)} readOnly />}
+              : <AutoTextarea aria-label={t.email_body_preview} className="single-textarea email-body-preview" value={limitReportText(bodyText || "--", 20000)} readOnly />}
           </div>
 
           <div className="tool-panel wide-panel email-attachments-panel">

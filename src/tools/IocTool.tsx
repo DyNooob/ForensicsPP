@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import { analyzeIocs, iocRecordsToStixBundle } from "../features/ioc/analyzer";
@@ -297,7 +298,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           <AButton variant="text" onClick={() => handleText(IOC_SAMPLE)}>{t.load_sample}</AButton>
           <AButton variant="filled" disabled={!text.trim() || analyzing} onClick={() => void analyze()}>{analyzing ? (t.extracting) : (t.extract_indicators)}</AButton>
         </div>
-        <textarea className="single-textarea ioc-simple-input" aria-label={t.text_to_scan_for_iocs} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
+        <AutoTextarea className="single-textarea ioc-simple-input" aria-label={t.text_to_scan_for_iocs} value={text} onChange={(event) => handleText(event.target.value)} placeholder={t.textPlaceholder} />
       </section>
 
       {hasInput && (
@@ -379,7 +380,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           ]} />
           <label className="ioc-simple-context">
             <span>{t.iocContext}</span>
-            <textarea className="single-textarea compact-textarea" value={selected.contexts.join("\n---\n") || selected.context || selected.value} readOnly />
+            <AutoTextarea className="single-textarea compact-textarea" value={selected.contexts.join("\n---\n") || selected.context || selected.value} readOnly />
           </label>
         </section>
       )}

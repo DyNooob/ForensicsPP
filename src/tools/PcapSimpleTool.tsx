@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { PcapInfo, PcapHttpItem, PcapTcpStream } from "../models";
@@ -615,7 +616,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
               <div className="pcap-stream-meta"><span>{t.payload}: {formatBytes(selectedStream.bytesAtoB + selectedStream.bytesBtoA)}</span><span>{t.retransmitted_overlap}: {formatBytes(selectedStream.retransmittedBytes)}</span><span>{t.capture_gaps}: {formatBytes(selectedStream.gapBytesAtoB + selectedStream.gapBytesBtoA)}</span></div>
               {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <div className="pcap-stream-notice">{t.the_capture_has_sequence_gaps_gap_markers_are_shown_in_the_preview_raw_export_is_available_only_for_a_complete_direction}</div> : null}
               {pcap.streamBytesLimited ? <div className="pcap-stream-notice">{t.the_restored_workspace_does_not_contain_all_stream_bytes_re_analyze_the_capture_before_exporting}</div> : null}
-              <textarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={t.tcp_stream_content} />
+              <AutoTextarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={t.tcp_stream_content} />
             </div>}
           </div>}
 
@@ -674,7 +675,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                             ...(packet.tcpFlags ? [["TCP flags", packet.tcpFlags] as [string, string]] : []),
                             ...(packet.tcpStreamKey ? [[t.tcp_stream, packet.tcpStreamKey] as [string, string]] : [])
                           ]} />
-                          <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={packet.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={packet.hexPreview || "--"} readOnly /></label></div>
+                          <div className="pcap-simple-payload"><label>Payload<AutoTextarea className="single-textarea compact-textarea" value={packet.payloadPreview || "--"} readOnly /></label><label>Hex<AutoTextarea className="single-textarea compact-textarea" value={packet.hexPreview || "--"} readOnly /></label></div>
                         </div>
                       </td>
                     </tr>
@@ -722,7 +723,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
         {view === "packets" && selectedPacket && expandedPacketNo !== selectedPacket.no && <section className="tool-panel wide-panel pcap-simple-detail-panel">
           <ToolPanelHeader title={t.selected_packet} subtitle={`#${selectedPacket.no} · ${selectedPacket.protocol}`} />
           <InfoTable rows={[["Flow", selectedPacket.flow], [t.timestamp_2, selectedPacket.timestamp], [t.captured_original, `${selectedPacket.captured} / ${selectedPacket.original}`]]} />
-          <div className="pcap-simple-payload"><label>Payload<textarea className="single-textarea compact-textarea" value={selectedPacket.payloadPreview || "--"} readOnly /></label><label>Hex<textarea className="single-textarea compact-textarea" value={selectedPacket.hexPreview || "--"} readOnly /></label></div>
+          <div className="pcap-simple-payload"><label>Payload<AutoTextarea className="single-textarea compact-textarea" value={selectedPacket.payloadPreview || "--"} readOnly /></label><label>Hex<AutoTextarea className="single-textarea compact-textarea" value={selectedPacket.hexPreview || "--"} readOnly /></label></div>
         </section>}
       </>}
       {httpDetail && <HttpMessageModal item={httpDetail} t={t} english={english} onClose={() => setHttpDetail(null)} onFollow={() => { const key = httpDetail.streamKey; if (key) { setSelectedStreamKey(key); setView("streams"); } setHttpDetail(null); }} />}
@@ -765,7 +766,7 @@ function HttpMessageModal({ item, t, english, onClose, onFollow }: { item: PcapH
             <div className="pcap-http-section-label">{t.httpHeaders}</div>
             <pre className="pcap-http-headers">{item.headers}</pre>
             <div className="pcap-http-section-label">{t.httpMessageBody}</div>
-            <textarea className="single-textarea pcap-http-body" value={item.bodyPreview || "--"} readOnly aria-label={t.http_body} />
+            <AutoTextarea className="single-textarea pcap-http-body" value={item.bodyPreview || "--"} readOnly aria-label={t.http_body} />
           </>
         ) : (
           <div className="pcap-stream-notice">{t.noHeadersCaptured}</div>

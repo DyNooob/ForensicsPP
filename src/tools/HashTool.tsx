@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ACheckbox, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
@@ -406,11 +407,12 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
               <AButton variant="outlined" onClick={() => fileInputRef.current?.click()}>{t.select_files}</AButton>
               <AButton variant="text" onClick={() => directoryInputRef.current?.click()}>{t.select_folder}</AButton>
             </div>
+            {selectedFiles.length > 0 && <ul className="input-file-list">{selectedFiles.slice(0, 5).map((file, index) => <li key={`${file.name}-${index}`}><span title={file.name}>{file.name}</span><small>{formatBytes(file.size)}</small></li>)}{selectedFiles.length > 5 && <li>+{selectedFiles.length - 5} …</li>}</ul>}
           </>
         ) : (
           <label className="stack-label">
             {t.text}
-            <textarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => handleTextChange(event.currentTarget.value)} placeholder={t.enter_text_to_hash} />
+            <AutoTextarea className="single-textarea hash-simple-text-input" value={text} onChange={(event) => handleTextChange(event.currentTarget.value)} placeholder={t.enter_text_to_hash} />
           </label>
         )}
 
@@ -434,7 +436,7 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
 
         <label className="stack-label">
           {t.expectedHash}
-          <textarea className="compact-textarea hash-simple-expected" value={expectedHash} onChange={(event) => setExpectedHash(event.currentTarget.value)} placeholder={t.expectedHashHint} />
+          <AutoTextarea className="compact-textarea hash-simple-expected" value={expectedHash} onChange={(event) => setExpectedHash(event.currentTarget.value)} placeholder={t.expectedHashHint} />
         </label>
 
         <div className="button-row">

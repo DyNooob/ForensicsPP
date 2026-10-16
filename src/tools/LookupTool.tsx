@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
 import { copyText } from "../utils/clipboard";
@@ -289,7 +290,7 @@ export function LookupTool({ lang, active = true }: { t: Translation; lang: Lang
         <ASegmentedGroup className="lookup-mode-tabs" value={kind} selects="single" aria-label={labels.type}>
           {(Object.keys(modeLabels) as LookupKind[]).map((mode) => <ASegmentedButton key={mode} value={mode} onClick={() => { stop(); setKind(mode); resetResultView(); setResults((current) => current.length ? [] : current); setError(""); clearAnalysisResult("lookup"); }}>{modeLabels[mode]}</ASegmentedButton>)}
         </ASegmentedGroup>
-        <textarea
+        <AutoTextarea
           className="single-textarea lookup-input"
           value={input}
           onChange={(event) => { stop(); setInput(event.currentTarget.value); if (results.length) resetResultView(); setResults((current) => current.length ? [] : current); setError(""); clearAnalysisResult("lookup"); }}

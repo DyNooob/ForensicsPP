@@ -21,13 +21,17 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
-import { createPortal } from "react-dom";
+import { PasteButton } from "../components/ClipboardImport";
+import { AutoTextarea } from "../components/AutoTextarea";
+import { Modal } from "antd";
+import { ImageViewer } from "../components/image/ImageViewer";
+import { ImageMetadata } from "../components/image/ImageMetadata";
+import { ImageReviewSummary } from "../components/image/ImageReviewSummary";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { ImageInfo } from "../models";
 import { buildImageEnvelope } from "../features/image/envelope";
-import { exifFieldLabel, exifValueLabel } from "../features/image/exifLocalize";
 import { scanQrRobust } from "../features/qr/scan";
 import { useStaleRunGuard } from "../core/runtime";
 import { publishAnalysisResult } from "../features/analysis/resultStore";
@@ -164,7 +168,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   const [imageFormatLayer, setImageFormatLayer] = React.useState<"container" | "exif" | "PNG" | "GIF" | "JPEG" | "WEBP" | "BMP" | "TIFF" | "HEIF/AVIF">("container");
   const [qrResult, setQrResult] = React.useState<ImageQrResult | null>(null);
   const [qrScanning, setQrScanning] = React.useState(false);
-  const [lightbox, setLightbox] = React.useState<{ src: string; label: string } | null>(null);
+  const [lightbox, setLightbox] = React.useState<{ src: string; label: string; open?: boolean } | null>(null);
   const [restoredSource, setRestoredSource] = React.useState<ImageWorkspace | null>(null);
   React.useEffect(() => {
     if (!active || typeof window === "undefined") return;
@@ -198,6 +202,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
   React.useEffect(() => {
     if (active) return;
+    setLightbox(null);
     analysisIdRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -220,6 +225,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
   const handleImage = async (file: File | undefined, persist = true) => {
     if (!file || !active) return;
+    setLightbox(null);
     if (persist) {
       restoreStartedRef.current = true;
       setRestoredSource(null);
@@ -553,6 +559,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     }
   };
   const clearImage = () => {
+    setLightbox(null);
     restoreStartedRef.current = true;
     guard.next();
     setRestoredSource(null);
@@ -636,6 +643,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         onDrop={handleImageDrop}
       >
         <PanelTitle title={t.uploadImage} />
+        {imageInfo && <div className="image-source-file"><strong>{imageInfo.name}</strong><span>{formatBytes(imageInfo.size)} · {imageInfo.width} × {imageInfo.height}</span></div>}
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.bin" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void handleImage(file); }} />
         <div className={`desktop-drop-zone ${isImageDropActive ? "active" : ""}`} role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}>
           <strong>{imageInfo?.name || t.dropFileTitle}</strong>
@@ -643,6 +651,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </div>
         <div className="action-row">
           <AButton variant="filled" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
+          <PasteButton english={isEnglish} />
           <AButton variant="text" disabled={!imageInfo && !error && !loading} onClick={clearImage}>{t.clear}</AButton>
         </div>
         {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
@@ -661,8 +670,9 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </ASegmentedGroup>
 
         {imagePage === "overview" && <div className="tool-panel wide-panel image-simple-overview-panel">
+          <ImageReviewSummary image={imageInfo} english={isEnglish} onNavigate={setImagePage} />
           <div className="image-simple-overview">
-            <figure className="image-simple-preview" role="button" tabIndex={0} onClick={() => setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name }); } }}><img src={imageInfo.dataUrl || imageInfo.repairedDataUrl} alt={imageInfo.name} /></figure>
+            <div className="image-simple-preview"><ImageViewer src={imageInfo.dataUrl || imageInfo.repairedDataUrl} label={imageInfo.name} english={isEnglish} onExpand={() => setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name })} /></div>
             <div className="image-simple-facts">
               <PanelTitle title={t.imageOverview} />
               <InfoTable rows={[
@@ -695,29 +705,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
           {imageFormatLayer === "container" && <>
             <InfoTable rows={imageInfo.structureRows} />
-            <div className="panel-heading-row image-exif-heading">
-              <PanelTitle title={t.exif} />
-              {Object.keys(imageInfo.exif).length > 0 && <span className="status-pill">{Math.min(100, Object.keys(imageInfo.exif).length)}/{Object.keys(imageInfo.exif).length}</span>}
-            </div>
-            {Object.keys(imageInfo.exif).length ? <div className="image-exif-scroll">
-              <table className="image-exif-table">
-                <colgroup><col className="image-exif-field-col" /><col /></colgroup>
-                <thead><tr><th>{isEnglish ? "Field" : "字段"}</th><th>{isEnglish ? "Value" : "值"}</th></tr></thead>
-                <tbody>{Object.entries(imageInfo.exif).slice(0, 100).map(([key, value]) => {
-                  const field = exifFieldLabel(key, isEnglish);
-                  const valueLabel = exifValueLabel(key, value, isEnglish);
-                  return (
-                    <tr key={key}>
-                      <th scope="row">
-                        <span className="exif-field-label">{field}</span>
-                        {!isEnglish && field !== key && <code className="exif-tag-sub">{key}</code>}
-                      </th>
-                      <td><pre>{valueLabel ?? formatExifValue(value)}</pre></td>
-                    </tr>
-                  );
-                })}</tbody>
-              </table>
-            </div> : <div className="empty-state">{t.noExif}</div>}
+            <ImageMetadata metadata={imageInfo.exif} name={imageInfo.name} english={isEnglish} formatValue={formatExifValue} />
           </>}
 
           {imageInfo.formatLayers.filter((layer) => layer.format === imageFormatLayer).map((layer) => (
@@ -760,11 +748,11 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
                 </>}
                 {layer.gif.comments.length > 0 && <>
                   <PanelTitle title={isEnglish ? "GIF comments" : "GIF 注释"} />
-                  <div className="image-text-result-list">{layer.gif.comments.map((comment, index) => <label key={`gif-comment-${index}`}>{`${isEnglish ? "Comment" : "注释"} #${index + 1}`}<textarea className="single-textarea compact-textarea" value={comment} readOnly /></label>)}</div>
+                  <div className="image-text-result-list">{layer.gif.comments.map((comment, index) => <label key={`gif-comment-${index}`}>{`${isEnglish ? "Comment" : "注释"} #${index + 1}`}<AutoTextarea className="single-textarea compact-textarea" value={comment} readOnly /></label>)}</div>
                 </>}
                 {layer.gif.applicationExtensions.length > 0 && <>
                   <PanelTitle title={isEnglish ? "GIF application extensions" : "GIF 应用扩展"} />
-                  <div className="image-text-result-list">{layer.gif.applicationExtensions.map((ext, index) => <label key={`gif-appext-${index}`}>{`${isEnglish ? "App extension" : "应用扩展"} #${index + 1}`}<textarea className="single-textarea compact-textarea" value={ext} readOnly /></label>)}</div>
+                  <div className="image-text-result-list">{layer.gif.applicationExtensions.map((ext, index) => <label key={`gif-appext-${index}`}>{`${isEnglish ? "App extension" : "应用扩展"} #${index + 1}`}<AutoTextarea className="single-textarea compact-textarea" value={ext} readOnly /></label>)}</div>
                 </>}
               </>}
 
@@ -856,9 +844,9 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runHiddenAnalysis()}>{advancedTask === "hidden" ? (isEnglish ? "Scanning..." : "正在扫描...") : (isEnglish ? "Reveal common steganography" : "一键还原常见隐写")}</AButton><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
           <InfoTable rows={imageInfo.hiddenRows} />
           {imageInfo.hiddenPayloads.length > 0 && <><PanelTitle title={t.extractedPayloads} /><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Source" : "来源"}</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th></th></tr></thead><tbody>{imageInfo.hiddenPayloads.map((payload, index) => <tr key={`${payload.offset}-${index}`}><td>{payload.source}</td><td>{payload.offset}</td><td>{payload.label}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview.slice(0, 160) || "--"}</td><td><AButton variant="outlined" onClick={() => downloadHiddenPayload(payload, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div></>}
-          {imageInfo.pngTextEntries.length > 0 && <><PanelTitle title={t.pngTextMetadata} /><div className="image-text-result-list">{imageInfo.pngTextEntries.map((entry) => <label key={`${entry.offset}-${entry.keyword}`}>{entry.keyword || entry.chunk}<textarea className="single-textarea compact-textarea" value={entry.text} readOnly /></label>)}</div></>}
-          {imageInfo.lsbCandidates.length > 0 && <><PanelTitle title={t.lsbCandidates} /><div className="image-text-result-list">{imageInfo.lsbCandidates.map((candidate) => <label key={`${candidate.mode}-${candidate.text.slice(0, 20)}`}>{candidate.mode}<textarea className="single-textarea compact-textarea" value={candidate.text} readOnly /></label>)}</div></>}
-          {imageInfo.trailerBytes.length > 0 && <><PanelTitle title={t.trailerData} /><textarea className="single-textarea image-trailer-preview" value={`${imageInfo.trailerPreview || "--"}\n\n${imageInfo.trailerText || ""}`} readOnly /></>}
+          {imageInfo.pngTextEntries.length > 0 && <><PanelTitle title={t.pngTextMetadata} /><div className="image-text-result-list">{imageInfo.pngTextEntries.map((entry) => <label key={`${entry.offset}-${entry.keyword}`}>{entry.keyword || entry.chunk}<AutoTextarea className="single-textarea compact-textarea" value={entry.text} readOnly /></label>)}</div></>}
+          {imageInfo.lsbCandidates.length > 0 && <><PanelTitle title={t.lsbCandidates} /><div className="image-text-result-list">{imageInfo.lsbCandidates.map((candidate) => <label key={`${candidate.mode}-${candidate.text.slice(0, 20)}`}>{candidate.mode}<AutoTextarea className="single-textarea compact-textarea" value={candidate.text} readOnly /></label>)}</div></>}
+          {imageInfo.trailerBytes.length > 0 && <><PanelTitle title={t.trailerData} /><AutoTextarea className="single-textarea image-trailer-preview" value={`${imageInfo.trailerPreview || "--"}\n\n${imageInfo.trailerText || ""}`} readOnly /></>}
           {!imageInfo.hiddenPayloads.length && !imageInfo.pngTextEntries.length && !imageInfo.lsbCandidates.length && !imageInfo.trailerBytes.length && <div className="empty-state">{t.noHiddenCandidate}</div>}
         </div>}
 
@@ -882,7 +870,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
               [isEnglish ? "Scan strategy" : "识别策略", isEnglish ? qrResult.scanStrategy : ({ original: "原图", mirror: "镜像", binary: "二值化", "binary-invert": "反相二值化" } as Record<string, string>)[qrResult.scanStrategy] ?? qrResult.scanStrategy]
             ]} />
             {!qrResult.payload && <div className="tool-storage-note" role="status">{isEnglish ? "No QR code detected. Multiple resolutions and binarization strategies were tried. Common causes: low resolution, QR too small in the frame, oversized center logo, or a non-standard code (e.g. a WeChat mini-program circular code)." : "未识别到二维码。已按多分辨率与二值化策略重试。常见原因：图片分辨率过低、二维码占比过小、中央 logo 过大，或为非标准码（如微信小程序圆形码）。"}</div>}
-            {qrResult.payload && <><PanelTitle title={isEnglish ? "Payload" : "二维码内容"} /><textarea className="single-textarea compact-textarea" value={qrResult.payload} readOnly /><div className="action-row"><AButton variant="outlined" onClick={() => void copyText(qrResult.payload)}>{t.copy}</AButton></div></>}
+            {qrResult.payload && <><PanelTitle title={isEnglish ? "Payload" : "二维码内容"} /><AutoTextarea className="single-textarea compact-textarea" value={qrResult.payload} readOnly /><div className="action-row"><AButton variant="outlined" onClick={() => void copyText(qrResult.payload)}>{t.copy}</AButton></div></>}
             {qrResult.payloadRows.length > 0 && <><PanelTitle title={isEnglish ? "Parsed payload" : "内容解析"} /><InfoTable rows={qrResult.payloadRows} /></>}
             {qrResult.cornerRows.length > 0 && <><PanelTitle title={isEnglish ? "Corners" : "定位点"} /><InfoTable rows={qrResult.cornerRows} /></>}
             {qrResult.geometryRows.length > 0 && <><PanelTitle title={isEnglish ? "Geometry" : "几何信息"} /><InfoTable rows={qrResult.geometryRows} /></>}
@@ -896,36 +884,14 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
-      {lightbox && <ImageLightbox src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} t={t} onClose={() => setLightbox(null)} />}
+      {lightbox && <ImageLightbox open={lightbox.open !== false} src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} t={t} onClose={() => setLightbox((current) => current ? { ...current, open: false } : null)} />}
     </div>
   );
 }
 
-function ImageLightbox({ src, label, name, english, t, onClose }: { src: string; label: string; name: string; english: boolean; t: (typeof copy)["zh"]; onClose: () => void }) {
-  React.useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  // Rendered into <body> via a portal on purpose: the workbench grid forces
-  // `position: static !important; top: auto !important` on its direct children
-  // (tools.css `.tool-grid[class*="has-"] > *`, and the stacked variant), which
-  // would drop this overlay into the page flow at the very bottom — forcing the
-  // user to scroll the whole tool to see it. Portaling keeps it a real,
-  // viewport-centered overlay.
-  return createPortal(
-    <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={label} onClick={onClose}>
-      <div className="image-lightbox-inner" onClick={(event) => event.stopPropagation()}>
-        <div className="image-lightbox-head">
-          <strong>{label}</strong>
-          <div className="image-lightbox-actions">
-            <AButton variant="outlined" onClick={() => downloadChannelImage(name, label, src)}>{t.download}</AButton>
-            <AButton variant="text" onClick={onClose}>{t.close}</AButton>
-          </div>
-        </div>
-        <img className="image-lightbox-img" src={src} alt={label} />
-      </div>
-    </div>,
-    document.body
-  );
+function ImageLightbox({ open, src, label, name, english, t, onClose }: { open: boolean; src: string; label: string; name: string; english: boolean; t: (typeof copy)["zh"]; onClose: () => void }) {
+  return <Modal open={open} title={label} onCancel={onClose} footer={null} width="min(1200px, calc(100vw - 32px))" centered className="image-lightbox-modal" destroyOnHidden>
+    <div className="image-lightbox-download"><AButton onClick={() => downloadChannelImage(name, label, src)}>{t.download}</AButton></div>
+    <ImageViewer src={src} label={label} english={english} large />
+  </Modal>;
 }

@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
@@ -220,7 +221,7 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
             <AButton variant="text" onClick={() => setText(examples.response)}>{t.response_example}</AButton>
           </div>
         </div>
-        <textarea
+        <AutoTextarea
           className="single-textarea http-source-textarea"
           aria-label={t.raw_http_message}
           value={text}
@@ -275,7 +276,7 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 <PanelTitle title={t.httpMessageBody} />
                 <AButton variant="text" onClick={() => void copyText(parsed.body)}>{t.copy}</AButton>
               </div>
-              <textarea aria-label={t.http_body} className="single-textarea http-body-textarea" value={parsed.body} spellCheck={false} readOnly />
+              <AutoTextarea aria-label={t.http_body} className="single-textarea http-body-textarea" value={parsed.body} spellCheck={false} readOnly />
             </div>
           )}
         </>

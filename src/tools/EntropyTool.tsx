@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, AInputNumber, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { EntropyAnalysis, EntropyBlock, EntropyRange } from "../models";
@@ -284,7 +285,7 @@ export function EntropyTool({ t, services, active = true }: { t: (typeof copy)["
           <label>{t.blockSize}<AInputNumber min={64} max={1048576} step={64} value={blockSize} onChange={(value) => setBlockSize(Math.max(64, value ?? 1024))} /></label>
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
         </div>
-        <textarea
+        <AutoTextarea
           className="single-textarea entropy-simple-input"
           aria-label={t.text_for_entropy_analysis}
           value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${t.loaded}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}

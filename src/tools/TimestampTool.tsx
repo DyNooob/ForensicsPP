@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { SampleButton } from "../components/SampleButton";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, ToolPanelHeader } from "../components/ui";
@@ -227,7 +228,7 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
               <AButton variant="text" disabled={!batchInput && !submittedBatchInput} onClick={() => { setBatchInput(""); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }}>{t.clear}</AButton>
           </>}
         />
-        <textarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
+        <AutoTextarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
         {batchInputTooLarge && <div className="empty-state error-state">{t.the_batch_input_exceeds_the_32_mib_limit}</div>}
         <div className="timestamp-simple-batch-filter">
           <input className="text-input" aria-label={t.filter_extracted_timestamps} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={t.filter_raw_value_iso_or_context} />

@@ -25,6 +25,7 @@ import { setUiLang } from "./uiLang";
 import { ConfigProvider, Modal, theme as antdTheme } from "antd";
 import { CommandPalette } from "./components/CommandPalette";
 import { EvidenceInbox } from "./components/EvidenceInbox";
+import { ClipboardImport } from "./components/ClipboardImport";
 import { ToolHost } from "./components/ToolHost";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
@@ -280,6 +281,8 @@ export function App() {
           )}
         </section>
       </main>
+
+      <ClipboardImport activeTool={activeTool} english={lang === "en"} enabled={acceptedLegalVersion === legalVersion} onSelectTool={setActiveTool} onOpenFiles={() => setEvidenceInboxOpen(true)} />
 
       <LegalConsentModal
         t={t}

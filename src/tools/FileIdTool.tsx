@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { FileSignatureDef } from "../models";
@@ -229,7 +230,7 @@ export function FileIdTool({ t, active = true }: { t: (typeof copy)["zh"]; activ
               <PanelTitle title={t.header_bytes} />
               <AButton variant="text" onClick={() => void copyText(result.headerHex)}>{t.copy}</AButton>
             </div>
-            <textarea aria-label={t.file_header_bytes} className="single-textarea compact-textarea" value={result.headerHex || "--"} readOnly />
+            <AutoTextarea aria-label={t.file_header_bytes} className="single-textarea compact-textarea" value={result.headerHex || "--"} readOnly />
           </div>
         </>
       )}

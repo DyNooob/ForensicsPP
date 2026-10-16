@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import { AButton, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
@@ -206,7 +207,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
         </ASegmentedGroup>
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><SampleButton toolId="json" english={english} onLoad={(text) => { setInput(text); setAnalyzedInput(text); }} /></div>
-          <textarea className="json-simple-textarea" aria-label={t.json_input} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
+          <AutoTextarea className="json-simple-textarea" aria-label={t.json_input} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
         {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
         <div className="text-panel json-simple-text-panel">
@@ -218,7 +219,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
               <AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`json-output-${Date.now()}.${outputExtension}`, output, "text/plain;charset=utf-8")}>{t.save}</AButton>
             </div>
           </div>
-          <textarea className="json-simple-textarea" aria-label={t.json_output} value={output} readOnly />
+          <AutoTextarea className="json-simple-textarea" aria-label={t.json_output} value={output} readOnly />
         </div>
       </div>
 

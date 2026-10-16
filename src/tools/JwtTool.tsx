@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
 import {
   AButton,
@@ -298,7 +299,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                   <SampleButton toolId="jwt" english={english} onLoad={(text) => { setTokenInput(text); setSelectedToken(""); }} />
                 </div>
               </div>
-              <textarea
+              <AutoTextarea
                 className="single-textarea jwt-token-input"
                 aria-label="JWT"
                 value={tokenInput}
@@ -352,11 +353,11 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             {algFamily(signAlg) === "none" && <p className="inline-note jwt-none-hint">{t.jwt_sign_none_hint}</p>}
             <div className="text-panel jwt-text-panel">
               <div className="text-panel-title"><strong>Header</strong></div>
-              <textarea className="compact-textarea jwt-json" value={signHeader} onChange={(event) => { setSignHeader(event.currentTarget.value); setGeneratedToken(""); }} />
+              <AutoTextarea className="compact-textarea jwt-json" value={signHeader} onChange={(event) => { setSignHeader(event.currentTarget.value); setGeneratedToken(""); }} />
             </div>
             <div className="text-panel jwt-text-panel">
               <div className="text-panel-title"><strong>Payload</strong></div>
-              <textarea className="single-textarea jwt-json" value={signPayload} onChange={(event) => { setSignPayload(event.currentTarget.value); setGeneratedToken(""); }} />
+              <AutoTextarea className="single-textarea jwt-json" value={signPayload} onChange={(event) => { setSignPayload(event.currentTarget.value); setGeneratedToken(""); }} />
             </div>
             {algFamily(signAlg) === "HS" && (
               <label className="stack-label">
@@ -367,7 +368,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             {["RS", "ES", "PS"].includes(algFamily(signAlg)) && (
               <label className="stack-label">
                 {t.jwt_sign_key}
-                <textarea className="compact-textarea jwt-key-input" value={signKey} onChange={(event) => { setSignKey(event.currentTarget.value); setGeneratedToken(""); }} placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" />
+                <AutoTextarea className="compact-textarea jwt-key-input" value={signKey} onChange={(event) => { setSignKey(event.currentTarget.value); setGeneratedToken(""); }} placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" />
               </label>
             )}
             <div className="button-row">
@@ -383,7 +384,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                     <AButton variant="text" onClick={() => { setTokenInput(generatedToken); setMode("decode"); }}>{t.jwt_open_decode}</AButton>
                   </div>
                 </div>
-                <textarea className="single-textarea jwt-generated" value={generatedToken} readOnly />
+                <AutoTextarea className="single-textarea jwt-generated" value={generatedToken} readOnly />
               </div>
             )}
           </>
@@ -408,14 +409,14 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                 <strong>Header</strong>
                 <AButton variant="text" disabled={!decodeHeader} onClick={() => void copyText(decodeHeader)}>{t.copy_header}</AButton>
               </div>
-              <textarea className="compact-textarea jwt-json" aria-label="JWT Header" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} />
+              <AutoTextarea className="compact-textarea jwt-json" aria-label="JWT Header" value={decodeHeader} onChange={(event) => setDecodeHeader(event.currentTarget.value)} />
             </div>
             <div className="text-panel jwt-text-panel">
               <div className="text-panel-title">
                 <strong>Payload</strong>
                 <AButton variant="text" disabled={!decodePayload} onClick={() => void copyText(decodePayload)}>{t.copy_payload}</AButton>
               </div>
-              <textarea className="single-textarea jwt-json" aria-label="JWT Payload" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
+              <AutoTextarea className="single-textarea jwt-json" aria-label="JWT Payload" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
             </div>
             {decodeError && <div className="empty-state error-state">{decodeError}</div>}
             <div className="button-row">
@@ -435,7 +436,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
               {asymmetric && (
                 <label className="stack-label">
                   {t.public_key_or_jwk}
-                  <textarea className="compact-textarea jwt-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" />
+                  <AutoTextarea className="compact-textarea jwt-key-input" value={verifyKey} onChange={(event) => { setVerifyKey(event.currentTarget.value); setVerification({ status: "idle", detail: "" }); }} placeholder="PEM / JWK" />
                 </label>
               )}
               {asymmetric && (

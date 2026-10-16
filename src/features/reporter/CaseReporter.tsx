@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { AutoTextarea } from "../../components/AutoTextarea";
 import { copyText } from "../../utils/clipboard";
 import React from "react";
 import { CloseOutlined, DownOutlined, MoreOutlined } from "@ant-design/icons";
@@ -681,7 +682,7 @@ export function CaseReporter({
               <label>{t.evidenceId}<input value={meta.evidenceId} onChange={(event) => updateMetaField("evidenceId", event.target.value)} /></label>
               <label>{t.timezone}<input value={meta.timezone} onChange={(event) => updateMetaField("timezone", event.target.value)} /></label>
               <label>{t.classification}<input value={meta.classification} onChange={(event) => updateMetaField("classification", event.target.value)} /></label>
-              <label className="reporter-meta-wide">{t.reportRemarks}<textarea value={meta.remarks} onChange={(event) => updateMetaField("remarks", event.target.value)} /></label>
+              <label className="reporter-meta-wide">{t.reportRemarks}<AutoTextarea value={meta.remarks} onChange={(event) => updateMetaField("remarks", event.target.value)} /></label>
             </div>
           )}
         </div>
@@ -760,7 +761,7 @@ export function CaseReporter({
                         [t.timelineEvents, String(selectedNote.timelineEvents?.length ?? 0)],
                         [t.noteContentHash, selectedDigest]
                       ]} />
-                      <textarea
+                      <AutoTextarea
                         className="reporter-note-content"
                         value={selectedNote.markdown || selectedNote.content}
                         onChange={(event) => {
@@ -794,7 +795,7 @@ export function CaseReporter({
                 {previewMode === "html" ? (
                   <iframe className="reporter-preview-frame" title={t.reportPreview} srcDoc={htmlReport} sandbox="allow-same-origin" />
                 ) : (
-                  <textarea className="reporter-markdown" value={markdown} readOnly aria-label="Evidence report markdown" />
+                  <AutoTextarea className="reporter-markdown" value={markdown} readOnly aria-label="Evidence report markdown" />
                 )}
               </div>
             )}

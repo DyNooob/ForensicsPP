@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle, ToolFactGrid, ToolPanelHeader, ToolStageFeatures } from "../components/ui";
 import { filterSqlRows, sqlRowsToCsv, sqlTableToJson } from "../features/sql/analyzer";
 import type { SqlWorkerRequest, SqlWorkerResult } from "../features/sql/sql.worker";
@@ -258,7 +259,7 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
         </div>
         {!result && <div className="text-panel sql-input-stage">
           <div className="text-panel-title"><strong>{t.paste_sql}</strong><AButton variant="text" disabled={!formatInput} onClick={() => void copyText(formatInput)}>{t.copyInput}</AButton></div>
-          <textarea className="single-textarea sql-input-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.currentTarget.value); setError(""); }} placeholder={t.paste_a_sql_dump_here} />
+          <AutoTextarea className="single-textarea sql-input-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.currentTarget.value); setError(""); }} placeholder={t.paste_a_sql_dump_here} />
         </div>}
         {!result && <ToolStageFeatures items={stageFeatures} />}
         {error && <pre className="result-box">{error}</pre>}
@@ -358,8 +359,8 @@ export function SqlTool({ t, active = true }: { t: Translation; active?: boolean
               <AButton variant="text" disabled={!formatOutput} onClick={() => void copyText(formatOutput)}>{t.copyOutput}</AButton>
             </div>
             <div className="text-columns sql-format-columns">
-              <textarea className="single-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.target.value); setFormatOutput(""); }} />
-              <textarea className="single-textarea" aria-label={t.formatted_sql_output} value={formatOutput} readOnly />
+              <AutoTextarea className="single-textarea" aria-label={t.sql_input} value={formatInput} onChange={(event) => { setFormatInput(event.target.value); setFormatOutput(""); }} />
+              <AutoTextarea className="single-textarea" aria-label={t.formatted_sql_output} value={formatOutput} readOnly />
             </div>
           </details>
         </>

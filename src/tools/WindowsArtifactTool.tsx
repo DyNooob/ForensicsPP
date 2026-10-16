@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import type { WindowsWorkerRequest } from "../features/windows/windows.worker";
 import { copy } from "../i18n";
@@ -261,7 +262,7 @@ export function WindowsArtifactTool({ t, active = true }: { t: (typeof copy)["zh
                 <span />
                 <AButton variant="text" onClick={() => void copyText(analysis.textPreview)}>{t.copy}</AButton>
               </div>
-              <textarea className="single-textarea windows-preview-textarea" value={analysis.textPreview} readOnly />
+              <AutoTextarea className="single-textarea windows-preview-textarea" value={analysis.textPreview} readOnly />
             </div>
           )}
           </div>

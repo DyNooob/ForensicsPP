@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, AInputNumber, ASelect, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
@@ -151,7 +152,7 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
 
         <label className="crypto-simple-text-field">
           <span>{t.inputText}</span>
-          <textarea value={input} onChange={(event) => { setInput(event.target.value); invalidateResult(); }} placeholder={t.textPlaceholder} />
+          <AutoTextarea value={input} onChange={(event) => { setInput(event.target.value); invalidateResult(); }} placeholder={t.textPlaceholder} />
         </label>
         {inputTooLarge && <div className="empty-state error-state" role="alert">{english ? `Input is limited to ${Math.round(inputLimit / 1024)} KiB for this operation.` : `此操作最多处理 ${Math.round(inputLimit / 1024)} KiB 输入。`}</div>}
         <div className="crypto-simple-primary-action">
@@ -185,7 +186,7 @@ export function CryptoTool({ t, services, active = true }: { t: (typeof copy)["z
               </table>
             </div>
           ) : (
-            <textarea aria-label={t.cipher_result} className="single-textarea crypto-simple-output" value={output} readOnly />
+            <AutoTextarea aria-label={t.cipher_result} className="single-textarea crypto-simple-output" value={output} readOnly />
           )}
         </section>
       )}

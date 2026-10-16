@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { useStaleRunGuard } from "../core/runtime";
 import { AButton, ALinearProgress, ASelect, InfoTable, PanelTitle } from "../components/ui";
@@ -430,7 +431,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
               </div>
               {entryHashError && <div className="empty-state error-state">{entryHashError}</div>}
               {imageUrl ? <div className="archive-image-preview"><img src={imageUrl} alt={selected.name} /></div> : selected.data ? (
-                <textarea aria-label={t.archive_entry_preview} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
+                <AutoTextarea aria-label={t.archive_entry_preview} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
               ) : <div className="empty-state">{selected.encrypted ? (t.encrypted_entry_cannot_be_previewed) : (t.this_entry_was_not_extracted_for_preview)}</div>}
             </> : <div className="empty-state">--</div>}
           </div>

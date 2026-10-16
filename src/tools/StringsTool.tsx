@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, AInputNumber, ALinearProgress, ASelect, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { ExtractedStringRow, StringsAnalysis } from "../models";
@@ -316,7 +317,7 @@ export function StringsTool({ t, services, active = true }: { t: (typeof copy)["
           <AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.selectFile}</AButton>
           <AButton variant="filled" disabled={!pendingBytes.length || analyzing} onClick={analyze}>{analyzing ? (t.extracting) : (t.extract_strings)}</AButton>
         </div>
-        <textarea
+        <AutoTextarea
           className="single-textarea strings-simple-input"
           aria-label={t.file_text_for_string_extraction}
           value={sourceName === "text input" ? text : `${sourceName}\n${formatBytes(bytes.length)} ${t.loaded}${sourceSize > bytes.length ? ` / ${formatBytes(sourceSize)}` : ""}`}

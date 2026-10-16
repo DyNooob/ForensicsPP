@@ -103,7 +103,7 @@ function EvidenceCard({ item, t, lang, titleMap, onOpenTool }: EvidenceCardProps
       <div className="evidence-inbox-card__meta">
         <span>{formatBytes(item.size)}</span>
         <span className="evidence-inbox-card__dot">·</span>
-        <span>{item.source === "drop" ? t.evidenceSourceDrop : t.evidenceSourceUpload}</span>
+        <span>{item.source === "paste" ? (t.waiting === "Waiting" ? "Clipboard" : "剪贴板") : item.source === "drop" ? t.evidenceSourceDrop : t.evidenceSourceUpload}</span>
         <span className="evidence-inbox-card__dot">·</span>
         <span>{formatLoadedAt(item.acquiredAt, lang)}</span>
       </div>

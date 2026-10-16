@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { SampleButton } from "../components/SampleButton";
 import { AButton, ASelect, InfoTable, PanelTitle, ToolPanelHeader } from "../components/ui";
 import { analyzeRegex, type RegexAnalysis, type RegexMatch } from "../features/regex/analyzer";
@@ -172,7 +173,7 @@ export function RegexTool({ t, active = true }: RegexToolProps & { active?: bool
           <label className="stack-label">{t.flags}<input className="text-input full-input" value={flags} onChange={(event) => setFlags(event.currentTarget.value)} placeholder="gim" /></label>
           <label className="stack-label">{t.regexExamples}<ASelect aria-label={t.regexExamples} value={preset} onChange={(value) => applyPreset(String(value))} options={[{ value: "", label: t.choose_preset }, ...presets.map((item) => ({ value: item.label, label: item.label }))]} /></label>
         </div>
-        <label className="stack-label">{t.source_text}<textarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
+        <label className="stack-label">{t.source_text}<AutoTextarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
         {fileError && <div className="empty-state error-state">{fileError}</div>}
         {(analyzing || result.error) && <div className={`empty-state ${result.error ? "error-state" : ""}`} role={result.error ? "alert" : "status"}>{analyzing ? (t.matching) : result.error}</div>}
       </div>
@@ -216,7 +217,7 @@ export function RegexTool({ t, active = true }: RegexToolProps & { active?: bool
       {hasInput && <div className="tool-panel wide-panel regex-simple-replace-panel">
         <ToolPanelHeader title={t.regexReplaceOutput} actions={<AButton variant="outlined" disabled={!source} onClick={() => void copyText(result.replaced)}>{t.copyOutput}</AButton>} />
         <label className="stack-label">{t.regexReplacement}<input className="text-input full-input" value={replacement} onChange={(event) => setReplacement(event.currentTarget.value)} /></label>
-        <textarea aria-label={t.replacement_result} className="single-textarea regex-simple-output" value={result.replaced} readOnly />
+        <AutoTextarea aria-label={t.replacement_result} className="single-textarea regex-simple-output" value={result.replaced} readOnly />
       </div>}
     </div>
   );

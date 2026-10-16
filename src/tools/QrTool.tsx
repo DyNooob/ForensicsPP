@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import { downloadTextFile, formatBytes } from "../utils/files";
@@ -293,7 +294,7 @@ export function QrTool({ t, services, active = true }: { t: (typeof copy)["zh"];
               <div className="result-copy-card"><span>{t.qrDecodedBytes}</span><strong>{analysis.decodedBytes}</strong></div>
               <div className="result-copy-card"><span>{t.dimensions}</span><strong>{analysis.width} x {analysis.height}</strong></div>
             </div>
-            <textarea aria-label={t.qr_code_payload} className="single-textarea qr-payload-box" value={analysis.payload || t.qrNoCode} readOnly />
+            <AutoTextarea aria-label={t.qr_code_payload} className="single-textarea qr-payload-box" value={analysis.payload || t.qrNoCode} readOnly />
             {!analysis.payload && <div className="tool-storage-note" role="status">{t.qrNotFoundHint}</div>}
           </div>
 

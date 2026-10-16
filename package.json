@@ -45,7 +45,8 @@
     "validate": "vitest run tests/validation",
     "smoke:settings": "node scripts/smoke-settings.mjs",
     "smoke:image": "node scripts/smoke-image.mjs",
-    "smoke:cdn": "node scripts/smoke-cdn.mjs"
+    "smoke:cdn": "node scripts/smoke-cdn.mjs",
+    "smoke:usability": "node scripts/smoke-usability.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, AInputNumber, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { CaseEvidenceFile, EntropyAnalysis, FileAnalysis, FileEmbeddedSignature, StringsAnalysis, YaraScanResult } from "../models";
@@ -559,7 +560,7 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
             <div className="tool-panel wide-panel binary-trailer-panel">
               <div className="panel-heading-row"><PanelTitle title={t.trailerData} /><AButton variant="text" disabled={!analysis.trailerBytes.length} onClick={downloadTrailer}>{t.download}</AButton></div>
               <InfoTable rows={analysis.trailerRows} />
-              <textarea className="single-textarea compact-textarea" value={analysis.trailerPreview || "--"} readOnly />
+              <AutoTextarea className="single-textarea compact-textarea" value={analysis.trailerPreview || "--"} readOnly />
             </div>
           ) : null}
 
@@ -586,7 +587,7 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
 
           {binaryPage === "yara" && <div className="tool-panel wide-panel binary-yara-panel">
             <div className="panel-heading-row"><PanelTitle title="YARA" /><div className="button-row compact-buttons">{services.yaraRuleTemplates.map((template) => <AButton key={template.id} variant="text" onClick={() => { setYaraRules(template.rule); setYaraResult(null); }}>{template.label}</AButton>)}</div></div>
-            <textarea className="single-textarea yara-simple-editor" value={yaraRules} onChange={(event) => { setYaraRules(event.target.value); setYaraResult(null); }} placeholder={t.paste_yara_rules} />
+            <AutoTextarea className="single-textarea yara-simple-editor" value={yaraRules} onChange={(event) => { setYaraRules(event.target.value); setYaraResult(null); }} placeholder={t.paste_yara_rules} />
             <div className="action-row"><AButton variant="filled" disabled={yaraScanning || !bytes.length || !yaraRules.trim()} onClick={() => void runYaraScan()}>{yaraScanning ? (t.scanning) : (t.scan_current_file)}</AButton></div>
             {bytes.length > 32 * 1024 * 1024 && <div className="tool-storage-note">{t.yara_scans_the_first_32_mib_in_the_browser_workbench}</div>}
             {yaraResult && <><InfoTable rows={[[t.yaraRules, String(yaraResult.results.length)], [t.matched, String(matchedYara.length)]]} />{matchedYara.length ? <div className="finding-list">{matchedYara.map((item) => <div className="finding-item warn" key={item.rule.name}><strong>{item.rule.name}</strong><span>{item.hits.filter((hit) => hit.count).map((hit) => `${hit.id}: ${hit.count}`).join(" · ") || (t.rule_matched)}</span></div>)}</div> : <div className="empty-state">{t.no_rule_matched}</div>}</>}

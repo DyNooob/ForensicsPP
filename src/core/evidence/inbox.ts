@@ -42,7 +42,7 @@ export type EvidenceInboxItem = {
   sha256?: string;
   acquiredAt: number;
   usedByTools: ToolId[];
-  source: "upload" | "drop";
+  source: "upload" | "drop" | "paste";
   file: File;
 };
 
@@ -77,7 +77,7 @@ function notify() {
  * asynchronously (fire-and-forget) so the card can show a fingerprint without
  * blocking the load.
  */
-export function captureEvidence(files: FileList | File[], source: "upload" | "drop", toolId: ToolId) {
+export function captureEvidence(files: FileList | File[], source: "upload" | "drop" | "paste", toolId: ToolId) {
   const list = Array.from(files).filter((file) => typeof file.size === "number" && file.size >= 0);
   if (!list.length) return;
   for (const file of list) {

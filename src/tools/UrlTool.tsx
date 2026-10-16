@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { SampleButton } from "../components/SampleButton";
 import { parseUrlInput } from "../utils/url";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
@@ -72,7 +73,7 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
     <div className={`tool-grid url-workbench ${url ? "has-url" : "empty-url"}`}>
       <div className="tool-panel wide-panel url-source-panel">
         <div className="panel-heading-row"><PanelTitle title="URL" /><SampleButton toolId="urltool" english={t.waiting === "Waiting"} onLoad={setInput} /></div>
-        <textarea
+        <AutoTextarea
           className="single-textarea url-source-textarea"
           aria-label={t.url_input}
           value={input}

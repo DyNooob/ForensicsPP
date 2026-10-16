@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
 import type { YaraBatchRow, YaraRuleResult, YaraScanResult } from "../models";
@@ -228,7 +229,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
             <AButton key={template.id} variant="outlined" onClick={() => { setRules(template.rule); invalidate(); }}>{template.label}</AButton>
           ))}
         </div>
-        <textarea className="single-textarea yara-simple-editor" aria-label={t.yara_rules} value={rules} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_RULE_BYTES) { setError(t.yara_rules_are_limited_to_2_mib ); return; } setRules(next); invalidate(); }} placeholder={t.paste_one_or_more_yara_rules} />
+        <AutoTextarea className="single-textarea yara-simple-editor" aria-label={t.yara_rules} value={rules} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_RULE_BYTES) { setError(t.yara_rules_are_limited_to_2_mib ); return; } setRules(next); invalidate(); }} placeholder={t.paste_one_or_more_yara_rules} />
 
         <div className="yara-simple-divider" />
         <div className="yara-simple-section-heading"><strong>{t.yaraSample}</strong></div>
@@ -251,7 +252,7 @@ export function YaraTool({ t, services, active = true }: { t: (typeof copy)["zh"
           <strong>{sampleName === "text sample" ? (t.text_sample) : sampleName}</strong>
           <span>{sampleBytes.length ? formatBytes(sampleBytes.length) : (t.drop_up_to_25_files)}</span>
         </div>
-        <textarea className="single-textarea yara-simple-sample" aria-label={t.yara_text_sample} value={sample} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) { setError(t.text_samples_are_limited_to_32_mib ); return; } setSampleName("text sample"); setSample(next); invalidate(); }} placeholder={t.textPlaceholder} />
+        <AutoTextarea className="single-textarea yara-simple-sample" aria-label={t.yara_text_sample} value={sample} onChange={(event) => { const next = event.target.value; if (new TextEncoder().encode(next).byteLength > MAX_YARA_TEXT_SAMPLE_BYTES) { setError(t.text_samples_are_limited_to_32_mib ); return; } setSampleName("text sample"); setSample(next); invalidate(); }} placeholder={t.textPlaceholder} />
         <div className="yara-simple-primary-action">
           <AButton variant="filled" disabled={scanning || !rules.trim() || !sample.trim()} onClick={() => void runTextScan()}>{t.run}</AButton>
           <AButton variant="outlined" disabled={scanning || !rules.trim()} onClick={() => inputRef.current?.click()}>{t.uploadSample}</AButton>

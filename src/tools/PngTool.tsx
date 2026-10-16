@@ -20,6 +20,7 @@
  */
 
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
 import { copy } from "../i18n";
 import type { PngWorkerRequest } from "../features/png/png.worker";
@@ -243,7 +244,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
                 [t.fileSize, formatBytes(analysis.trailer.length)],
                 [t.detected_signatures, analysis.trailerSignatures.map((item) => item.label).join(", ") || "--"]
               ]} />
-              <textarea aria-label={t.png_trailing_data_preview} className="single-textarea compact-textarea" value={analysis.trailerPreview} readOnly />
+              <AutoTextarea aria-label={t.png_trailing_data_preview} className="single-textarea compact-textarea" value={analysis.trailerPreview} readOnly />
             </div>
           )}
         </>

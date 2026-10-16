@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { SampleButton } from "../components/SampleButton";
 import type { Translation } from "../i18n";
@@ -157,7 +158,7 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
           <SampleButton toolId="baseconvert" english={english} onLoad={(text) => setValue(text)} />
           <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
         </>} />
-        <label className="stack-label">{t.inputText}<textarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={t.enter_one_value_or_one_value_per_line} /></label>
+        <label className="stack-label">{t.inputText}<AutoTextarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={t.enter_one_value_or_one_value_per_line} /></label>
         {conversionError && <div className="empty-state error-state" role="alert">{conversionError}</div>}
         <div className="baseconvert-simple-base-row">
           <span>{t.default_input_base}</span>
