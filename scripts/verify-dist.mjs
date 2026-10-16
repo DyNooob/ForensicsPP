@@ -103,7 +103,8 @@ try {
   // (fully inlined single file) this assertion does not apply.
   const usesExternalAssets = /\b(?:src|href)="[^"]*\/assets\//.test(indexHtml);
   const usesRootAbsolute = /\b(?:src|href)="\/assets\//.test(indexHtml);
-  if (usesExternalAssets && !usesRootAbsolute) {
+  const fullCdn = /<meta name="asset-cdn" content="https:\/\//.test(indexHtml);
+  if (usesExternalAssets && !usesRootAbsolute && !fullCdn) {
     errors.push("web build index.html must use root-absolute /assets/ paths so deep-linked and fallback routes boot");
   }
 

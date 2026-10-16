@@ -25,9 +25,11 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAssetIdentity } from "./build-assets.mjs";
 import { SITE } from "../src/seo/seoPages.mjs";
+import { prepareResourceCdn } from "./resource-cdn.mjs";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(projectRoot, "dist");
+if (process.env.ASSET_CDN_URL && process.env.SINGLE_FILE !== "1") await prepareResourceCdn(distRoot);
 const packageJson = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
 const serviceWorkerPath = join(distRoot, "sw.js");
 const serviceWorker = await readFile(serviceWorkerPath, "utf8");

@@ -22,7 +22,7 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
-const manifest = JSON.parse(await readFile("release/vendor-cdn-manifest.json", "utf8"));
+const manifest = JSON.parse(await readFile(process.env.CDN_MANIFEST || "release/vendor-cdn-manifest.json", "utf8"));
 for (const file of manifest.files) {
   const response = await fetch(file.url, { signal: AbortSignal.timeout(15000), headers: { Origin: "https://www.forensicspp.com" } })
     .catch((error) => { throw new Error(`${file.url}: ${error.cause?.code || error.message}; check DNS and HTTPS certificate`); });
@@ -30,9 +30,10 @@ for (const file of manifest.files) {
   const cors = response.headers.get("access-control-allow-origin");
   if (cors !== "*" && cors !== "https://www.forensicspp.com") throw new Error(`${file.url}: missing module CORS header`);
   const mime = response.headers.get("content-type") || "";
-  if (file.path.endsWith(".js") ? !/(?:javascript|ecmascript)/i.test(mime) : !/text\/css/i.test(mime)) throw new Error(`${file.url}: invalid MIME type ${mime}`);
+  const expectedMime = file.path.endsWith(".js") ? /(?:javascript|ecmascript)/i : file.path.endsWith(".css") ? /text\/css/i : file.path.endsWith(".wasm") ? /application\/wasm/i : null;
+  if (expectedMime && !expectedMime.test(mime)) throw new Error(`${file.url}: invalid MIME type ${mime}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (createHash("sha256").update(bytes).digest("hex") !== file.sha256) throw new Error(`${file.url}: file does not match this build`);
   console.log(`OK ${file.path}`);
 }
-console.log(`Verified ${manifest.files.length} vendor CDN resources.`);
+console.log(`Verified ${manifest.files.length} CDN resources.`);

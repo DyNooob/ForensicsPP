@@ -239,6 +239,19 @@ describe("service worker degraded storage", () => {
 });
 
 describe("service worker slow network", () => {
+  it("replays full CDN modules and WASM only inside the declared release", async () => {
+    const base = "https://static.digiforensics.cn/releases/build123";
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const { cache, dispatchFetch } = loadServiceWorker({ bootstrap: [`${base}/assets/index-aB12_cd3.js`], fetch });
+    for (const path of ["ImageTool-aB12_cd3.js", "yara_x-aB12_cd3.wasm"]) {
+      const url = `${base}/assets/${path}`;
+      cache.seed(url, "cached resource");
+      expect(await (await dispatchFetch({ method: "GET", url, mode: "cors" })).text()).toBe("cached resource");
+    }
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(dispatchFetch({ method: "GET", url: "https://static.digiforensics.cn/releases/other/assets/index-aB12_cd3.js", mode: "cors" })).rejects.toThrow("did not respond");
+  });
+
   it("replays lazy vendor modules only from the CDN declared by this build", async () => {
     const base = "https://static.digiforensics.cn";
     const fetch = vi.fn(() => new Promise<Response>(() => {}));

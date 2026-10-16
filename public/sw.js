@@ -74,11 +74,13 @@ function offlineResponse() {
 // A content hash identifies immutable bytes, so a cached build asset never
 // needs a network round trip. Unversioned files still use network-first.
 function isCdnVendorAsset(url) {
-  if (!/\/assets\/vendor-[\w-]+\.(?:js|css)$/.test(url.pathname)) return false;
+  const allAssets = BUILD_ASSETS.some((asset) => /\/releases\/[^/]+\/assets\//.test(asset));
+  const resourcePattern = allAssets ? /\/assets\/[^/]+\.(?:js|css|wasm)$/ : /\/assets\/vendor-[\w-]+\.(?:js|css)$/;
+  if (!resourcePattern.test(url.pathname)) return false;
   return BUILD_ASSETS.some((asset) => {
     const bootstrap = new URL(asset, self.registration.scope);
     return bootstrap.origin !== self.location.origin && bootstrap.origin === url.origin &&
-      /\/assets\/vendor-[\w-]+\.(?:js|css)$/.test(bootstrap.pathname) &&
+      resourcePattern.test(bootstrap.pathname) &&
       bootstrap.pathname.slice(0, bootstrap.pathname.lastIndexOf("/") + 1) === url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1);
   });
 }
@@ -120,7 +122,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  // Only the vendor CDN declared by this build may enter the shell cache.
+  // Only the resource CDN directory declared by this build may enter the cache.
   // Lookup data packs and unrelated external requests keep their own handling.
   if (url.origin !== self.location.origin && !isCdnVendorAsset(url)) return;
 

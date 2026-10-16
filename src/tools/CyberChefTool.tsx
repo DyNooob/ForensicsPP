@@ -25,13 +25,27 @@ import type { Translation } from "../i18n";
 import cyberChef from "../config/cyberchef.json";
 
 export function CyberChefTool({ t, active = true }: { t: Translation; active?: boolean }) {
-  const cyberChefUrl = new URL(`${import.meta.env.BASE_URL}${cyberChef.entry}`, window.location.href).href;
+  const resourceBase = (import.meta.env as { VITE_ASSET_CDN_URL?: string }).VITE_ASSET_CDN_URL;
+  const cyberChefUrl = resourceBase ? `${resourceBase}/${cyberChef.entry}` : new URL(`${import.meta.env.BASE_URL}${cyberChef.entry}`, window.location.href).href;
   const [loaded, setLoaded] = React.useState(false);
   const [showFallback, setShowFallback] = React.useState(false);
   const [frameKey, setFrameKey] = React.useState(0);
   // Defer mounting the ~12MB CyberChef iframe until the tool is actually opened,
   // so it is only fetched when the user navigates to this page.
   const [hasActivated, setHasActivated] = React.useState(active);
+
+  React.useEffect(() => {
+    if (!resourceBase) return;
+    const ready = (event: MessageEvent) => {
+      const frame = document.querySelector<HTMLIFrameElement>('.cyberchef-stage iframe');
+      if (event.origin === new URL(cyberChefUrl).origin && event.source === frame?.contentWindow && event.data === "forensicspp:cyberchef-ready") {
+        setLoaded(true);
+        setShowFallback(false);
+      }
+    };
+    window.addEventListener("message", ready);
+    return () => window.removeEventListener("message", ready);
+  }, [resourceBase, cyberChefUrl, frameKey]);
 
   React.useEffect(() => {
     if (active) setHasActivated(true);
@@ -72,6 +86,7 @@ export function CyberChefTool({ t, active = true }: { t: Translation; active?: b
             title="CyberChef"
             src={cyberChefUrl}
             onLoad={(event) => {
+              if (resourceBase && new URL(cyberChefUrl).origin !== window.location.origin) return;
               // A missing asset can be rewritten to the app shell by a host.
               // Only dismiss the loader for the actual embedded application.
               try {
@@ -82,6 +97,7 @@ export function CyberChefTool({ t, active = true }: { t: Translation; active?: b
               } catch {
                 // file:// documents have opaque origins in some browsers.
                 // Their exact bundled path cannot be rewritten by an SPA host.
+                if (resourceBase) return; // Wait for the verified frame's ready message.
                 if (window.location.protocol === "file:") setLoaded(true);
                 else setShowFallback(true);
               }

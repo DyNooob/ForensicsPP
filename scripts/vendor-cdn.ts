@@ -42,7 +42,7 @@ export function vendorAssetUrl(base: string, filename: string): string | undefin
 // Rollup's imports are relative chunk references; Vite's renderBuiltUrl handles
 // asset/preload URLs but does not rewrite these ES module specifiers. Parse the
 // module syntax so strings in source code or user samples are never rewritten.
-export function vendorCdnPlugin(base: string): Plugin {
+export function vendorCdnPlugin(base: string, allAssets = false): Plugin {
   return {
     name: "forensicspp-vendor-cdn",
     apply: "build",
@@ -58,7 +58,7 @@ export function vendorCdnPlugin(base: string): Plugin {
             const source = node.source;
             if (source?.type === "Literal" && typeof source.value === "string" && source.value.startsWith(".")) {
               const filename = posix.normalize(posix.join(posix.dirname(chunk.fileName), source.value));
-              const url = vendorAssetUrl(base, filename);
+              const url = allAssets && filename.startsWith("assets/") ? `${base}/${filename}` : vendorAssetUrl(base, filename);
               if (url) edits.push({ start: source.start, end: source.end, value: JSON.stringify(url) });
             }
           }

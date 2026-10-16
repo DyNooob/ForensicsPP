@@ -41,7 +41,7 @@ const browserCryptoShim = fileURLToPath(new URL("./src/shims/node-crypto-browser
 function readBuildInfo(): { hash: string; branch: string } {
   try {
     const hash = execSync("git rev-parse --short HEAD").toString().trim();
-    const branch = execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
+    const branch = process.env.RELEASE_BRANCH || process.env.GITHUB_REF_NAME || execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
     return { hash: hash || "unknown", branch: branch || "unknown" };
   } catch {
     return { hash: "dev", branch: "dev" };
@@ -84,6 +84,8 @@ const singleFileBuild = (globalThis as { process?: { env?: Record<string, string
 // Opt in only after uploading the matching vendor package. Offline/standalone
 // releases always keep their dependencies local.
 const vendorCdn = singleFileBuild ? "" : normalizeVendorCdn(process.env.VENDOR_CDN_URL);
+const assetCdn = singleFileBuild ? "" : normalizeVendorCdn(process.env.ASSET_CDN_URL);
+const resourceBase = assetCdn ? `${assetCdn}/releases/${buildInfo.hash}` : "";
 
 export default defineConfig({
   resolve: {
@@ -101,14 +103,24 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_BUILD_HASH": JSON.stringify(buildInfo.hash),
     "import.meta.env.VITE_BUILD_BRANCH": JSON.stringify(buildInfo.branch),
+    "import.meta.env.VITE_ASSET_CDN_URL": JSON.stringify(resourceBase),
     // Mirrors the build-time preview flag so the runtime (routeAdapter.isPreview,
     // the Preview banner, and the belt-and-suspenders noindex effect) agrees
     // with the build mode. Missing before — the banner silently never showed.
     "import.meta.env.VITE_PREVIEW": JSON.stringify(process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true" ? "1" : "0")
   },
-  plugins: [react(), copyrightCssPlugin(), ...(vendorCdn ? [vendorCdnPlugin(vendorCdn)] : []), ...(singleFileBuild ? [standalonePlugin()] : [])],
-  experimental: vendorCdn ? {
-    renderBuiltUrl(filename) {
+  plugins: [react(), copyrightCssPlugin(), ...(resourceBase || vendorCdn ? [vendorCdnPlugin(resourceBase || vendorCdn, Boolean(resourceBase))] : []), ...(singleFileBuild ? [standalonePlugin()] : [])],
+  experimental: resourceBase || vendorCdn ? {
+    renderBuiltUrl(filename, { hostType }) {
+      if (resourceBase && filename.startsWith("assets/")) {
+        // Worker constructors must stay on the page origin even when their
+        // importing module is served by the CDN. The local file is a small
+        // module bridge; its analyzer payload is imported from the CDN.
+        if (/\.worker-[\w-]+\.js$/.test(filename) && hostType === "js") {
+          return { runtime: `self.location.origin + ${JSON.stringify(`/${filename}?release=${buildInfo.hash}`)}` };
+        }
+        return `${resourceBase}/${filename}`;
+      }
       return vendorAssetUrl(vendorCdn, filename);
     }
   } : undefined,

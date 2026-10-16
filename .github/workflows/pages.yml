@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VENDOR_CDN_URL: ${{ vars.VENDOR_CDN_URL }}
+      ASSET_CDN_URL: ${{ vars.ASSET_CDN_URL }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -63,8 +64,12 @@ jobs:
           test -z "$(find dist -type d -name .git -print -quit)"
 
       - name: Verify uploaded vendor CDN resources
-        if: env.VENDOR_CDN_URL != ''
+        if: env.VENDOR_CDN_URL != '' && env.ASSET_CDN_URL == ''
         run: node scripts/package-vendor-cdn.mjs && npm run verify:cdn
+
+      - name: Verify uploaded full resource CDN
+        if: env.ASSET_CDN_URL != ''
+        run: node scripts/package-resource-cdn.mjs && npm run verify:resources
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
