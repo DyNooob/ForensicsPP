@@ -37,8 +37,8 @@ async function serve(cdn) {
     try {
       let path = new URL(req.url, "http://localhost").pathname;
       if (cdn) {
-        if (!path.startsWith(prefix + "/")) throw new Error("Wrong version");
-        path = path.slice(prefix.length);
+        if (path.startsWith(prefix + "/")) path = path.slice(prefix.length);
+        else if (!path.startsWith("/lookup/")) throw new Error("Wrong version");
       }
       let file = resolve(root, "." + decodeURIComponent(path));
       if (!file.startsWith(root + "/") && file !== root) throw new Error("Invalid path");
@@ -85,6 +85,25 @@ try {
   assert.equal(result.type, "result", JSON.stringify(result));
   assert(result.result.results.some(r => r.matched), "YARA must match using the CDN WASM");
   console.log("Resource CDN: real YARA worker and WASM passed");
+  const lookupBridge = config.bridges.find(path => path.includes("/lookup.worker-"));
+  assert(lookupBridge, "Lookup bridge required");
+  const lookup = await page.evaluate(async (url) => new Promise((resolve, reject) => {
+    const worker = new Worker(url, { type: "module" });
+    const timer = setTimeout(() => { worker.terminate(); reject(new Error("Lookup timed out")); }, 60000);
+    worker.onerror = e => { clearTimeout(timer); worker.terminate(); reject(new Error(e.message)); };
+    worker.onmessage = e => {
+      if (!["result", "error"].includes(e.data.type)) return;
+      clearTimeout(timer); worker.terminate(); resolve(e.data);
+    };
+    worker.postMessage({ requestId: 1, kind: "auto", values: ["8.8.8.8", "13800138000", "11010519491231002X"], lang: "en" });
+  }), app.base + "/" + lookupBridge);
+  assert.equal(lookup.type, "result", JSON.stringify(lookup));
+  assert.deepEqual(lookup.results.map(r => [r.kind, r.valid, r.matched]), [["ip", true, true], ["phone", true, true], ["id", true, true]]);
+  assert.match(String(lookup.results[0].fields.country), /United States|美国/i);
+  assert.match(lookup.results[1].summary, /北京|Beijing/i);
+  assert.match(lookup.results[2].summary, /朝阳/);
+  assert(requests.filter(r => r.cdn && /^\/lookup\/[^/]+\.(xdb|dat|json)$/.test(r.path)).length >= 3, "All real lookup packs must load from the CDN");
+  console.log("Resource CDN: real IP, phone and administrative-code lookups passed");
   await page.goto(app.base + "/tools/cyberchef/", { waitUntil: "networkidle2" });
   await page.waitForSelector(".cyberchef-stage iframe.is-loaded", { timeout: 60000 });
   const chef = page.frames().find(f => f.url().startsWith(cdn.base + prefix + "/cyberchef/"));

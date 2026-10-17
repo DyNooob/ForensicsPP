@@ -27,6 +27,7 @@ import { copyText } from "../utils/clipboard";
 import { downloadTextFile, formatBytes } from "../utils/files";
 import { clearAnalysisResult, publishAnalysisResult } from "../features/analysis/resultStore";
 import { buildLookupEnvelope } from "../features/lookup/envelope";
+import { lookupDataPackMessage } from "../features/lookup/dataPacks";
 import { splitLookupInput } from "../features/lookup/rules";
 import type { LookupKind, LookupResult, ResolvedLookupKind } from "../features/lookup/rules";
 import type { Translation } from "../i18n";
@@ -309,11 +310,11 @@ export function LookupTool({ lang, active = true }: { t: Translation; lang: Lang
         {busy && <ALinearProgress />}
         {busy && progress > 0 && <span className="lookup-progress-label">{progress}%</span>}
         {overLimit && <div className="error-banner" role="alert">{labels.limit}</div>}
-        {error && <div className="error-banner" role="alert"><strong>{labels.error}</strong><span>{error}</span></div>}
+        {error && <div className="error-banner" role="alert"><strong>{labels.error}</strong><span>{lookupDataPackMessage(error, lang)}</span></div>}
         <div className="lookup-pack-row" aria-live="polite">
           {activePacks.map(([pack, state]) => (
             <span key={pack} className={`lookup-pack lookup-pack--${state.state}`}>
-              {kindLabels[pack]} · {state.state === "loading" ? labels.loadingPack : state.state === "ready" ? `${labels.cached}${state.detail ? ` · ${pack === "id" ? `${Number(state.detail).toLocaleString()} codes` : formatBytes(Number(state.detail))}` : ""}` : state.detail}
+              {kindLabels[pack]} · {state.state === "loading" ? labels.loadingPack : state.state === "ready" ? `${labels.cached}${state.detail ? ` · ${pack === "id" ? `${Number(state.detail).toLocaleString()} codes` : formatBytes(Number(state.detail))}` : ""}` : lookupDataPackMessage(state.detail, lang)}
             </span>
           ))}
         </div>

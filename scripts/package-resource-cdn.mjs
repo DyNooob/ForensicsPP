@@ -28,6 +28,8 @@ import { zipSync, strToU8 } from "fflate";
 const root = resolve("dist");
 const config = JSON.parse(await readFile(join(root, "resource-cdn.json"), "utf8"));
 const prefix = new URL(config.base).pathname.replace(/^\//, "");
+const dataPrefix = prefix.replace(/(?:^|\/)releases\/[^/]+$/, "");
+const dataBase = config.base.replace(/\/releases\/[^/]+$/, "");
 const archive = resolve("release/resource-cdn-assets");
 const manifest = [];
 async function walk(dir) {
@@ -39,14 +41,16 @@ async function walk(dir) {
   }
   return files;
 }
-for (const directory of ["assets", "cyberchef"]) {
+for (const directory of ["assets", "cyberchef", "lookup"]) {
   for (const path of await walk(join(root, directory))) {
     const name = relative(root, path).replaceAll("\\", "/");
-    const target = join(archive, prefix, name);
+    const sharedData = directory === "lookup" && !name.endsWith("/SOURCES.json");
+    const outputPath = [sharedData ? dataPrefix : prefix, name].filter(Boolean).join("/");
+    const target = join(archive, outputPath);
     await mkdir(resolve(target, ".."), { recursive: true });
     await copyFile(path, target);
     const bytes = await readFile(path);
-    manifest.push({ path: `${prefix}/${name}`, url: `${config.base}/${name}`, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    manifest.push({ path: outputPath, url: `${sharedData ? dataBase : config.base}/${name}`, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
   }
 }
 // Preserve the currently deployed vendor-only build while staging the new one.
@@ -56,7 +60,7 @@ for (const path of await walk(resolve("release/vendor-cdn-assets"))) {
 }
 const files = {};
 for (const path of await walk(archive)) files[relative(archive, path).replaceAll("\\", "/")] = new Uint8Array(await readFile(path));
-files["edgeone.json"] = strToU8(JSON.stringify({ headers: ["/assets/*", "/releases/*"].map(source => ({ source, headers: [
+files["edgeone.json"] = strToU8(JSON.stringify({ headers: ["/assets/*", "/releases/*", `${dataPrefix ? `/${dataPrefix}` : ""}/lookup/*`].map(source => ({ source, headers: [
   { key: "Access-Control-Allow-Origin", value: "*" },
   { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
   { key: "Cross-Origin-Resource-Policy", value: "cross-origin" }

@@ -19,6 +19,8 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import dataSources from "./dataSources.json";
+
 /**
  * Static lookup packs have their own cache namespace. App-shell releases can
  * rotate independently without forcing users to download these larger packs
@@ -26,23 +28,30 @@
  */
 export const LOOKUP_DATA_CACHE = "forensicspp-lookup-data-v1";
 
-export const LOOKUP_DATA_PACKS = {
-  ip: {
-    url: "https://cdn.jsdelivr.net/gh/lionsoul2014/ip2region@c1a1fc7d5941760db3f8431dc05c48cf7f0e30a1/data/ip2region_v4.xdb",
-    version: "ip2region@c1a1fc7",
-    source: "ip2region (Apache-2.0)"
-  },
-  phone: {
-    url: "https://cdn.jsdelivr.net/gh/pangongzi/phone@a0076a7cdfb5b44c53e70fac0bc46ef3ebb8bd80/src/data/phone.dat",
-    version: "2025-02 / a0076a7",
-    source: "pangongzi/phone community data"
-  },
-  id: {
-    url: "https://cdn.jsdelivr.net/gh/xihan123/gb2260@aa9f31b3a8b1dff06e815b7612f4a9e5c02a5bff/site/public/downloads/areas.json",
-    version: "gb2260@aa9f31b",
-    source: "xihan123/gb2260 (CC0; upstream terms apply)"
-  }
-} as const;
+const resourceBase = (import.meta.env as { VITE_ASSET_CDN_URL?: string }).VITE_ASSET_CDN_URL;
+
+export function lookupDataPackUrl(pack: { path: string; upstream: string }, base = resourceBase): string {
+  return base ? `${base.replace(/\/releases\/[^/]+$/, "")}/${pack.path}` : pack.upstream;
+}
+
+export const LOOKUP_DATA_PACKS = Object.fromEntries(Object.entries(dataSources).map(([id, pack]) => [id, {
+  ...pack,
+  // Content-addressed data URLs stay stable across application releases.
+  url: lookupDataPackUrl(pack)
+}])) as Record<keyof typeof dataSources, (typeof dataSources)[keyof typeof dataSources] & { url: string }>;
+
+export function lookupDataPackMessage(message: string, lang: "zh" | "en"): string {
+  const code = /^lookup data pack: (network|timeout|invalid|storage|unavailable)$/.exec(message)?.[1];
+  if (!code) return message;
+  const messages: Record<string, [string, string]> = {
+    network: ["查询数据包下载失败，请重试；也可在设置中预先下载数据包。", "Could not download the lookup data. Retry, or download the data pack in Settings."],
+    timeout: ["查询数据包下载超时，请重试。", "Lookup data download timed out. Please retry."],
+    invalid: ["查询数据包不完整或格式无效，请在设置中清除数据包后重新下载。", "Lookup data is incomplete or invalid. Remove it in Settings, then download again."],
+    storage: ["数据包无法保存，请检查浏览器存储空间。", "Could not save the data pack. Check browser storage space."],
+    unavailable: ["浏览器暂不支持保存数据包，请直接查询或更换浏览器。", "Data-pack storage is unavailable. Run the lookup directly or use another browser."]
+  };
+  return messages[code][lang === "zh" ? 0 : 1];
+}
 
 export type LookupDataPackId = keyof typeof LOOKUP_DATA_PACKS;
 

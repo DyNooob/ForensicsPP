@@ -55,7 +55,7 @@ npm run smoke:cdn
 
 ## 完整资源加速（可选，替代只加速公共库）
 
-`ASSET_CDN_URL` 启用完整资源模式，优先于 `VENDOR_CDN_URL`。`assets/` 下的主程序、懒加载工具、CSS、WASM，以及完整的 `cyberchef/` 都部署到 `https://static.digiforensics.cn/releases/<commit>/`。主站保留页面、SEO、Service Worker 和通常不足 1 KB 的同源 Worker 桥接脚本；分析器代码由桥接脚本从 CDN 导入。查询数据包当前仍按需从原有固定版本数据源下载。
+`ASSET_CDN_URL` 启用完整资源模式，优先于 `VENDOR_CDN_URL`。`assets/` 下的主程序、懒加载工具、CSS、WASM，以及完整的 `cyberchef/` 和 `lookup/` 都部署到 `https://static.digiforensics.cn/releases/<commit>/`。主站保留页面、SEO、Service Worker 和通常不足 1 KB 的同源 Worker 桥接脚本；分析器代码由桥接脚本从 CDN 导入。IP、手机号、行政区划数据包也随资源包镜像到资源域名根目录的 `lookup/<内容哈希>`，按需下载并保存到独立的数据包缓存；应用版本升级不会改变同一份数据的下载地址。
 
 先提交全部更改，再构建，避免同一提交版本目录被不同的工作区内容覆盖：
 
@@ -79,3 +79,6 @@ npm run verify:resources
 `RESOURCE_FULL_AUDIT=1 npm run smoke:resources` 会额外运行全部工具的布局和文件加载检查。测试通过两个本地 HTTP 源真实执行跨域模块、Worker、WASM 和 CyberChef，不读写用户剪贴板。它不能替代上传后的线上资源校验。
 
 回退：清空 `ASSET_CDN_URL` 并重新发布；已有 `VENDOR_CDN_URL` 可继续维持公共库加速。独立离线构建始终使用本地资源。页面首个 HTML 仍由主站提供，本模式解决资源下载慢，不能保证主站 HTML 或用户所在地网络的延迟。
+
+
+查询数据的来源、固定版本、字节数和 SHA-256 记录在 `src/features/lookup/dataSources.json`。完整资源构建会先校验本机 `release/lookup-data/` 缓存；缺失时从固定版本上游下载，字节数或 SHA-256 不匹配会停止构建。镜像不改变原数据内容与来源归属。数据更新需显式修改清单，并通过真实 IP、手机号与行政区划查询回归。新增数据包会进入上传清单，发布前与代码资源一起验证，避免代码已上线但数据文件缺失。

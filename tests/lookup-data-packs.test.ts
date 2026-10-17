@@ -20,7 +20,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DataPackError, fetchLookupDataPack, inspectLookupDataPacks, LOOKUP_DATA_CACHE, LOOKUP_DATA_PACKS } from "../src/features/lookup/dataPacks";
+import { DataPackError, fetchLookupDataPack, inspectLookupDataPacks, lookupDataPackMessage, lookupDataPackUrl, LOOKUP_DATA_CACHE, LOOKUP_DATA_PACKS } from "../src/features/lookup/dataPacks";
 
 const originalCaches = Object.getOwnPropertyDescriptor(globalThis, "caches");
 
@@ -121,13 +121,29 @@ describe("proactive lookup localization", () => {
 });
 
 describe("lookup data-pack manifest", () => {
+  it("keeps data URLs stable across application releases so the cache survives", () => {
+    const pack = LOOKUP_DATA_PACKS.ip;
+    const url = lookupDataPackUrl(pack, "https://static.digiforensics.cn/releases/first");
+    expect(url).toBe(`https://static.digiforensics.cn/${pack.path}`);
+    expect(lookupDataPackUrl(pack, "https://static.digiforensics.cn/releases/second")).toBe(url);
+    expect(lookupDataPackUrl(pack, "")).toBe(pack.upstream);
+  });
+
   it("pins every remote pack to an immutable revision", () => {
     for (const pack of Object.values(LOOKUP_DATA_PACKS)) {
-      expect(pack.url).toMatch(/githubusercontent|jsdelivr/);
-      expect(pack.url).toMatch(/@[a-f0-9]{7,40}\//);
+      expect(pack.upstream).toMatch(/githubusercontent|jsdelivr/);
+      expect(pack.upstream).toMatch(/@[a-f0-9]{7,40}\//);
+      expect(pack.path).toMatch(/^lookup\/[a-z]+-[a-f0-9]{12}\./);
+      expect(pack.sha256).toMatch(/^[a-f0-9]{64}$/);
       expect(pack.version).toBeTruthy();
       expect(pack.source).toBeTruthy();
     }
+  });
+
+  it("explains download failures without exposing raw protocol errors", () => {
+    expect(lookupDataPackMessage("lookup data pack: network", "zh")).toContain("下载失败");
+    expect(lookupDataPackMessage("lookup data pack: timeout", "en")).toContain("timed out");
+    expect(lookupDataPackMessage("Different error", "zh")).toBe("Different error");
   });
 
   it("reports current packs as on-demand before the cache exists", async () => {

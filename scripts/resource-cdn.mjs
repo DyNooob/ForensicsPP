@@ -22,8 +22,10 @@
 
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { prepareLookupData } from "./prepare-lookup-data.mjs";
 
 export async function prepareResourceCdn(root) {
+  await prepareLookupData(root);
   const htmlPath = join(root, "index.html");
   let html = await readFile(htmlPath, "utf8");
   const entry = html.match(/src="(https:\/\/[^"\s]+\/releases\/[^/]+\/assets\/[^"\s]+\.js)"/);

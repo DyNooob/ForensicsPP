@@ -1,0 +1,26 @@
+{
+  "ip": {
+    "upstream": "https://cdn.jsdelivr.net/gh/lionsoul2014/ip2region@c1a1fc7d5941760db3f8431dc05c48cf7f0e30a1/data/ip2region_v4.xdb",
+    "path": "lookup/ip-8e31bbdccb5b.xdb",
+    "version": "ip2region@c1a1fc7",
+    "source": "ip2region (Apache-2.0)",
+    "sha256": "8e31bbdccb5bf21028af10592d4312ec975da0bffa108c0c5d862a12190f9ad3",
+    "bytes": 11122036
+  },
+  "phone": {
+    "upstream": "https://cdn.jsdelivr.net/gh/pangongzi/phone@a0076a7cdfb5b44c53e70fac0bc46ef3ebb8bd80/src/data/phone.dat",
+    "path": "lookup/phone-5858836c6a47.dat",
+    "version": "2025-02 / a0076a7",
+    "source": "pangongzi/phone community data",
+    "sha256": "5858836c6a472a706a690a55419d589ccbcd9e72721852642280d9e10e379bc2",
+    "bytes": 4665431
+  },
+  "id": {
+    "upstream": "https://cdn.jsdelivr.net/gh/xihan123/gb2260@aa9f31b3a8b1dff06e815b7612f4a9e5c02a5bff/site/public/downloads/areas.json",
+    "path": "lookup/id-d5334729dc17.json",
+    "version": "gb2260@aa9f31b",
+    "source": "xihan123/gb2260 (CC0; upstream terms apply)",
+    "sha256": "d5334729dc1750b168a2bbec64ec86d889e7f1af306fe05e140e0c3e39002b34",
+    "bytes": 2829905
+  }
+}
