@@ -24,8 +24,8 @@ import { toolHelp } from "./toolHelp";
 const toolDefinitions = [
   { id: "home", category: "system", name: "home", desc: "homeDesc", featured: true, maturity: "stable", resourcePolicy: "retain" },
   { id: "cyberchef", category: "integration", name: "cyberchef", desc: "cyberchefDesc", featured: true, maturity: "stable", resourcePolicy: "retain" },
-  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"], capabilities: ["image", "png", "crc", "qr", "exif", "metadata", "steganography", "repair"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析图片（png/jpg/gif/webp/bmp）：读取 EXIF 与元数据、检测隐写线索、校验 CRC/完整性、识别二维码。可查看容器异常与尾部数据，并提取常见隐藏线索。", en: "Analyze images (png/jpg/gif/webp/bmp): read EXIF and metadata, surface steganography clues, verify CRC/integrity, and decode QR codes. Inspect container anomalies, trailing data and common hidden-data leads." } },
-  { id: "codec", category: "transform", name: "codec", desc: "codecDesc", maturity: "stable" },
+  { id: "image", category: "analysis", name: "image", desc: "imageDesc", accepts: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif"], capabilities: ["image", "png", "crc", "qr", "exif", "metadata", "steganography", "repair"], supportsEvidence: true, supportsResult: true, supportsHandoff: true, maturity: "stable", validation: "fixture-validated", emitsEnvelope: true, help: { zh: "分析图片（png/jpg/gif/webp/bmp/tiff/heic/heif/avif）：读取 EXIF 与元数据、检测隐写线索、校验 CRC/完整性、识别二维码。可查看容器异常与尾部数据，并提取常见隐藏线索。", en: "Analyze images (png/jpg/gif/webp/bmp/tiff/heic/heif/avif): read EXIF and metadata, surface steganography clues, verify CRC/integrity, and decode QR codes. Inspect container anomalies, trailing data and common hidden-data leads." } },
+  { id: "codec", category: "transform", name: "codec", desc: "codecDesc", capabilities: ["简繁转换", "繁体转简体", "简体转繁体", "繁體", "簡體", "OpenCC", "Chinese", "traditional", "simplified"], maturity: "stable" },
   { id: "crypto", category: "transform", name: "crypto", desc: "cryptoDesc", maturity: "stable" },
   { id: "jwt", category: "transform", name: "jwt", desc: "jwtDesc", maturity: "stable" },
   { id: "password", category: "transform", name: "password", desc: "passwordDesc", maturity: "stable" },
@@ -167,14 +167,14 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.0-rc.1";
+export const appVersion = "1.0.0";
 /** Date this version was published (YYYY-MM-DD). Bump together with `appVersion` on each release. */
-export const appReleaseDate = "2026-10-13";
+export const appReleaseDate = "2026-11-10";
 /** Where users download new releases. */
 export const releaseDownloadUrl = `${projectLinks.repo}/releases`;
 export const projectLicense = "MIT";
 export const projectRepoName = "DyNooob/ForensicsPP";
-export const lastUpdated = "2026-10-13";
+export const lastUpdated = "2026-11-10";
 export const legalVersion = "2026-10-13-v4";
 export const feedbackEmail = "toolab@digiforensics.cn";
 

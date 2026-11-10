@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # AnalysisEnvelope 覆盖表 — beta.6 阶段 C / B6-B1
 
 > 跟踪 P0-2（统一 AnalysisEnvelope）的迁移进度。每批结束以 `tsc + 全量 vitest + vite build` 绿为门槛。

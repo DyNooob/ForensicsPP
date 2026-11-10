@@ -1,3 +1,5 @@
+> Historical release record. Counts, capabilities and distribution instructions apply to this version. See the [current release](v1.0.0.md) and [current guides](../README.md).
+
 # 2026-08-16 forensic depth update
 
 This development snapshot continues the `1.0.0-beta.1` stabilization work without changing the package version.

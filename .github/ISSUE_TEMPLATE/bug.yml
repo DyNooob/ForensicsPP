@@ -40,6 +40,13 @@ body:
     validations:
       required: true
   - type: input
+    id: version
+    attributes:
+      label: Application version and distribution
+      placeholder: "Example: 1.0.0, offline ZIP / website / source checkout"
+    validations:
+      required: true
+  - type: input
     id: route
     attributes:
       label: Tool route

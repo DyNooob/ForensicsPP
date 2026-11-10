@@ -23,6 +23,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      use_cdn:
+        description: Use already-uploaded and verified matching CDN resources
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -37,8 +43,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      VENDOR_CDN_URL: ${{ vars.VENDOR_CDN_URL }}
-      ASSET_CDN_URL: ${{ vars.ASSET_CDN_URL }}
+      VENDOR_CDN_URL: ${{ inputs.use_cdn && vars.VENDOR_CDN_URL || '' }}
+      ASSET_CDN_URL: ${{ inputs.use_cdn && vars.ASSET_CDN_URL || '' }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6

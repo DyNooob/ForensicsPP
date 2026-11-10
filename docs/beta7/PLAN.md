@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # ForensicsPP 1.0.0-beta.7 — 候选功能计划
 
 > 计划日期：2026-09-01 ｜ 评估依据：`docs/beta6/TOOL-CANDIDATE-EVAL-2026-09-01.md`

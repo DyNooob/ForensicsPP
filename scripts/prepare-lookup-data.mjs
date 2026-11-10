@@ -26,13 +26,14 @@ import { createHash } from "node:crypto";
 
 const sources = JSON.parse(await readFile(new URL("../src/features/lookup/dataSources.json", import.meta.url), "utf8"));
 const digest = data => createHash("sha256").update(data).digest("hex");
-export async function prepareLookupData(root) {
+export async function prepareLookupData(root, { allowDownload = true } = {}) {
   const cache = resolve("release/lookup-data");
   await mkdir(cache, { recursive: true });
   await mkdir(join(root, "lookup"), { recursive: true });
   for (const [id, source] of Object.entries(sources)) {
     let bytes = await readFile(join(cache, source.sha256)).catch(() => null);
     if (!bytes || bytes.length !== source.bytes || digest(bytes) !== source.sha256) {
+      if (!allowDownload) throw new Error(`Pinned ${id} lookup data is missing or corrupt in ${cache}. Prepare data before the offline build; offline builds never download dependencies.`);
       bytes = null;
       const raw = source.upstream.replace("https://cdn.jsdelivr.net/gh/", "https://raw.githubusercontent.com/").replace("@", "/");
       for (const url of [raw, source.upstream]) {

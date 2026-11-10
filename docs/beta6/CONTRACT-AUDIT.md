@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # AnalysisEnvelope Contract Audit — beta.6
 
 > Read-only audit of the provenance contracts **before** resuming tool migration (C-B4).

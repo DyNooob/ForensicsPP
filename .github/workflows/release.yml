@@ -17,13 +17,13 @@
 # Released under the MIT License.
 # Full source code: https://github.com/DyNooob/ForensicsPP
 
-name: Verify release candidate
+name: Verify tagged release
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v1.0.0-alpha.1
+        description: Existing version tag, for example v1.0.0
         required: true
         type: string
 

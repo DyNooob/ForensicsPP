@@ -26,10 +26,10 @@ import { fileURLToPath } from "node:url";
 import { buildAssetIdentity } from "./build-assets.mjs";
 import { SITE } from "../src/seo/seoPages.mjs";
 import { prepareResourceCdn } from "./resource-cdn.mjs";
+import { prepareOfflineDistribution } from "./offline-distribution.mjs";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(projectRoot, "dist");
-if (process.env.ASSET_CDN_URL && process.env.SINGLE_FILE !== "1") await prepareResourceCdn(distRoot);
 const packageJson = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
 const serviceWorkerPath = join(distRoot, "sw.js");
 const serviceWorker = await readFile(serviceWorkerPath, "utf8");
@@ -49,6 +49,11 @@ console.log(`Wrote dist/robots.txt (${isPreview ? "preview: Disallow /" : "produ
 // Production keeps its www canonical and stays indexable.
 const indexHtmlPath = join(distRoot, "index.html");
 let indexHtml = await readFile(indexHtmlPath, "utf8");
+const isOffline = process.env.OFFLINE_BUILD === "1" || !/<script\b[^>]*\bsrc=/.test(indexHtml);
+if (process.env.ASSET_CDN_URL && !isOffline) {
+  await prepareResourceCdn(distRoot);
+  indexHtml = await readFile(indexHtmlPath, "utf8");
+}
 if (isPreview) {
   const home = `${SITE.base}/`;
   indexHtml = indexHtml
@@ -62,6 +67,8 @@ if (isPreview) {
   console.log("Rewrote root canonical + og:url to preview host");
 }
 
+// Inlined standalone output is always an offline distribution, regardless of ambient CDN variables.
+if (isOffline) await prepareOfflineDistribution(distRoot, projectRoot);
 const { fingerprint, bootstrap } = await buildAssetIdentity(distRoot);
 const expectedCacheVersion = `forensicspp-v${packageJson.version}-${fingerprint}`;
 if (!/const CACHE_VERSION = "[^"]+";/.test(serviceWorker) || !serviceWorker.includes("const BUILD_ASSETS = [];")) {

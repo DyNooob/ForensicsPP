@@ -25,7 +25,7 @@ import { PasteButton } from "../components/ClipboardImport";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { Modal } from "antd";
 import { ImageViewer } from "../components/image/ImageViewer";
-import { ImageMetadata } from "../components/image/ImageMetadata";
+import { ImageMetadata, ImageMetadataHighlights } from "../components/image/ImageMetadata";
 import { ImageReviewSummary } from "../components/image/ImageReviewSummary";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
@@ -273,7 +273,26 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       const rawDataUrl = await bytesToDataUrl(bytes, sourceMime);
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       let image: HTMLImageElement | null = null;
+      let displayDataUrl = rawDataUrl;
+      let heicPreview = false;
+      let heicError = "";
       try { image = await loadBrowserImage(rawDataUrl); } catch { image = null; }
+      if (!image && detectedFormat === "HEIF/AVIF") {
+        try {
+          const png = await runWorkerTask<{ file: Blob }, ArrayBuffer>({
+            createWorker: () => new Worker(new URL("../features/image/heic.worker.ts", import.meta.url), { type: "module" }),
+            request: { file }, signal: controller.signal, timeoutMs: 120_000
+          });
+          if (controller.signal.aborted || analysisId !== analysisIdRef.current) return;
+          displayDataUrl = await bytesToDataUrl(new Uint8Array(png), "image/png");
+          if (controller.signal.aborted || analysisId !== analysisIdRef.current) { revokeImagePreviewUrl(displayDataUrl); return; }
+          image = await loadBrowserImage(displayDataUrl);
+          heicPreview = true;
+        } catch (caught) {
+          if (controller.signal.aborted) return;
+          heicError = caught instanceof Error ? caught.message : String(caught);
+        }
+      }
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       if (image && image.naturalWidth * image.naturalHeight > 50_000_000) {
         throw new Error(isEnglish ? "Decoded image dimensions exceed the 50 megapixel analysis limit." : "解码后的图片尺寸超过 5000 万像素分析上限。");
@@ -286,7 +305,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         "Open the Repair page to try container recovery.",
         "warn"
       );
-      const effectiveDisplayDataUrl = image ? rawDataUrl : placeholderDataUrl;
+      const effectiveDisplayDataUrl = image ? displayDataUrl : placeholderDataUrl;
       const workerBytes = bytes.slice();
       const workerResult = await runImageWorker<ImageBasicsWorkerResult>({
         action: "basics",
@@ -307,7 +326,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         dataUrl: effectiveDisplayDataUrl,
         repairedDataUrl: "",
         repairedContainerBytes: null,
-        repairStatus: decoded ? (isEnglish ? "Image opened successfully." : "图片可正常打开。") : (isEnglish ? "Open Repair to try recovery." : "可进入修复页尝试恢复。"),
+        repairStatus: heicPreview ? (isEnglish ? "HEIC/HEIF decoded locally for preview; metadata comes from the original file." : "已在本地解码 HEIC/HEIF 预览；元数据读取自原文件。") : heicError ? `${isEnglish ? "HEIC/HEIF preview unavailable; original metadata is still analyzed" : "HEIC/HEIF 预览解码未成功，仍分析原文件元数据"} (${heicError})` : decoded ? (isEnglish ? "Image opened successfully." : "图片可正常打开。") : (isEnglish ? "Open Repair to try recovery." : "可进入修复页尝试恢复。"),
         recoveryRows: [],
         exif,
         structureRows: analysis.rows,
@@ -670,6 +689,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </ASegmentedGroup>
 
         {imagePage === "overview" && <div className="tool-panel wide-panel image-simple-overview-panel">
+          <ImageMetadataHighlights metadata={imageInfo.exif} english={isEnglish} />
           <ImageReviewSummary image={imageInfo} english={isEnglish} onNavigate={setImagePage} />
           <div className="image-simple-overview">
             <div className="image-simple-preview"><ImageViewer src={imageInfo.dataUrl || imageInfo.repairedDataUrl} label={imageInfo.name} english={isEnglish} onExpand={() => setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name })} /></div>
@@ -687,11 +707,23 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
                 [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
               ]} />
               <div className="action-row">
+                {imageInfo.decoded && imageInfo.type.includes("HEIF/AVIF") && <AButton variant="outlined" onClick={async () => {
+                  const image = sourceRef.current?.image;
+                  if (!image) return;
+                  const canvas = document.createElement("canvas");
+                  try {
+                    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+                    canvas.getContext("2d")!.drawImage(image, 0, 0);
+                    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+                    if (blob) downloadBlob(`${imageInfo.name.replace(/\.[^.]+$/, "")}-preview.png`, blob);
+                  } finally { canvas.width = 1; canvas.height = 1; }
+                }}>{isEnglish ? "Export PNG preview" : "导出 PNG 预览"}</AButton>}
                 {imageInfo.decoded && imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-normalized.png`}>{t.downloadRepaired}</AButton>}
                 <AButton variant="outlined" disabled={!imageInfo.hiddenPayloads.length} onClick={() => setImagePage("hidden")}>{isEnglish ? "View extracted" : "查看提取项"}</AButton>
               </div>
             </div>
           </div>
+          <ImageMetadata metadata={imageInfo.exif} name={imageInfo.name} english={isEnglish} formatValue={formatExifValue} showHighlights={false} />
         </div>}
 
         {imagePage === "structure" && <div className="tool-panel wide-panel image-simple-structure-panel">

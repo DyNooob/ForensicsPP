@@ -42,6 +42,8 @@ const packageToProject = {
   cfb: "CFB",
   "crypto-js": "CryptoJS",
   exifr: "exifr",
+  "heic-to": "heic-to",
+  "opencc-js": "OpenCC JS",
   fflate: "fflate",
   jsqr: "jsQR",
   "pdfjs-dist": "PDF.js",

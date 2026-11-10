@@ -32,7 +32,7 @@ const version = packageJson.version;
 const releaseRoot = join(projectRoot, "release");
 const variantIndex = process.argv.indexOf("--variant");
 const variant = variantIndex >= 0 ? process.argv[variantIndex + 1] : "";
-if (variantIndex >= 0 && !["web", "standalone"].includes(variant)) throw new Error("--variant must be web or standalone");
+if (variantIndex >= 0 && !["web", "standalone", "offline"].includes(variant)) throw new Error("--variant must be web, standalone or offline");
 const folderName = `ForensicsPP-v${version}${variant ? `-${variant}` : ""}-static`;
 const stagingRoot = join(releaseRoot, folderName);
 const zipPath = join(releaseRoot, `${folderName}.zip`);
@@ -54,9 +54,16 @@ if (!html.includes(`<meta name="version" content="${version}"`)) throw new Error
 const isWeb = /<script[^>]+src="\/assets\//.test(html);
 if (variant === "web" && !isWeb) throw new Error("Web package requires npm run build");
 if (variant === "standalone" && isWeb) throw new Error("Standalone package requires npm run build:standalone");
+if (variant === "offline" || variant === "standalone") {
+  const { verifyOfflineDistribution } = await import("./verify-offline.mjs");
+  await verifyOfflineDistribution(distRoot);
+}
 await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(stagingRoot, { recursive: true });
 await cp(distRoot, stagingRoot, { recursive: true });
+const releaseNotes = await readFile(join(projectRoot, `docs/releases/v${version}.md`), "utf8");
+await writeFile(join(stagingRoot, "RELEASE_NOTES.md"), releaseNotes.replace(`(v${version}-audit.md)`, "(TOOL_AUDIT.md)"));
+if (variant === "offline") await cp(join(projectRoot, `docs/releases/v${version}-audit.md`), join(stagingRoot, "TOOL_AUDIT.md"));
 
 const packagedFiles = await walk(stagingRoot);
 if (!packagedFiles.some((path) => basename(path) === "index.html")) throw new Error("Static package is missing index.html");
@@ -65,7 +72,7 @@ await rm(zipPath, { force: true });
 const zipEntries = {};
 for (const path of packagedFiles) {
   const outputPath = `${folderName}/${relative(stagingRoot, path).replaceAll("\\", "/")}`;
-  zipEntries[outputPath] = new Uint8Array(await readFile(path));
+  zipEntries[outputPath] = [new Uint8Array(await readFile(path)), { os: 3, attrs: ((await stat(path)).mode & 0xffff) << 16 }];
 }
 await writeFile(zipPath, zipSync(zipEntries, { level: 9 }));
 
@@ -77,8 +84,9 @@ const earlier = (await readFile(checksumPath, "utf8").catch(() => "")).split("\n
   .filter((line) => line && !line.endsWith(`  ${basename(zipPath)}`));
 const checksumLines = [...earlier, checksumLine.trimEnd()].sort();
 await writeFile(checksumPath, checksumLines.join("\n") + "\n", "utf8");
+const versionPackages = new Set(["", "-web", "-standalone", "-offline"].map((suffix) => `ForensicsPP-v${version}${suffix}-static.zip`));
 await writeFile(join(releaseRoot, `SHA256SUMS-v${version}.txt`),
-  checksumLines.filter((line) => line.includes(`  ForensicsPP-v${version}-`)).join("\n") + "\n", "utf8");
+  checksumLines.filter((line) => versionPackages.has(line.slice(line.indexOf("  ") + 2))).join("\n") + "\n", "utf8");
 
 const totalBytes = packagedFiles.reduce(async (sumPromise, path) => (await sumPromise) + (await stat(path)).size, Promise.resolve(0));
 console.log(`Static release package: ${relative(projectRoot, zipPath)}`);

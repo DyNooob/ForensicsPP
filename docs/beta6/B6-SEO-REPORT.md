@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # Forensics++ B6-SEO Report
 
 **Phase:** B6-SEO — Search Discovery Foundation

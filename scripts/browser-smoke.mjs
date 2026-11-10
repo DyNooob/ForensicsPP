@@ -25,13 +25,13 @@ import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve, extname } from "node:path";
 
-export async function launchSmokeBrowser() {
+export async function launchSmokeBrowser(options = {}) {
   const executablePath = process.env.CHROME_PATH || [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"
   ].find(existsSync);
   if (!executablePath) throw new Error("Chrome not found. Set CHROME_PATH to a Chrome/Chromium executable.");
-  return puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+  return puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox", ...(options.blockExternal ? ["--proxy-server=http://127.0.0.1:9", "--proxy-bypass-list=127.0.0.1;localhost"] : [])] });
 }
 
 export async function prepareSmokePage(browser) {

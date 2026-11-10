@@ -164,7 +164,7 @@ describe("image format-layer parsers", () => {
     str(b, "avif"); // compatible brand
     u32be(b, 8); str(b, "meta"); // meta box (8 bytes)
     u32be(b, 8); str(b, "mdia"); // mdia box (8 bytes)
-    u32be(b, 24); str(b, "ispe"); // ispe box: 8 header + 16 payload
+    u32be(b, 20); str(b, "ispe"); // ispe box: 8 header + 12 payload
     b.push(0, 0, 0, 0); // version/flags
     u32be(b, 8); // image_width
     u32be(b, 6); // image_height

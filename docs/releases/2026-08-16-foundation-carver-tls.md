@@ -1,3 +1,5 @@
+> Historical release record. Counts, capabilities and distribution instructions apply to this version. See the [current release](v1.0.0.md) and [current guides](../README.md).
+
 # Analysis foundation, firmware carving, and PCAP TLS
 
 Date: 2026-08-16

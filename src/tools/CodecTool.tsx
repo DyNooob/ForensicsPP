@@ -22,7 +22,8 @@
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
-import { AButton, ASelect, ToolPanelHeader } from "../components/ui";
+import { AButton, ASelect, ASegmentedGroup, ASegmentedButton, ToolPanelHeader } from "../components/ui";
+import { ChineseConverter } from "../components/ChineseConverter";
 import { SampleButton } from "../components/SampleButton";
 import { copy } from "../i18n";
 import { downloadTextFile } from "../utils/files";
@@ -50,6 +51,7 @@ export type CodecToolServices = {
 };
 
 export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: CodecToolServices; active?: boolean }) {
+  const [tab, setTab] = useStoredState("codec.tab.v1", "codec");
   const [input, setInput] = useStoredState("codec.input.v2", "");
   const [output, setOutput] = useStoredState("codec.output.v2", "");
   const [operation, setOperation] = useStoredState("codec.operation", "urle");
@@ -153,7 +155,11 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
 
   return (
     <div className={`tool-grid codec-workbench codec-simple-workbench ${hasContent ? "has-codec" : "empty-codec"}`}>
-      <div className="tool-panel wide-panel codec-simple-panel">
+      <ASegmentedGroup className="wide-panel" value={tab} selects="single" aria-label={t.codec}>
+        <ASegmentedButton value="codec" onClick={() => setTab("codec")}>{t.encode_decode}</ASegmentedButton>
+        <ASegmentedButton value="chinese" onClick={() => setTab("chinese")}>{t.chineseConversion}</ASegmentedButton>
+      </ASegmentedGroup>
+      {tab === "chinese" ? <ChineseConverter english={english} active={active} /> : <div className="tool-panel wide-panel codec-simple-panel">
         <ToolPanelHeader
           title={t.encode_decode}
           actions={<>
@@ -208,7 +214,7 @@ export function CodecTool({ t, services, active = true }: { t: (typeof copy)["zh
           <div className="text-panel-title"><strong>{t.outputText}</strong><div className="mini-actions"><AButton variant="text" disabled={!output} onClick={() => void copyText(output)}>{t.copyOutput}</AButton><AButton variant="text" disabled={!output} onClick={() => downloadTextFile(`codec-output-${Date.now()}.txt`, output, "text/plain;charset=utf-8")}>{t.download}</AButton><AButton variant="text" disabled={!output} onClick={() => { setInput(output); setOutput(""); setError(""); }}>{t.codecApplyCandidate}</AButton></div></div>
           <AutoTextarea className="codec-simple-textarea" aria-label={t.output_text} value={output} readOnly />
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

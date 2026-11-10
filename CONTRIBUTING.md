@@ -1,61 +1,61 @@
 # Contributing to Forensics++
 
-Thank you for helping improve Forensics++ / ForensicsPP.
+[Documentation](docs/README.md) · [Development](docs/DEVELOPMENT.md) · [Security](SECURITY.md)
 
-The project favors practical, browser-local tools with clear inputs, explicit execution, readable results, and outputs that can be independently verified.
+Contributions should improve a concrete examination workflow while preserving browser-local processing, bounded resource use and honest result semantics. Code, fixtures, documentation, translations and reproducible bug reports are all useful contributions.
 
-## Before You Start
+## Choose a focused change
 
-- Search existing issues before opening a new one.
-- Keep evidence processing local unless a network action is optional, clearly labeled, and disabled by default.
-- Do not add claims that a single tool result proves authenticity, attribution, or legal conclusions.
-- Prefer established project components and patterns over introducing another UI framework.
+Search existing issues and discussions in the issue tracker. For a new analyzer or substantial behavior change, describe the intended input, output, user workflow, format references and limits before starting a large implementation. A new top-level tool is not always needed; consult [workbench organization](docs/WORKBENCH_CONSOLIDATION.md).
 
-## Local Development
+Use a bug report for a reproducible defect and a feature request for a proposed workflow. Security reports belong in the private channel described in `SECURITY.md`, not public issue comments.
 
-```bash
+## Prepare a checkout
+
+```sh
 git clone https://github.com/DyNooob/ForensicsPP.git
 cd ForensicsPP
 npm ci
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-The development server prints the local URL. Vite normally starts on `http://localhost:5173/` and selects another port when needed.
+Node.js 22.13+ and npm 10+ are required. Browser smoke tests need Chrome/Chromium. Offline builds additionally require verified local inputs; see [OFFLINE.md](docs/OFFLINE.md).
 
-## Required Checks
+## Implementation expectations
 
-Run these before submitting a pull request:
+- Keep parsers independent of React where practical and use shared execution/evidence abstractions.
+- Validate offsets, counts, dimensions and expanded sizes before allocation or traversal.
+- Make cancellation, stale-result invalidation and resource cleanup part of the feature.
+- Preserve source/derived-artifact identity and state uncertainty in structured limitations.
+- Add both UI languages, accessible names, help and documented behavior.
+- Review new dependencies for browser support, offline assets, license/provenance and size.
+- Maintain import, route and persisted-state compatibility deliberately.
 
-```bash
+## Safe fixtures and reports
+
+Use synthetic or appropriately licensed public data. Record expected values and provenance. Never include private evidence, production credentials, real case material or unreviewed email/packet captures. A public source is not automatically a redistribution license; document its actual terms.
+
+Tests should cover the defect or contract rather than reproduce the implementation's own assumptions. Parser changes normally need valid, malformed and boundary cases. Worker/storage/asset-path changes need real browser execution where relevant.
+
+## Verification
+
+```sh
 npm run verify
+git diff --check
 ```
 
-This runs the automated test suite, copyright header check, TypeScript validation, production build and release artifact verification.
+Select additional suites from [VALIDATION.md](docs/VALIDATION.md): browser execution, layout, storage, offline delivery or performance. Do not imply a suite was run if it was not. Explain environment restrictions and remaining gaps.
 
-For layout changes, start the app on port `5174` and run the desktop audit:
+Documentation-only changes should pass `npm run docs:check`; code/build changes still need the appropriate broader verification. Do not commit generated distribution trees or screenshots merely to demonstrate a check.
 
-```bash
-npm run dev -- --port 5174
-npm run audit:layout
-```
+## Pull-request description
 
-The audit visits every tool route and exercises seeded and file-loaded states. When changing parser behavior, also include a small reproducible fixture and verify the expected values manually.
+State the problem and resulting behavior first. Include a concrete trigger/example where helpful, the checks actually run, and material effects on storage, exports, networking, dependencies or compatibility. Add screenshots for visible UI changes. Follow the repository PR template without filling it with unrelated history.
 
-## Pull Requests
+Keep commits and reviews understandable. Address review findings explicitly and avoid mixing unrelated formatting or architecture changes into a focused fix. Maintainers may ask to split a change or narrow unsupported claims.
 
-Keep each pull request focused. Describe:
+## Licensing and maintenance
 
-1. What problem it solves.
-2. What behavior changed.
-3. How it was verified.
-4. Whether it changes local storage, downloads, network behavior, or third-party dependencies.
+Contributions to project code are distributed under the [MIT License](LICENSE). Preserve third-party notices and do not relicense imported code or data by copying it into the tree. Disclose provenance and licensing limitations for third-party material.
 
-Do not commit generated `dist/`, local screenshots, temporary evidence files, editor state, or dependency directories.
-
-## Security Issues
-
-Please report vulnerabilities privately by email to [toolab@digiforensics.cn](mailto:toolab@digiforensics.cn). Do not publish exploit details, real evidence, credentials, or private email content in a public issue. See [SECURITY.md](./SECURITY.md) for the information to include.
-
-## License
-
-By contributing, you agree that your contribution may be distributed under the project's [MIT License](./LICENSE).
+The project uses the lightweight [governance process](docs/GOVERNANCE.md). Releases, vulnerability fixes and reviews depend on maintainer availability; there is no implied commercial support SLA.

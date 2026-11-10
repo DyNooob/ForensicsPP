@@ -41,7 +41,7 @@ async function walk(dir) {
   }
   return files;
 }
-for (const directory of ["assets", "cyberchef", "lookup"]) {
+for (const directory of ["assets", "cyberchef", "lookup", "licenses"]) {
   for (const path of await walk(join(root, directory))) {
     const name = relative(root, path).replaceAll("\\", "/");
     const sharedData = directory === "lookup" && !name.endsWith("/SOURCES.json");

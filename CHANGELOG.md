@@ -2,6 +2,29 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
+## [1.0.0] - 2026-11-10
+
+### Added
+- 完整离线构建：JS、CSS、WASM、CyberChef、OpenCC 和 IP/手机号/行政区划数据全部随包提供；首次打开无需下载。
+- 简繁转换：OpenCC 词组转换、标准/台湾/香港字形、台湾地区用词双向转换、UTF-8 文本导入、复制、TXT 下载与 Ctrl/⌘+Enter 快捷键。
+- HEIC/HEIF 本地预览解码兜底、PNG 预览导出；EXIF 始终来自原始文件。
+- 本地 Python 标准库启动器、Windows/macOS 启动脚本、离线清单、完整依赖许可证、查询数据来源和 HEIC 对应源码。
+- 离线校验与真实浏览器外网阻断测试；发布 ZIP 保留可执行权限并附 SHA-256。
+
+### Fixed
+- 图片概览优先显示拍摄时间、设备、GPS、镜头、软件等已提取信息；完整 EXIF 默认展开，有内容字段优先，空字段可选显示，可继续加载超过 100 项的结果。
+- 原始 EXIF 日期保留原文，避免无时区的拍摄时间被显示成 UTC 时间。
+- HEIF 按完整 ISO BMFF box 边界判断文件结尾，修复正常 meta/mdat 被误判为尾部数据；支持嵌套 ispe、64 位 box 长度和截断边界检查。
+- 离线查询从随包数据读取，取消远程回退；构建及收尾均忽略 CDN 环境变量，缺失输入直接失败。
+- 离线版显示本机时钟，不把本机静态服务器时间当成远程校时结果。
+- 更新 Vite 6.4.6、Vitest 4.1.12，依赖审计 0 项漏洞。
+
+### Verification
+- 35 个可见工具、桌面/手机 70 项可用性检查；94 个测试文件、501 项测试通过。
+- 空状态 35、已填充状态 14、文件加载流程 9、专项检查 12，布局审计全部通过。
+- 全新缓存与外网阻断：三类归属地、OpenCC、哈希 Worker、SQLite WASM、CyberChef、iPhone HEIC 均通过，无远程请求。
+- 详细范围和限制见 [1.0 体检记录](docs/releases/v1.0.0-audit.md)。
+
 ## [1.0.0-rc.1] - 2026-10-13
 
 > Final release candidate before 1.0. 最后一个候选版本，集中修复真实浏览器执行、路由、查询生命周期和离线分发。

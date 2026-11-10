@@ -57,7 +57,7 @@ async function parseImageMetadata(bytes: Uint8Array) {
   try {
     const exifrModule = await import("exifr");
     return ((await exifrModule
-      .parse(bytes, { tiff: true, xmp: true, iptc: true, icc: true, jfif: true, ihdr: true, gps: true })
+      .parse(bytes, { tiff: true, xmp: true, iptc: true, icc: true, jfif: true, ihdr: true, gps: true, reviveValues: false })
       .catch(() => null)) ?? {}) as Record<string, unknown>;
   } catch {
     return {};

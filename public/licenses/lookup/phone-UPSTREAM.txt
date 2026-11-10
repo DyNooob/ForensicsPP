@@ -1,0 +1,7 @@
+Dataset: phone.dat
+Author / source: pangongzi/phone
+Pinned source: https://github.com/pangongzi/phone/tree/a0076a7cdfb5b44c53e70fac0bc46ef3ebb8bd80
+Original data: src/data/phone.dat
+Upstream LICENSE at this revision is an empty file; preserved as phone-LICENSE.txt.
+No license grant is inferred from that empty file. This dataset retains the upstream author's rights and terms.
+Data is static, not live location information. Version, checksum and size: lookup/SOURCES.json.

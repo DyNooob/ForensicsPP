@@ -1,90 +1,45 @@
-# Forensics++ workbench consolidation
+# Workbench organization / 工作台组织
 
-Forensics++ should grow by forensic workflow depth, not by keeping every parser or operation as a top-level tool. `1.0.0-beta.4` starts consolidating workspaces where multiple entries operate on the same evidence, duplicate parsing, or maintain redundant file state.
+[Architecture](ARCHITECTURE.md) · [Tool reference](TOOLS.md)
 
-## Merge rule
+## When capabilities belong together
 
-A capability should normally be merged into an existing workbench when all of the following are true:
+Use a shared workspace when capabilities examine the same primary source, commonly occur in the same session and can reuse its file state or parsing. Add a page/tab only if secondary analysis remains lazy and independently bounded.
 
-1. It consumes the same primary evidence object.
-2. Users commonly need the capability during the same examination session.
-3. Keeping it separate causes duplicate parsing, duplicate file reads, or duplicated UI state.
-4. The capability can be exposed as a page/tab without forcing unrelated heavy analysis to run eagerly.
+Keep a separate analyzer when its evidence model, access pattern, state or interpretation is materially different. Fewer navigation entries are not a substitute for better boundaries.
 
-A capability should remain an independent analyzer when its input model, execution model, evidence limits, or investigation workflow is materially different.
+## Existing shared workspaces
 
-This distinction is important: fewer menu items alone are not an architectural improvement. Consolidation is useful only when the underlying evidence state and analysis pipeline are also shared.
+| Workspace | Capabilities |
+| --- | --- |
+| Image | Preview, metadata, image-container analysis, PNG chunks/CRC, QR, channels/bit planes, hidden/trailing data and repair attempts |
+| Binary | Identification, Hex/executable structure, strings/IOC, entropy, YARA, embedded-object discovery and analyzer handoff |
+| Codec | Common encodings/charsets plus an explicit Chinese conversion page sharing the tool's navigation context |
 
-## Consolidated in beta.4
+Metadata must continue to come from original image bytes when a HEIC preview is decoded to PNG. Opening one Binary page must not eagerly run every expensive scan.
 
-### Image Workbench
+## Independent workspaces
 
-The Image Workbench now owns:
+Firmware, Disk, SQLite, PCAP and Bulk use different source access, result or resource models. Android, Archive, Document, Email, Registry, EVTX, Windows and Memory also retain domain-specific parsers and safety bounds. They may share navigation or report infrastructure without sharing one mutable parser state.
 
-- general image metadata and file structure
-- PNG chunk/CRC/IHDR/IEND analysis
-- hidden/trailing data and image steganography helpers
-- QR decoding and payload classification
-- image repair operations
+Hash remains a general evidence operation. Timestamp conversion and event Timeline are distinct tasks.
 
-Legacy `#png` and `#qr` routes remain compatible and open the corresponding Image Workbench page. PNG and QR no longer require separate top-level runtime workspaces or a second upload of the same image.
+## Historical aliases
 
-### Binary Workbench
+Aliases remain in the catalog for saved links and older workspace history. They are hidden in the normal navigation and canonicalized to their owner.
 
-The Binary Workbench now owns:
+| Owner | Historical IDs |
+| --- | --- |
+| Image | `png`, `qr`, `gif`, `jpeg`, `webp`, `bmp`, `tiff`, `heif` |
+| Binary | `fileid`, `strings`, `entropy`, `yara` |
 
-- file identification and signatures
-- Hex/structure inspection
-- PE/ELF/Mach-O analysis
-- strings, timestamps and IOC extraction
-- entropy analysis
-- YARA scanning
-- embedded-object discovery and analyzer handoff
+The registry and route tests are the source of truth for the complete list. Do not create a second runtime implementation merely to preserve an old URL.
 
-Legacy `#fileid`, `#strings`, `#entropy` and `#yara` routes remain compatible and open the corresponding Binary Workbench page.
+## Rules for a new page
 
-Heavy optional operations are lazy. Opening a binary does not automatically run a full strings scan, entropy pass and YARA scan. Those pages consume the same file state but execute their additional workers only when requested.
-
-## Intentionally separate
-
-The following analyzers should not be collapsed merely to reduce the navigation count:
-
-- **Firmware Analyzer**: random-access/chunked scanning, recursive extraction and large-evidence limits differ from the bounded Binary Workbench.
-- **Bulk Artifact Scanner**: streaming extraction from large arbitrary evidence differs from interactive strings analysis on a bounded binary.
-- **Disk Image**: partition/filesystem random access is a distinct evidence model.
-- **SQLite Forensics**: database/WAL/deleted-record reconstruction maintains database-specific provenance.
-- **PCAP**: packet/stream/network timelines are a separate investigation model.
-- **Android, Archive, Document, Memory**: each has format-specific extraction and safety limits.
-- **Registry, EVTX and Windows Artifacts**: these may eventually share a Windows navigation hub, but should retain independent analyzers and result schemas.
-- **Hash**: hashing text/files is a general evidence operation and should remain directly accessible.
-- **Timestamp vs Timeline**: timestamp conversion and case/event timeline analysis solve different jobs.
-
-A future hub may group related analyzers visually without coupling their parser state. A Windows hub is the clearest candidate for that treatment.
-
-## Compatibility aliases
-
-Merged tool IDs remain in `ToolId` for saved workspace/history compatibility, but are hidden from normal navigation and canonicalized to their owning workbench:
-
-```text
-png      -> image
-qr       -> image
-fileid   -> binary
-strings  -> binary
-entropy  -> binary
-yara     -> binary
-```
-
-The old hash route is intentionally not rewritten. Canonicalization happens in the navigation/config layer so the runtime registry does not need separate lazy-loaded implementations for merged tools.
-
-## Performance requirements for consolidated workbenches
-
-Consolidation must not turn one click into every analysis running at once. Workbench pages follow these rules:
-
-- parse the common source once when practical;
-- keep the opened evidence object in one workbench state;
-- run expensive secondary workers on demand;
-- reuse structured analyzer results instead of scraping rendered DOM;
-- preserve worker and size limits of the original specialized capability;
-- record limitations when a large-file operation is intentionally sampled.
-
-These rules also make later capability-aware routing possible without bringing back one top-level entry per parser.
+- Reuse the existing source reference and derived-state ownership.
+- Declare whether it needs original bytes, decoded pixels or another expensive derivative.
+- Start secondary work explicitly and cancel it when its source becomes obsolete.
+- Preserve the original parser's resource limits and provenance.
+- Keep export/report behavior tied to the producing analysis run.
+- Add direct-route/alias tests when navigation changes.

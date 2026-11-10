@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # Forensics++ 产品与工程实质性分析（基于源码）
 
 > 视角：产品经理 + 开源维护者。结论均来自对 `src/` 的实际阅读，非文档复述。

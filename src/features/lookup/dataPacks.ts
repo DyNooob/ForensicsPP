@@ -29,8 +29,10 @@ import dataSources from "./dataSources.json";
 export const LOOKUP_DATA_CACHE = "forensicspp-lookup-data-v1";
 
 const resourceBase = (import.meta.env as { VITE_ASSET_CDN_URL?: string }).VITE_ASSET_CDN_URL;
+const offlineBuild = (import.meta.env as { VITE_OFFLINE?: boolean }).VITE_OFFLINE === true;
 
-export function lookupDataPackUrl(pack: { path: string; upstream: string }, base = resourceBase): string {
+export function lookupDataPackUrl(pack: { path: string; upstream: string }, base = resourceBase, offline = offlineBuild): string {
+  if (offline) return `/${pack.path}`;
   return base ? `${base.replace(/\/releases\/[^/]+$/, "")}/${pack.path}` : pack.upstream;
 }
 

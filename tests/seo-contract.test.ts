@@ -208,6 +208,14 @@ describe("SEO built artifacts", () => {
   });
 
   it("sitemap covers every route + home, and never /zh/ (when built)", () => {
+    const offlineManifest = join(root, "dist", "OFFLINE_MANIFEST.json");
+    if (existsSync(offlineManifest)) {
+      // The offline package serves hash routes locally; it intentionally has no generated SEO route pages.
+      const manifest = JSON.parse(readFileSync(offlineManifest, "utf8"));
+      expect(manifest.distribution).toBe("offline");
+      expect(manifest.externalRuntimeResources).toBe(false);
+      return;
+    }
     const base = distBase();
     const sm = join(dist, "sitemap.xml");
     if (!existsSync(sm)) {

@@ -121,6 +121,12 @@ describe("proactive lookup localization", () => {
 });
 
 describe("lookup data-pack manifest", () => {
+  it("uses bundled data in offline builds even if a CDN is configured", () => {
+    for (const pack of Object.values(LOOKUP_DATA_PACKS)) {
+      expect(lookupDataPackUrl(pack, "https://external.invalid/releases/build", true)).toBe(`/${pack.path}`);
+      expect(lookupDataPackUrl(pack, "", true)).toBe(`/${pack.path}`);
+    }
+  });
   it("keeps data URLs stable across application releases so the cache survives", () => {
     const pack = LOOKUP_DATA_PACKS.ip;
     const url = lookupDataPackUrl(pack, "https://static.digiforensics.cn/releases/first");

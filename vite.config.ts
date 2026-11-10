@@ -81,10 +81,11 @@ function copyrightCssPlugin(): Plugin {
 // with manualChunks, so we drop manualChunks in this mode. The default
 // `npm run build` stays multi-chunk and is unaffected.
 const singleFileBuild = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SINGLE_FILE === "1";
+const offlineBuild = singleFileBuild || process.env.OFFLINE_BUILD === "1";
 // Opt in only after uploading the matching vendor package. Offline/standalone
 // releases always keep their dependencies local.
-const vendorCdn = singleFileBuild ? "" : normalizeVendorCdn(process.env.VENDOR_CDN_URL);
-const assetCdn = singleFileBuild ? "" : normalizeVendorCdn(process.env.ASSET_CDN_URL);
+const vendorCdn = offlineBuild ? "" : normalizeVendorCdn(process.env.VENDOR_CDN_URL);
+const assetCdn = offlineBuild ? "" : normalizeVendorCdn(process.env.ASSET_CDN_URL);
 const resourceBase = assetCdn ? `${assetCdn}/releases/${buildInfo.hash}` : "";
 
 export default defineConfig({
@@ -101,6 +102,7 @@ export default defineConfig({
   // (SINGLE_FILE=1) and keeps relative "./" so file:// works offline.
   base: singleFileBuild ? "./" : "/",
   define: {
+    "import.meta.env.VITE_OFFLINE": JSON.stringify(offlineBuild),
     "import.meta.env.VITE_BUILD_HASH": JSON.stringify(buildInfo.hash),
     "import.meta.env.VITE_BUILD_BRANCH": JSON.stringify(buildInfo.branch),
     "import.meta.env.VITE_ASSET_CDN_URL": JSON.stringify(resourceBase),

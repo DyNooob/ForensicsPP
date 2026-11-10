@@ -1,3 +1,5 @@
+> Historical milestone record. This describes its original snapshot and may include plans or findings superseded by later work. Use the [current documentation](../README.md) and [1.0 validation record](../releases/v1.0.0-audit.md) for current behavior.
+
 # 6 项候选工具 / 功能评估（续评 + 现状）
 
 > 评估日期：2026-09-01 ｜ 评估对象：ForensicsPP 浏览器取证工作台候选工具

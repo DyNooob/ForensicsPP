@@ -23,6 +23,7 @@ import { decompressSync, strFromU8 } from "fflate";
 import type { BmpStructure, GifFrame, GifStructure, HeifStructure, ImageFinding, ImageFormatLayer, ImageInfo, JpegMarker, JpegStructure, PngChunkInfo, PngTextEntry, TiffEntry, TiffStructure, WebpChunk, WebpStructure } from "../../models";
 import { crc32, findEmbeddedFileSignatures, hexPreview, previewText, readAscii, shannonEntropy } from "../../utils/binary";
 import { formatBytes } from "../../utils/files";
+import { inspectHeif } from "./heif";
 import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
 
 const imageObjectUrls = new Set<string>();
@@ -92,7 +93,7 @@ function detectImageFormat(bytes: Uint8Array, fileType: string) {
   if (readAscii(bytes, 0, 4) === "RIFF" && readAscii(bytes, 8, 4) === "WEBP") return "WEBP";
   if (head.startsWith("42 4D")) return "BMP";
   if (head.startsWith("49 49 2A 00") || head.startsWith("4D 4D 00 2A")) return "TIFF";
-  if (readAscii(bytes, 4, 4) === "ftyp" && /heic|heix|hevc|hevx|mif1|msf1|avif/i.test(readAscii(bytes, 8, 16))) return "HEIF/AVIF";
+  if (readAscii(bytes, 4, 4) === "ftyp" && inspectHeif(bytes).isHeif) return "HEIF/AVIF";
   return fileType || "unknown";
 }
 
@@ -128,8 +129,7 @@ function getImageLogicalEnd(bytes: Uint8Array, format: string) {
   }
   if (format === "BMP") return findBmpEnd(bytes);
   if (format === "HEIF/AVIF" && bytes.length >= 8) {
-    const size = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0);
-    return size >= 8 && size <= bytes.length ? size : -1;
+    return inspectHeif(bytes).logicalEnd;
   }
   return -1;
 }
@@ -184,6 +184,7 @@ function emptyImageChannels(src: string): ImageInfo["channelDataUrls"] {
 
 function guessImageDimensions(bytes: Uint8Array, format: string) {
   try {
+    if (format === "HEIF/AVIF") { const { width, height } = inspectHeif(bytes); return { width, height }; }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (format === "PNG" && bytes.length >= 24) return { width: view.getUint32(16), height: view.getUint32(20) };
     if (format === "GIF" && bytes.length >= 10) return { width: view.getUint16(6, true), height: view.getUint16(8, true) };
@@ -993,46 +994,10 @@ function parseTiffStructure(bytes: Uint8Array): { rows: Array<[string, string]>;
 function parseHeifStructure(bytes: Uint8Array): { rows: Array<[string, string]>; findings: ImageFinding[]; heif: HeifStructure } {
   const rows: Array<[string, string]> = [];
   const findings: ImageFinding[] = [];
-  const compatibleBrands: string[] = [];
-  let majorBrand = "";
-  let minorVersion = 0;
-  let hasMeta = false;
-  let hasMdia = false;
-  let width: number | null = null;
-  let height: number | null = null;
-  if (bytes.length >= 16 && readAscii(bytes, 4, 4) === "ftyp") {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    majorBrand = readAscii(bytes, 8, 4);
-    minorVersion = view.getUint32(12, false);
-    let offset = 16;
-    while (offset + 4 <= bytes.length) {
-      const brand = readAscii(bytes, offset, 4);
-      if (!brand || /[^ -~]/.test(brand)) break;
-      compatibleBrands.push(brand);
-      offset += 4;
-    }
-  }
-  let offset = 0;
-  while (offset + 8 <= bytes.length && compatibleBrands.length >= 0) {
-    let size = viewSafe(bytes, offset);
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    if (size === 1 && offset + 16 <= bytes.length) size = view.getUint32(offset + 8, false) || bytes.length - offset;
-    if (!size) size = bytes.length - offset;
-    const type = readAscii(bytes, offset + 4, 4);
-    if (type === "meta") hasMeta = true;
-    if (type === "mdia") hasMdia = true;
-    if (type === "ispe") {
-      // ispe is a FullBox: [size][type][version:1][flags:3][image_width:4][image_height:4].
-      // Relative to the box start this is width @ +12 and height @ +16 (big-endian).
-      const view2 = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      width = view2.getUint32(offset + 12, false);
-      height = view2.getUint32(offset + 16, false);
-    }
-    if (size < 8 || offset + size > bytes.length) { if (type !== "meta" && type !== "mdia") break; }
-    offset += size;
-    if (offset >= bytes.length) break;
-    if (hasMeta && width) break;
-  }
+  const inspected = inspectHeif(bytes);
+  const { majorBrand, minorVersion, compatibleBrands, hasMeta, hasMdia } = inspected;
+  const width = inspected.width || null;
+  const height = inspected.height || null;
   rows.push(["Major brand", majorBrand || "--"]);
   rows.push(["Minor version", String(minorVersion)]);
   rows.push(["Compatible brands", compatibleBrands.join(", ") || "--"]);

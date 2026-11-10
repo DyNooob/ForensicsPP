@@ -49,6 +49,11 @@ export function ClockHealth({ lang }: { lang: Lang }) {
 
   const check = React.useCallback(async (notify = false) => {
     if (typeof window === "undefined") return;
+    if ((import.meta.env as { VITE_OFFLINE?: boolean }).VITE_OFFLINE) {
+      setState({ status: "unavailable", offsetMs: 0, checkedAt: Date.now() });
+      if (notify) showClockMessage("info", lang === "zh" ? "离线版显示本机时间，请在操作系统中核对时钟。" : "Offline edition uses your computer clock; verify it in system settings.");
+      return;
+    }
     if (checkingRef.current) {
       if (notify) showClockMessage("info", lang === "zh" ? "正在校验时间，请稍候。" : "Clock check is still running.");
       return;
