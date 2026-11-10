@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
@@ -196,7 +197,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
           </>}
         />
         <input ref={inputRef} type="file" aria-hidden="true" tabIndex={-1} accept=".json,.jsonl,.ndjson,text/*,application/json" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void openFile(file); }} />
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
         {analyzing && <div className="empty-state" role="status">{t.processing_json}</div>}
         <ASegmentedGroup className="json-simple-modes" value={mode} selects="single" aria-label={t.json_operation}>
           <ASegmentedButton value="format" onClick={() => setStoredMode("format")}>{t.formatJson}</ASegmentedButton>
@@ -209,7 +210,7 @@ export function JsonTool({ t, active = true }: JsonToolProps & { active?: boolea
           <div className="text-panel-title"><strong>{t.inputText}</strong><AButton variant="text" disabled={!input} onClick={() => void copyText(input)}>{t.copyInput}</AButton><SampleButton toolId="json" english={english} onLoad={(text) => { setInput(text); setAnalyzedInput(text); }} /></div>
           <AutoTextarea className="json-simple-textarea" aria-label={t.json_input} value={input} onChange={(event) => { requestRef.current += 1; setInput(event.currentTarget.value); setAnalyzedInput(""); setSelectedPath(""); }} placeholder={t.textPlaceholder} />
         </div>
-        {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <div className="empty-state error-state">{parsed.error}</div>}
+        {hasInput && mode !== "escape" && mode !== "unescape" && !parsed.ok && <ErrorNotice message={parsed.error} />}
         <div className="text-panel json-simple-text-panel">
           <div className="text-panel-title">
             <strong>{t.outputText}</strong>

@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -85,7 +86,7 @@ export function UrlTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
           <AButton variant="outlined" onClick={() => setInput("https://example.com/download/report.pdf?source=email&lang=zh#page=2")}>{t.example}</AButton>
           <AButton variant="text" disabled={!input} onClick={() => setInput("")}>{t.clear}</AButton>
         </div>
-        {parsed.error && <div className="empty-state error-state">{parsed.error}</div>}
+        {parsed.error && <ErrorNotice message={parsed.error} />}
       </div>
 
       {url && (

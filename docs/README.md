@@ -8,7 +8,8 @@ Documentation for Forensics++ **1.0.0**. Start with a task, then follow the corr
 | --- | --- |
 | [Getting started / 入门](GETTING_STARTED.md) | Select a distribution, load evidence, inspect results and export |
 | [Offline operation / 离线使用](OFFLINE.md) | Download, verify, launch and rebuild without runtime downloads |
-| [Tool reference / 工具手册](TOOLS.md) | All 35 visible workspaces, accepted inputs and limits |
+| [Result interpretation / 结果解读](ANALYSIS_RESULTS.md) | Severity levels, Chinese notices and PNG dimension recovery |
+| [Tool reference / 工具手册](TOOLS.md) | All 36 current visible workspaces, accepted inputs and limits |
 | [Troubleshooting / 排错](TROUBLESHOOTING.md) | Startup, workers, caches, data packs, HEIC and large files |
 | [Licensing / 许可与来源](LICENSING.md) | Source license, dependencies, lookup data and codec sources |
 

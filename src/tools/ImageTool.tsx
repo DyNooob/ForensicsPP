@@ -19,7 +19,10 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { AnalysisNotice, FindingCard, ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
+import { localizeAnalysisText, sortFindings } from "../core/analysisPresentation";
+import { dimensionRecoveryMessage } from "../features/png/presentation";
 import React from "react";
 import { PasteButton } from "../components/ClipboardImport";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -154,8 +157,14 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   } = services;
   const isEnglish = t.waiting === "Waiting";
   const [imageInfo, setImageInfo] = React.useState<ImageInfo | null>(null);
+  const [previewVersion, setPreviewVersion] = React.useState<"original" | "recovered">("original");
   const [loading, setLoading] = React.useState(false);
   const [advancedTask, setAdvancedTask] = React.useState<"hidden" | "channels" | "repair" | "">("");
+  const advancedTaskRef = React.useRef<typeof advancedTask>("");
+  const updateAdvancedTask = (task: typeof advancedTask) => {
+    advancedTaskRef.current = task;
+    setAdvancedTask(task);
+  };
   const [error, setError] = React.useState("");
   const [storageNotice, setStorageNotice] = React.useState("");
   const [isImageDropActive, setIsImageDropActive] = React.useState(false);
@@ -211,7 +220,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       channelTimerRef.current = null;
     }
     setLoading(false);
-    setAdvancedTask("");
+    updateAdvancedTask("");
     setIsImageDropActive(false);
   }, [active]);
 
@@ -242,7 +251,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     services.revokeImageObjectUrls();
     sourceRef.current = null;
     setImageInfo(null);
-    setAdvancedTask("");
+    updateAdvancedTask("");
     setQrResult(null);
     setQrScanning(false);
     setImagePage("overview");
@@ -266,9 +275,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       const detectedFormat = detectImageFormat(bytes, file.type);
       const guessedDimensions = guessImageDimensions(bytes, detectedFormat);
-      if (guessedDimensions.width * guessedDimensions.height > 50_000_000) {
-        throw new Error(isEnglish ? "Image dimensions exceed the 50 megapixel analysis limit." : "图片尺寸超过 5000 万像素分析上限。");
-      }
+      const oversizedHeader = guessedDimensions.width * guessedDimensions.height > 50_000_000 || guessedDimensions.width > 65535 || guessedDimensions.height > 65535;
       const sourceMime = /^image\//i.test(file.type) ? file.type : imageMimeForFormat(detectedFormat, file.type || "application/octet-stream");
       const rawDataUrl = await bytesToDataUrl(bytes, sourceMime);
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
@@ -276,8 +283,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       let displayDataUrl = rawDataUrl;
       let heicPreview = false;
       let heicError = "";
-      try { image = await loadBrowserImage(rawDataUrl); } catch { image = null; }
-      if (!image && detectedFormat === "HEIF/AVIF") {
+      if (!oversizedHeader) { try { image = await loadBrowserImage(rawDataUrl); } catch { image = null; } }
+      if (!image && !oversizedHeader && detectedFormat === "HEIF/AVIF") {
         try {
           const png = await runWorkerTask<{ file: Blob }, ArrayBuffer>({
             createWorker: () => new Worker(new URL("../features/image/heic.worker.ts", import.meta.url), { type: "module" }),
@@ -301,8 +308,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       const decoded = Boolean(image);
       const dimensions = image ? { width: image.naturalWidth, height: image.naturalHeight } : guessImageDimensions(bytes, detectedFormat);
       const placeholderDataUrl = imagePlaceholderDataUrl(
-        "Image pixels could not be decoded",
-        "Open the Repair page to try container recovery.",
+        isEnglish ? "Image pixels could not be decoded" : "图片像素暂时无法解码",
+        isEnglish ? "Open Repair to recover dimensions and container." : "原始数据已保留，请进入修复页检查宽高与容器。",
         "warn"
       );
       const effectiveDisplayDataUrl = image ? displayDataUrl : placeholderDataUrl;
@@ -329,6 +336,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         repairStatus: heicPreview ? (isEnglish ? "HEIC/HEIF decoded locally for preview; metadata comes from the original file." : "已在本地解码 HEIC/HEIF 预览；元数据读取自原文件。") : heicError ? `${isEnglish ? "HEIC/HEIF preview unavailable; original metadata is still analyzed" : "HEIC/HEIF 预览解码未成功，仍分析原文件元数据"} (${heicError})` : decoded ? (isEnglish ? "Image opened successfully." : "图片可正常打开。") : (isEnglish ? "Open Repair to try recovery." : "可进入修复页尝试恢复。"),
         recoveryRows: [],
         exif,
+        containerFindings: analysis.findings,
+        hiddenFindings: [],
         structureRows: analysis.rows,
         hiddenRows: analysis.hiddenRows,
         trailerBytes: analysis.trailerBytes,
@@ -357,6 +366,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
             : "当前图片仅在本次打开期间保留；超过 8 MiB 的图片不会自动恢复。");
         }
       }
+      setPreviewVersion("original");
       setImagePage("overview");
     } catch (caught) {
       if (analysisId !== analysisIdRef.current) return;
@@ -392,12 +402,12 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
   }, [active, restoredSource]);
   const runHiddenAnalysis = async () => {
     const source = sourceRef.current;
-    if (!active || !source || !imageInfo || advancedTask) return;
+    if (!active || !source || !imageInfo || advancedTaskRef.current) return;
     const analysisId = analysisIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setAdvancedTask("hidden");
+    updateAdvancedTask("hidden");
     setError("");
     try {
       const workerBytes = source.bytes.slice();
@@ -425,7 +435,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       setImageInfo((current) => {
         if (!current) return current;
-        const next = { ...current, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks };
+        const next = { ...current, hiddenFindings: analysis.findings, hiddenRows: analysis.hiddenRows, trailerBytes: analysis.trailerBytes, trailerPreview: analysis.trailerPreview, trailerText: analysis.trailerText, lsbCandidates: analysis.lsbCandidates, hiddenPayloads: analysis.hiddenPayloads, pngTextEntries: analysis.pngTextEntries, pngChunks: analysis.pngChunks };
         publishAnalysisResult("image", buildImageEnvelope(next));
         return next;
       });
@@ -433,23 +443,27 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      if (analysisId === analysisIdRef.current) setAdvancedTask("");
+      if (analysisId === analysisIdRef.current) updateAdvancedTask("");
     }
   };
   React.useEffect(() => {
     if (!active || !imageInfo || loading || advancedTask || !sourceRef.current) return;
     if (autoHiddenAnalysisRef.current === analysisIdRef.current) return;
-    autoHiddenAnalysisRef.current = analysisIdRef.current;
-    const timer = window.setTimeout(() => void runHiddenAnalysis(), 120);
+    const scheduledId = analysisIdRef.current;
+    const timer = window.setTimeout(() => {
+      if (advancedTaskRef.current || scheduledId !== analysisIdRef.current) return;
+      autoHiddenAnalysisRef.current = scheduledId;
+      void runHiddenAnalysis();
+    }, 120);
     return () => window.clearTimeout(timer);
     // Run once for each newly loaded image; subsequent page changes must not repeat the scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, imageInfo?.name, loading]);
+  }, [active, imageInfo?.name, loading, advancedTask]);
   const runChannelAnalysis = () => {
     const source = sourceRef.current;
-    if (!active || !source?.image || !imageInfo || advancedTask) return;
+    if (!active || !source?.image || !imageInfo || advancedTaskRef.current) return;
     const analysisId = analysisIdRef.current;
-    setAdvancedTask("channels");
+    updateAdvancedTask("channels");
     setError("");
     if (channelTimerRef.current !== null) window.clearTimeout(channelTimerRef.current);
     channelTimerRef.current = window.setTimeout(() => {
@@ -467,36 +481,58 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         } catch (caught) {
           setError(caught instanceof Error ? caught.message : String(caught));
         } finally {
-          if (analysisId === analysisIdRef.current) setAdvancedTask("");
+          if (analysisId === analysisIdRef.current) updateAdvancedTask("");
         }
       })();
     }, 0);
   };
   const runRepairAnalysis = async () => {
     const source = sourceRef.current;
-    if (!active || !source || !imageInfo || advancedTask) return;
+    if (!active || !source || !imageInfo || advancedTaskRef.current) return;
     const analysisId = analysisIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setAdvancedTask("repair");
+    updateAdvancedTask("repair");
     setError("");
     const previewUrls: string[] = [];
     let committed = false;
     try {
       const workerBytes = source.bytes.slice();
       const repair = await runImageWorker<ImageRepairWorkerResult>({ action: "repair", bytes: workerBytes.buffer, format: source.format }, [workerBytes.buffer], controller.signal);
-      const candidates: ImageRepairCandidate[] = repair.candidates;
+      const dimensionResult = repair.dimensions;
+      const dimensionCandidates: ImageRepairCandidate[] = (dimensionResult?.candidates ?? []).map(candidate => ({
+        label: isEnglish ? `PNG dimensions ${candidate.width} × ${candidate.height}` : `PNG 宽高恢复 ${candidate.width} × ${candidate.height}`,
+        note: candidate.crcMatch ? (isEnglish ? "Original IHDR CRC and full filtered scanlines match. Only dimensions and IHDR CRC are written; other bytes are preserved." : "原 IHDR CRC 与完整扫描行同时匹配；仅写入宽高与 IHDR CRC，其余字节保留。") : (isEnglish ? "Scanline candidate only; original CRC does not confirm it. Compare the preview before choosing." : "仅根据扫描行推导的候选，原 CRC 无法确认。请比较预览后选择，不代表已确定原始尺寸。"),
+        bytes: candidate.bytes, mime: "image/png"
+      }));
+      const candidates: ImageRepairCandidate[] = [...dimensionCandidates, ...repair.candidates.map(candidate => ({ ...candidate, label: localizeAnalysisText(candidate.label, isEnglish), note: localizeAnalysisText(candidate.note, isEnglish) }))];
       const rebuiltPng = repair.rebuiltPng;
-      if (rebuiltPng) candidates.push({ label: "Rebuilt PNG critical chunks", note: rebuiltPng.notes.join(" "), bytes: rebuiltPng.bytes, mime: "image/png" });
+      if (rebuiltPng) candidates.push({ label: localizeAnalysisText("Rebuilt PNG critical chunks", isEnglish), note: rebuiltPng.notes.map(note => localizeAnalysisText(note, isEnglish)).join(" "), bytes: rebuiltPng.bytes, mime: "image/png" });
       const previews: ImageInfo["repairPreviewItems"] = [];
-      const rows: Array<[string, string]> = [];
+      const rows: Array<[string, string]> = dimensionResult?.status !== "not-png" && dimensionResult ? [
+        [isEnglish ? "Declared dimensions" : "文件头声明尺寸", `${dimensionResult.declaredWidth} × ${dimensionResult.declaredHeight}`],
+        [isEnglish ? "Dimension recovery" : "宽高恢复结论", dimensionRecoveryMessage(dimensionResult, isEnglish)],
+        [isEnglish ? "Inflated scanline bytes" : "解压扫描行字节", formatBytes(dimensionResult.inflatedBytes)],
+        [isEnglish ? "Search width range" : "宽度搜索范围", dimensionResult.searchedWidth ? `1–${dimensionResult.searchedWidth}` : "—"],
+        [isEnglish ? "Candidate count" : "尺寸候选数", `${dimensionResult.candidateCount}${dimensionResult.candidateCount > dimensionResult.candidates.length ? (isEnglish ? ` (first ${dimensionResult.candidates.length} shown)` : `（展示前 ${dimensionResult.candidates.length} 个）`) : ""}`]
+      ] : [];
       for (const candidate of candidates) {
         if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
+        const guessed = guessImageDimensions(candidate.bytes, candidate.mime === "image/png" ? "PNG" : source.format);
+        if (guessed.width * guessed.height > 50_000_000 || guessed.width > 65535 || guessed.height > 65535) {
+          rows.push([candidate.label, isEnglish ? "Preview skipped: declared dimensions exceed limits" : "声明尺寸超限，跳过像素预览；容器候选仍可下载核对"]);
+          continue;
+        }
         const src = await bytesToDataUrl(candidate.bytes, candidate.mime);
         previewUrls.push(src);
-        try { await loadBrowserImage(src); previews.push({ label: candidate.label, src, detail: candidate.note }); rows.push([candidate.label, "decoded"]); }
-        catch { rows.push([candidate.label, "failed"]); }
+        try {
+          const decoded = await loadBrowserImage(src);
+          if (decoded.naturalWidth * decoded.naturalHeight > 50_000_000) throw new Error("pixel-limit");
+          previews.push({ label: candidate.label, src, detail: `${decoded.naturalWidth} × ${decoded.naturalHeight} · ${candidate.note}` });
+          rows.push([candidate.label, isEnglish ? "Decoded" : "预览解码通过"]);
+        }
+        catch { rows.push([candidate.label, isEnglish ? "Decode failed" : "预览解码失败（保留候选供核对）"]); }
       }
       if (!active || controller.signal.aborted || analysisId !== analysisIdRef.current) return;
       const retained = new Set(previews.map((item) => item.src));
@@ -508,7 +544,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         return {
           ...current,
         repairedDataUrl: previews[0]?.src || "",
-        repairedContainerBytes: rebuiltPng?.bytes ?? null,
+        repairedContainerBytes: dimensionResult?.status === "recovered" && previews.some(item => item.label === dimensionCandidates[0]?.label) ? dimensionCandidates[0].bytes : rebuiltPng?.bytes ?? null,
+        dimensionRecovery: dimensionResult?.status === "not-png" ? undefined : dimensionResult ? { ...dimensionResult, candidates: dimensionResult.candidates.map(({ bytes: _bytes, ...item }) => item) } : undefined,
         repairStatus: previews.length
           ? (isEnglish ? "A displayable repair result is available." : "已找到可显示的修复结果。")
           : source.image
@@ -519,13 +556,14 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         repairDownloads: candidates.map((candidate) => ({ label: candidate.label, note: candidate.note, size: candidate.bytes.length, extension: imageExtensionForMime(candidate.mime), mime: candidate.mime, bytes: candidate.bytes }))
         };
       });
+      if (previews.length) setPreviewVersion("recovered");
       committed = true;
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       if (!committed) previewUrls.forEach(revokeImagePreviewUrl);
       if (abortRef.current === controller) abortRef.current = null;
-      if (analysisId === analysisIdRef.current) setAdvancedTask("");
+      if (analysisId === analysisIdRef.current) updateAdvancedTask("");
     }
   };
   const handleImageDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -596,7 +634,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
     setStorageNotice("");
     setError("");
     setLoading(false);
-    setAdvancedTask("");
+    updateAdvancedTask("");
     setQrResult(null);
     setQrScanning(false);
     setIsImageDropActive(false);
@@ -675,7 +713,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </div>
         {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
         {(loading || advancedTask) && <ALinearProgress />}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {imageInfo && <>
@@ -689,17 +727,19 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </ASegmentedGroup>
 
         {imagePage === "overview" && <div className="tool-panel wide-panel image-simple-overview-panel">
-          <ImageMetadataHighlights metadata={imageInfo.exif} english={isEnglish} />
           <ImageReviewSummary image={imageInfo} english={isEnglish} onNavigate={setImagePage} />
           <div className="image-simple-overview">
-            <div className="image-simple-preview"><ImageViewer src={imageInfo.dataUrl || imageInfo.repairedDataUrl} label={imageInfo.name} english={isEnglish} onExpand={() => setLightbox({ src: imageInfo.dataUrl || imageInfo.repairedDataUrl, label: imageInfo.name })} /></div>
+            <div className="image-simple-preview">
+              {imageInfo.repairedDataUrl && <ASegmentedGroup value={previewVersion} selects="single" aria-label={isEnglish ? "Compare original and recovery" : "原图与修复副本对照"}><ASegmentedButton value="original" onClick={() => setPreviewVersion("original")}>{isEnglish ? "Original" : "原始图片"}</ASegmentedButton><ASegmentedButton value="recovered" onClick={() => setPreviewVersion("recovered")}>{isEnglish ? "Recovered copy" : "修复副本"}</ASegmentedButton></ASegmentedGroup>}
+              <ImageViewer src={previewVersion === "recovered" && imageInfo.repairedDataUrl ? imageInfo.repairedDataUrl : imageInfo.dataUrl} label={imageInfo.name} english={isEnglish} onExpand={() => setLightbox({ src: previewVersion === "recovered" && imageInfo.repairedDataUrl ? imageInfo.repairedDataUrl : imageInfo.dataUrl, label: imageInfo.name })} />
+            </div>
             <div className="image-simple-facts">
               <PanelTitle title={t.imageOverview} />
               <InfoTable rows={[
                 [isEnglish ? "Name" : "名称", imageInfo.name],
                 [t.fileType, imageInfo.type],
                 [t.fileSize, formatBytes(imageInfo.size)],
-                [t.dimensions, imageInfo.width && imageInfo.height ? `${imageInfo.width} × ${imageInfo.height}` : "--"],
+                [imageInfo.decoded ? t.dimensions : (isEnglish ? "Declared dimensions (unverified)" : "声明尺寸（未验证）"), imageInfo.width && imageInfo.height ? `${imageInfo.width} × ${imageInfo.height}` : "--"],
                 [isEnglish ? "Display" : "显示状态", imageInfo.decoded ? (isEnglish ? "Opened" : "可打开") : (isEnglish ? "Not decoded" : "无法解码")],
                 [t.repairStatus, imageInfo.repairStatus],
                 [t.exif, String(Object.keys(imageInfo.exif).length)],
@@ -723,6 +763,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
               </div>
             </div>
           </div>
+          <ImageMetadataHighlights metadata={imageInfo.exif} english={isEnglish} />
           <ImageMetadata metadata={imageInfo.exif} name={imageInfo.name} english={isEnglish} formatValue={formatExifValue} showHighlights={false} />
         </div>}
 
@@ -736,16 +777,17 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
           </ASegmentedGroup>
 
           {imageFormatLayer === "container" && <>
-            <InfoTable rows={imageInfo.structureRows} />
+            <div className="finding-list">{sortFindings([...(imageInfo.containerFindings ?? []), ...imageInfo.formatLayers.flatMap(layer => layer.findings)]).map((finding, index) => <FindingCard key={index} finding={finding} english={isEnglish} />)}</div>
+            <InfoTable rows={imageInfo.structureRows.map(([key,value]) => [key, localizeAnalysisText(value, isEnglish)] as [string,string])} />
             <ImageMetadata metadata={imageInfo.exif} name={imageInfo.name} english={isEnglish} formatValue={formatExifValue} />
           </>}
 
           {imageInfo.formatLayers.filter((layer) => layer.format === imageFormatLayer).map((layer) => (
             <React.Fragment key={layer.format}>
-              <InfoTable rows={layer.rows} />
+              <InfoTable rows={layer.rows.map(([key,value]) => [key, localizeAnalysisText(value, isEnglish)] as [string,string])} />
               {layer.findings.length > 0 && <>
                 <PanelTitle title={isEnglish ? "Format findings" : "格式检查记录"} />
-                <div className="finding-list">{layer.findings.map((finding, index) => <div className={`finding-item ${finding.level === "danger" ? "danger" : finding.level === "warn" ? "warn" : "info"}`} key={`fl-${index}`}><strong>{finding.title}</strong><span>{finding.detail}</span></div>)}</div>
+                <div className="finding-list">{sortFindings(layer.findings).map((finding, index) => <FindingCard finding={finding} english={isEnglish} key={`fl-${index}`} />)}</div>
               </>}
 
               {layer.format === "PNG" && imageInfo.pngChunks.length > 0 && <>
@@ -753,14 +795,14 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
                 <InfoTable rows={[
                   ["Chunks", String(imageInfo.pngChunks.length)],
                   ["IDAT", formatBytes(pngIdatBytes)],
-                  ["CRC", pngBadCrc.length ? `${pngBadCrc.length} mismatch` : "OK"],
+                  ["CRC", pngBadCrc.length ? (isEnglish ? `${pngBadCrc.length} mismatch` : `${pngBadCrc.length} 个块校验失败`) : (isEnglish ? "Passed" : "校验通过")],
                   ["IEND", pngHasIend ? (isEnglish ? "Present" : "存在") : (isEnglish ? "Missing" : "缺失")],
                   [isEnglish ? "Text chunks" : "文本块", String(imageInfo.pngTextEntries.length)],
                   [isEnglish ? "Risk / private chunks" : "风险 / 私有块", String(pngRiskChunks.length)],
                   [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
                 ]} />
-                {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <div className="finding-item warn" key={`png-risk-${chunk.offset}-${chunk.type}`}><strong>{chunk.type} @ 0x{chunk.offset.toString(16).toUpperCase()}</strong><span>{chunk.risk.join("; ")}</span></div>)}</div>}
-                <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "soft-selected-row"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? "OK" : `${chunk.crc} / ${chunk.computed}`}</td><td>{[chunk.ancillary ? "ancillary" : "critical", chunk.privateUse ? "private" : "public", chunk.safeToCopy ? "safe-copy" : "unsafe-copy"].join(" · ")}</td></tr>)}</tbody></table></div>
+                {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <FindingCard key={`png-risk-${chunk.offset}-${chunk.type}`} english={isEnglish} finding={{ level: chunk.ok ? "warn" : "danger", title: `${chunk.type} @ 0x${chunk.offset.toString(16).toUpperCase()}`, detail: chunk.risk.map(risk => localizeAnalysisText(risk, isEnglish)).join("；") }} />)}</div>}
+                <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "analysis-row-danger"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? (isEnglish ? "Passed" : "通过") : <><strong className="analysis-text-danger">{isEnglish ? "CRC mismatch" : "校验失败"}</strong><br/>{isEnglish ? "Stored" : "保存值"} {chunk.crc}<br/>{isEnglish ? "Computed" : "计算值"} {chunk.computed}</>}</td><td>{[chunk.ancillary ? (isEnglish ? "ancillary" : "辅助块") : (isEnglish ? "critical" : "关键块"), chunk.privateUse ? (isEnglish ? "private" : "私有") : (isEnglish ? "public" : "公开"), chunk.safeToCopy ? (isEnglish ? "safe-copy" : "可安全复制") : (isEnglish ? "unsafe-copy" : "不可随意复制")].join(" · ")}</td></tr>)}</tbody></table></div>
               </>}
 
               {layer.format === "GIF" && <>
@@ -874,7 +916,8 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
 
         {imagePage === "hidden" && <div className="tool-panel wide-panel image-simple-hidden-panel">
           <div className="panel-heading-row"><PanelTitle title={t.hiddenData} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runHiddenAnalysis()}>{advancedTask === "hidden" ? (isEnglish ? "Scanning..." : "正在扫描...") : (isEnglish ? "Reveal common steganography" : "一键还原常见隐写")}</AButton><AButton variant="outlined" disabled={!imageInfo.trailerBytes.length} onClick={downloadTrailer}>{t.downloadHiddenData}</AButton><AButton variant="text" disabled={!imageInfo.lsbCandidates.length && !imageInfo.pngTextEntries.length && !imageInfo.trailerText} onClick={copyHiddenText}>{t.copyHiddenText}</AButton></div></div>
-          <InfoTable rows={imageInfo.hiddenRows} />
+          <div className="finding-list">{sortFindings(imageInfo.hiddenFindings ?? []).map((finding, index) => <FindingCard key={index} finding={finding} english={isEnglish} />)}</div>
+          <InfoTable rows={imageInfo.hiddenRows.map(([key,value]) => [key, localizeAnalysisText(value, isEnglish)] as [string,string])} />
           {imageInfo.hiddenPayloads.length > 0 && <><PanelTitle title={t.extractedPayloads} /><div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Source" : "来源"}</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Type" : "类型"}</th><th>{t.fileSize}</th><th>{t.preview}</th><th></th></tr></thead><tbody>{imageInfo.hiddenPayloads.map((payload, index) => <tr key={`${payload.offset}-${index}`}><td>{payload.source}</td><td>{payload.offset}</td><td>{payload.label}</td><td>{formatBytes(payload.size)}</td><td>{payload.preview.slice(0, 160) || "--"}</td><td><AButton variant="outlined" onClick={() => downloadHiddenPayload(payload, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div></>}
           {imageInfo.pngTextEntries.length > 0 && <><PanelTitle title={t.pngTextMetadata} /><div className="image-text-result-list">{imageInfo.pngTextEntries.map((entry) => <label key={`${entry.offset}-${entry.keyword}`}>{entry.keyword || entry.chunk}<AutoTextarea className="single-textarea compact-textarea" value={entry.text} readOnly /></label>)}</div></>}
           {imageInfo.lsbCandidates.length > 0 && <><PanelTitle title={t.lsbCandidates} /><div className="image-text-result-list">{imageInfo.lsbCandidates.map((candidate) => <label key={`${candidate.mode}-${candidate.text.slice(0, 20)}`}>{candidate.mode}<AutoTextarea className="single-textarea compact-textarea" value={candidate.text} readOnly /></label>)}</div></>}
@@ -910,10 +953,14 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
         </div>}
 
         {imagePage === "repair" && <div className="tool-panel wide-panel image-simple-repair-panel">
-          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Checking..." : "正在检查...") : (isEnglish ? "Check repair options" : "检查修复结果")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-recovered.png`}>{t.downloadRepaired}</AButton>}</div></div>
-          <InfoTable rows={imageInfo.recoveryRows} />
+          <div className="panel-heading-row"><PanelTitle title={t.recoveryPlan} /><div className="button-row compact-buttons"><AButton variant="filled" disabled={Boolean(advancedTask)} onClick={() => void runRepairAnalysis()}>{advancedTask === "repair" ? (isEnglish ? "Checking..." : "正在检查...") : (isEnglish ? "Recover dimensions / check repair" : "恢复宽高 / 检查修复")}</AButton><AButton variant="outlined" disabled={!imageInfo.repairedContainerBytes} onClick={downloadContainerRepair}>{t.downloadContainerRepair}</AButton>{imageInfo.repairedDataUrl && <AButton variant="outlined" href={imageInfo.repairedDataUrl} download={`${imageInfo.name.replace(/\.[^.]+$/, "") || "image"}-recovered.png`}>{t.downloadRepaired}</AButton>}</div></div>
+          <AnalysisNotice level={imageInfo.dimensionRecovery?.status === "recovered" ? "success" : imageInfo.dimensionRecovery?.status === "ambiguous" ? "warn" : "info"} title={isEnglish ? "Recovery conclusion" : "恢复结论"} english={isEnglish}>
+            {imageInfo.dimensionRecovery ? dimensionRecoveryMessage(imageInfo.dimensionRecovery, isEnglish) : (isEnglish ? "Run recovery to search dimensions using IHDR CRC and IDAT scanlines. Container normalization alone does not restore dimensions." : "点击上方按钮，联合 IHDR CRC 与 IDAT 扫描行恢复宽高。仅重算 CRC 不代表恢复真实尺寸。")}
+            <p>{isEnglish ? "Recovery creates copies. The original bytes, metadata and appended evidence remain available." : "修复结果均为副本；原文件、元数据和尾部证据不会被覆盖。"}</p>
+          </AnalysisNotice>
+          <InfoTable rows={imageInfo.recoveryRows.map(([key,value]) => [key, localizeAnalysisText(value, isEnglish)] as [string,string])} />
           <div className="image-repair-preview-grid">{imageInfo.repairPreviewItems.map((item) => <figure key={`${item.label}-${item.detail}`} role="button" tabIndex={0} onClick={() => setLightbox({ src: item.src, label: item.label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setLightbox({ src: item.src, label: item.label }); } }}><img src={item.src} alt={item.label} /><figcaption><strong>{item.label}</strong><span>{item.detail}</span></figcaption></figure>)}</div>
-          {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{candidate.label}</td><td>{formatBytes(candidate.size)}</td><td>{candidate.note}</td><td><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton></td></tr>)}</tbody></table></div>}
+          {imageInfo.repairDownloads.length > 0 && <div className="table-scroll compact-scroll"><table className="data-table"><thead><tr><th>{isEnglish ? "Result" : "结果"}</th><th>{t.fileSize}</th><th>{isEnglish ? "Notes" : "说明"}</th><th></th></tr></thead><tbody>{imageInfo.repairDownloads.map((candidate, index) => <tr key={`${candidate.label}-${index}`}><td>{localizeAnalysisText(candidate.label, isEnglish)}</td><td>{formatBytes(candidate.size)}</td><td>{localizeAnalysisText(candidate.note, isEnglish)}</td><td><div className="button-row"><AButton variant="outlined" onClick={() => downloadRepairCandidate(candidate, index)}>{t.download}</AButton><AButton variant="text" onClick={() => void handleImage(new File([candidate.bytes.slice().buffer as ArrayBuffer], `${imageInfo.name.replace(/\.[^.]+$/, "")}-recovered-${index + 1}.${candidate.extension}`, { type: candidate.mime }))}>{isEnglish ? "Analyze this copy" : "分析此副本"}</AButton></div></td></tr>)}</tbody></table></div>}
         </div>}
       </>}
       {lightbox && <ImageLightbox open={lightbox.open !== false} src={lightbox.src} label={lightbox.label} name={imageInfo?.name ?? ""} english={isEnglish} t={t} onClose={() => setLightbox((current) => current ? { ...current, open: false } : null)} />}

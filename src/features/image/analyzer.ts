@@ -1040,12 +1040,12 @@ function buildFormatLayer(bytes: Uint8Array, format: string, trailer: Uint8Array
   }
   if (format === "PNG") {
     const badChunks = pngChunks.filter((chunk) => !chunk.ok);
-    const riskChunks = pngChunks.filter((chunk) => chunk.risk.length);
+    const riskChunks = pngChunks.filter((chunk) => chunk.risk.some(risk => risk !== "CRC mismatch"));
     const textEntries = pngChunks.map((chunk) => decodePngTextChunk(bytes, chunk)).filter(Boolean) as PngTextEntry[];
     const findings: ImageFinding[] = [];
-    if (pngChunks[0]?.type !== "IHDR") findings.push({ level: "warn", title: "PNG IHDR is not first", detail: "Critical PNG chunk order is invalid; viewers may reject or recover differently." });
-    if (!pngChunks.some((chunk) => chunk.type === "IEND")) findings.push({ level: "warn", title: "PNG IEND missing", detail: "The PNG logical end chunk was not parsed; the file may be truncated." });
-    if (badChunks.length) findings.push({ level: "warn", title: "PNG CRC mismatch", detail: badChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
+    if (pngChunks[0]?.type !== "IHDR") findings.push({ level: "danger", title: "PNG IHDR is not first", detail: "Critical PNG chunk order is invalid; viewers may reject or recover differently." });
+    if (!pngChunks.some((chunk) => chunk.type === "IEND")) findings.push({ level: "danger", title: "PNG IEND missing", detail: "The PNG logical end chunk was not parsed; the file may be truncated." });
+    if (badChunks.length) findings.push({ level: "danger", title: "PNG CRC mismatch", detail: badChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
     if (riskChunks.length) findings.push({ level: "warn", title: "Risky / private PNG chunks", detail: riskChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
     if (textEntries.length) findings.push({ level: "info", title: "PNG text metadata", detail: textEntries.map((entry) => `${entry.keyword}: ${entry.text.slice(0, 80)}`).join(" / ") });
     const rows: Array<[string, string]> = [
@@ -1430,7 +1430,7 @@ function inspectImageContainerBytes(bytes: Uint8Array, fileType: string, exif: I
     });
   }
   const metadataFields = imageMetadataFieldCount(exif);
-  if (metadataFields > 20) findings.push({ level: "warn", title: "Large metadata surface", detail: `${metadataFields} metadata fields were parsed.` });
+  if (metadataFields > 20) findings.push({ level: "info", title: "Large metadata surface", detail: `${metadataFields} metadata fields were parsed.` });
   const formatLayer = buildFormatLayer(bytes, format, trailer, pngChunks);
   return { format, logicalEnd, trailer, rows, findings, embeddedHits, pngChunks, pngTextEntries, formatLayer };
 }
@@ -1547,7 +1547,7 @@ function analyzeImagePixels(bytes: Uint8Array, fileType: string, imageData: Imag
       detail: `${unusualRatios.map(([channel, ratio]) => `${channel} ${(ratio * 100).toFixed(2)}% ones`).join(", ")}. This is a local distribution note, not a standalone hidden-data finding.`
     });
   }
-  if (alphaTransparent > 0 || alphaNon255 > pixels * 0.02) findings.push({ level: "warn", title: "Alpha channel carries data", detail: `${alphaNon255} pixels have non-opaque alpha; inspect alpha preview.` });
+  if (alphaTransparent > 0 || alphaNon255 > pixels * 0.02) findings.push({ level: "info", title: "Alpha channel carries data", detail: `${alphaNon255} pixels have non-opaque alpha; inspect alpha preview.` });
   const lsbCandidates = extractLsbCandidatesFromImageData(imageData);
   const lsbText = lsbCandidates[0]?.text ?? "";
   rows.push(["Readable LSB candidates", String(lsbCandidates.length)]);

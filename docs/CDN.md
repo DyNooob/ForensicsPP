@@ -67,3 +67,9 @@ Offline builds ignore both CDN variables throughout Vite and finalization. Test 
 A deployment must retain prior immutable `/assets/` URLs. Switching between a self-origin build and CDN mode changes chunk names; cached HTML and already-open lazy-loaded workspaces can still reference the previous names even when the new CDN files are correct. The Pages workflow restores assets from its two preceding successful artifacts without replacing the active HTML, service worker or current worker bridges. It refreshes the cache fingerprint after merging and validates the final upload, with an explicit retained-deployment size budget. A full cache purge is not a substitute for retaining assets used by open clients.
 
 For recovery, the manual `source_ref` input can redeploy an existing application tag using the current deployment workflow. This allows restoring a validated CDN release without inventing a new resource prefix for a workflow-only repair. The deployment helper always comes from the workflow revision; application bytes come from the selected source revision.
+
+### HTML cache freshness
+
+The production Cloudflare zone has a narrowly scoped cache rule named `ForensicsPP HTML and service worker freshness`: for the apex and `www` host, directory URLs, `.html` files and `/sw.js` bypass edge/browser caching. Hashed runtime JS/CSS on the resource CDN keep their existing caching policy. Purging the main HTML and stale negative asset responses restored the homepage during the 2026-11-10 incident. Do not clear application storage or evidence workspaces as a deployment repair step.
+
+GitHub's deploy-pages action caps its synchronization timeout at 10 minutes. A deployment stuck in `syncing_files` is not a successful publication; inspect the deployment result and live URLs before reporting completion.

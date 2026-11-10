@@ -171,6 +171,8 @@ export type ImageInfo = {
   repairStatus: string;
   recoveryRows: Array<[string, string]>;
   exif: Record<string, unknown>;
+  containerFindings?: Array<{ level: string; title: string; detail: string }>;
+  hiddenFindings?: Array<{ level: string; title: string; detail: string }>;
   structureRows: Array<[string, string]>;
   hiddenRows: Array<[string, string]>;
   trailerBytes: Uint8Array;
@@ -178,6 +180,7 @@ export type ImageInfo = {
   trailerText: string;
   lsbCandidates: Array<{ mode: string; text: string }>;
   hiddenPayloads: Array<{ label: string; source: string; offset: number; size: number; extension: string; mime: string; preview: string; bytes: Uint8Array }>;
+  dimensionRecovery?: Omit<import("./features/png/dimensionRecovery").PngDimensionRecovery, "candidates"> & { candidates: Array<{ width: number; height: number; crcMatch: boolean }> };
   repairDownloads: Array<{ label: string; note: string; size: number; extension: string; mime: string; bytes: Uint8Array }>;
   pngTextEntries: PngTextEntry[];
   pngChunks: PngChunkInfo[];

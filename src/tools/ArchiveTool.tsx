@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice, WarningNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -363,7 +364,7 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
           <AButton variant="text" disabled={!archive && !error && !loading} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <ALinearProgress />}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {archive && <>
@@ -401,9 +402,9 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
             </div>
             <div className="archive-file-list">
               {visibleEntries.map((entry) => (
-                  <button className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); setEntryHashError(""); }}>
+                  <button data-severity={entry.encrypted ? "warn" : undefined} className={entry.name === selectedName ? "active" : ""} type="button" key={entry.name} onClick={() => { setSelectedName(entry.name); setEntryHashError(""); }}>
                   <span>{entry.name}</span>
-                  <small>{entry.name.endsWith("/") ? (t.directory) : formatBytes(entry.uncompressed)}</small>
+                  <small>{entry.encrypted ? `${t.encrypted} · ` : ""}{entry.name.endsWith("/") ? (t.directory) : formatBytes(entry.uncompressed)}</small>
                 </button>
               ))}
               {!visibleEntries.length && <div className="empty-state">--</div>}
@@ -429,10 +430,10 @@ export function ArchiveTool({ t, active = true }: { t: (typeof copy)["zh"]; acti
                   ? <button type="button" className="archive-entry-hash" title={t.copy} onClick={() => void copyText(entryHashes[selected.name])}>{entryHashes[selected.name]}</button>
                   : <AButton variant="text" disabled={selected.encrypted || selected.name.endsWith("/") || Boolean(entryHashingKey) || Boolean(loadingEntry)} onClick={() => void hashSelectedEntry()}>{entryHashingKey === selected.name ? (t.calculating) : (t.calculate)}</AButton>}
               </div>
-              {entryHashError && <div className="empty-state error-state">{entryHashError}</div>}
+              {entryHashError && <ErrorNotice message={entryHashError} />}
               {imageUrl ? <div className="archive-image-preview"><img src={imageUrl} alt={selected.name} /></div> : selected.data ? (
                 <AutoTextarea aria-label={t.archive_entry_preview} className="single-textarea archive-entry-preview" value={selectedPreview || selectedHex || "--"} readOnly />
-              ) : <div className="empty-state">{selected.encrypted ? (t.encrypted_entry_cannot_be_previewed) : (t.this_entry_was_not_extracted_for_preview)}</div>}
+              ) : selected.encrypted ? <WarningNotice text={t.encrypted_entry_cannot_be_previewed} /> : <div className="empty-state">{t.this_entry_was_not_extracted_for_preview}</div>}
             </> : <div className="empty-state">--</div>}
           </div>
         </div>

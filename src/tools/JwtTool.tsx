@@ -19,7 +19,9 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice, FindingCard } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
+import { localizeAnalysisText, sortFindings } from "../core/analysisPresentation";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
@@ -91,11 +93,6 @@ function findingClass(finding: Finding) {
   return finding.level; // "warn" | "info"
 }
 
-function severityLabel(t: (typeof copy)["zh"], level: string) {
-  if (level === "risk") return t.jwt_sev_risk;
-  if (level === "warn") return t.jwt_sev_warn;
-  return t.jwt_sev_info;
-}
 
 export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]; services: JwtToolServices; active?: boolean }) {
   const {
@@ -310,7 +307,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                 placeholder={t.jwt_input_placeholder}
               />
             </div>
-            {parseError && <div className="empty-state error-state">{parseError}</div>}
+            {parseError && <ErrorNotice message={parseError} />}
             {!activeRow && !parseError && (
               <div className="empty-state jwt-guide">
                 <p>{t.jwt_no_token}</p>
@@ -374,7 +371,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             <div className="button-row">
               <AButton variant="filled" disabled={algFamily(signAlg) === "HS" ? !signSecret : ["RS", "ES", "PS"].includes(algFamily(signAlg)) ? !signKey.trim() : false} onClick={() => void doSign()}>{t.generate}</AButton>
             </div>
-            {signError && <div className="empty-state error-state">{signError}</div>}
+            {signError && <ErrorNotice message={signError} />}
             {generatedToken && (
               <div className="text-panel jwt-text-panel">
                 <div className="text-panel-title">
@@ -418,7 +415,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
               </div>
               <AutoTextarea className="single-textarea jwt-json" aria-label="JWT Payload" value={decodePayload} onChange={(event) => setDecodePayload(event.currentTarget.value)} />
             </div>
-            {decodeError && <div className="empty-state error-state">{decodeError}</div>}
+            {decodeError && <ErrorNotice message={decodeError} />}
             <div className="button-row">
               <AButton variant="filled" onClick={forgeToSign}>{t.jwt_forge_to_sign}</AButton>
             </div>
@@ -444,7 +441,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
                   <AButton variant="outlined" disabled={!verifyKey.trim() || verification.status === "checking"} onClick={() => void verifyAsymmetric()}>{t.verify_signature}</AButton>
                   {verification.status !== "idle" && (
                     <AChip selected className={verification.status === "valid" ? "ok" : verification.status === "invalid" ? "bad" : ""}>
-                      {verification.detail}
+                      {localizeAnalysisText(verification.detail)}
                     </AChip>
                   )}
                 </div>
@@ -459,15 +456,7 @@ export function JwtTool({ t, services, active = true }: { t: (typeof copy)["zh"]
             <div className="tool-panel wide-panel jwt-findings-panel">
               <ToolPanelHeader title={t.jwt_findings} />
               <div className="finding-list">
-                {activeInspection.findings.map((finding, index) => (
-                  <div className={`finding-item ${findingClass(finding)}`} key={`${finding.title}-${index}`}>
-                    <span className="finding-sev">{severityLabel(t, findingClass(finding))}</span>
-                    <div className="finding-body">
-                      <strong>{finding.title}</strong>
-                      <span>{finding.detail}</span>
-                    </div>
-                  </div>
-                ))}
+                {sortFindings(activeInspection.findings.map(finding => ({ ...finding, level: findingClass(finding) }))).map((finding, index) => <FindingCard finding={finding} key={`${finding.title}-${index}`} />)}
               </div>
             </div>
           )}

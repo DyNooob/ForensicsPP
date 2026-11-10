@@ -27,12 +27,15 @@ import {
   tryRebuildPngContainer
 } from "./analyzer";
 
+import { recoverPngDimensions } from "../png/dimensionRecovery";
+
 export type ImageAnalysisResult = ReturnType<typeof analyzeImagePixels>;
 export type ImageBasicsWorkerResult = {
   analysis: ReturnType<typeof analyzeImageBasics>;
   exif: Record<string, unknown>;
 };
 export type ImageRepairWorkerResult = {
+  dimensions: Awaited<ReturnType<typeof recoverPngDimensions>>;
   candidates: ReturnType<typeof buildImageRepairCandidates>;
   rebuiltPng: ReturnType<typeof tryRebuildPngContainer>;
 };
@@ -82,6 +85,7 @@ self.onmessage = async (event: MessageEvent<ImageWorkerRequest>) => {
       }, request.metadataFields);
     } else {
       result = {
+        dimensions: await recoverPngDimensions(bytes),
         candidates: buildImageRepairCandidates(bytes, request.format),
         rebuiltPng: tryRebuildPngContainer(bytes)
       };

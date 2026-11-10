@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { WarningNotice, ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
 import { AButton, ALinearProgress, ATextField, InfoTable, ToolPanelHeader } from "../components/ui";
@@ -168,9 +169,9 @@ export function RegistryTool({ t, active = true }: { t: (typeof copy)["zh"]; act
       {!hive && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{t.open_a_registry_hive}</strong><span>NTUSER.DAT · SOFTWARE · SYSTEM · SAM · SECURITY</span></div>}
       <div className="action-row"><AButton variant="filled" onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="text" disabled={!file && !hive} onClick={clear}>{t.clear}</AButton></div>
       {loading && <ALinearProgress />}
-      {error && <div className="empty-state error-state">{error}</div>}
+      {error && <ErrorNotice message={error} />}
       {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
-      {hive && hive.warnings.length > 0 && <div className="empty-state registry-warning-list">{hive.warnings.map((warning) => english ? warning.replace("主序列号与次序列号不一致，Hive 可能需要事务日志恢复。", "Primary and secondary sequence numbers differ; transaction logs may be required.").replace("Hive 文件头校验和不匹配。", "Hive header checksum does not match.") : warning).join("\n")}</div>}
+      {hive && hive.warnings.length > 0 && <WarningNotice level="danger" text={hive.warnings.map((warning) => english ? warning.replace("主序列号与次序列号不一致，Hive 可能需要事务日志恢复。", "Primary and secondary sequence numbers differ; transaction logs may be required.").replace("Hive 文件头校验和不匹配。", "Hive header checksum does not match.") : warning).join("\n")} english={english} />}
     </section>
 
     {hive && selected && <>

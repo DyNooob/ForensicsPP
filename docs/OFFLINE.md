@@ -10,21 +10,21 @@ The website build has a separate policy and may use configured CDNs or on-demand
 
 ## Download and verify / 下载与校验
 
-Download the offline ZIP and `SHA256SUMS-v1.0.0.txt` from the [1.0.0 release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.0).
+Download the offline ZIP and `SHA256SUMS-v1.0.1.txt` from the [1.0.0 release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1).
 
 Run in the directory containing both files:
 
 ```sh
 # macOS
-shasum -a 256 ForensicsPP-v1.0.0-offline-static.zip
+shasum -a 256 ForensicsPP-v1.0.1-offline-static.zip
 # Linux
-sha256sum -c SHA256SUMS-v1.0.0.txt
+sha256sum -c SHA256SUMS-v1.0.1.txt
 ```
 
 Windows PowerShell:
 
 ```powershell
-Get-FileHash .\ForensicsPP-v1.0.0-offline-static.zip -Algorithm SHA256
+Get-FileHash .\ForensicsPP-v1.0.1-offline-static.zip -Algorithm SHA256
 ```
 
 Compare the complete digest with the checksum file. A checksum detects changed bytes; its trust depends on obtaining the checksum from the intended release. There is no separate signed-checksum claim for this version.
@@ -74,7 +74,7 @@ Prerequisites: the source checkout, Node.js 22.13+, npm 10+ and the locked depen
 Import the fixed data and codec sources from an already downloaded, checksum-verified offline release:
 
 ```sh
-npm run prepare:offline -- --package /absolute/path/ForensicsPP-v1.0.0-offline-static.zip
+npm run prepare:offline -- --package /absolute/path/ForensicsPP-v1.0.1-offline-static.zip
 npm run build:offline
 node scripts/verify-offline.mjs
 npm run smoke:offline

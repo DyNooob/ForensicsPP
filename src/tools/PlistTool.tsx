@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { ArrowLeftOutlined, DownloadOutlined, FolderOpenOutlined, RightOutlined } from "@ant-design/icons";
 import { AButton, ALinearProgress, ATextField, ToolPanelHeader } from "../components/ui";
@@ -161,7 +162,7 @@ export function PlistTool({ t, active = true }: { t: (typeof copy)["zh"]; active
         {!current && !loading && <div className="desktop-drop-zone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void open(event.dataTransfer.files?.[0]); }}><strong>{file?.name || (t.open_a_plist_file)}</strong><span>XML · bplist00</span></div>}
         <div className="action-row"><AButton variant="filled" disabled={loading} onClick={() => inputRef.current?.click()}><FolderOpenOutlined /> {t.selectFile}</AButton><AButton variant="outlined" disabled={root === undefined} onClick={exportData}><DownloadOutlined /> JSON</AButton><AButton variant="text" disabled={!file && root === undefined && !error} onClick={clear}>{t.clear}</AButton></div>
         {loading && <ALinearProgress />}
-      {error && <div className="empty-state error-state">{error}</div>}
+      {error && <ErrorNotice message={error} />}
       {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
       </div>
       {current && <div className="tool-panel wide-panel browser-data-panel">

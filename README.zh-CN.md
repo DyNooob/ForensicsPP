@@ -5,19 +5,19 @@
   <p><a href="README.md">English</a> · <a href="https://www.forensicspp.com/">在线使用</a> · <a href="https://github.com/DyNooob/ForensicsPP/releases/latest">下载发布包</a> · <a href="docs/README.md">文档中心</a></p>
 </div>
 
-Forensics++ 将 **35 个工作台** 集中在一个静态 Web 应用中，覆盖图片、文件、数据库、日志、邮件、网络、系统痕迹和文本转换。核心分析在当前浏览器中执行，无需 Forensics++ 分析后端；已实现的重型任务由 Web Worker 承载。界面支持简体中文和英文。
+Forensics++ 将 **36 个工作台** 集中在一个静态 Web 应用中，覆盖图片、文件、数据库、日志、邮件、网络、系统痕迹和文本转换。核心分析在当前浏览器中执行，无需 Forensics++ 分析后端；已实现的重型任务由 Web Worker 承载。界面支持简体中文和英文。
 
-**1.0.0 正式版**提供完整离线包，改进 EXIF 信息层级，增加本地 HEIC/HEIF 预览解码和 OpenCC 简繁转换。[查看完整发布说明](docs/releases/v1.0.0.md)。
+**1.0.1 修订正式版**提供完整离线包，补齐 PNG 宽高恢复、中文异常分级与图片结果导航；简繁转换已成为左侧独立工具。[查看完整发布说明](docs/releases/v1.0.1.md)。
 
 ## 选择入口
 
 | 你要做什么 | 从这里开始 |
 | --- | --- |
 | 立即检查文件或文本 | [在线工作台](https://www.forensicspp.com/) |
-| 在竞赛、隔离网或离线环境使用 | [下载 1.0 离线包](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.0) · [离线指南](docs/OFFLINE.md) |
+| 在竞赛、隔离网或离线环境使用 | [下载 1.0 离线包](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1) · [离线指南](docs/OFFLINE.md) |
 | 了解工具输入与结果边界 | [工具手册](docs/TOOLS.md) |
 | 从源码开发或添加分析器 | [开发指南](docs/DEVELOPMENT.md) · [架构说明](docs/ARCHITECTURE.md) |
-| 了解测试覆盖 | [验证体系](docs/VALIDATION.md) · [1.0 体检记录](docs/releases/v1.0.0-audit.md) |
+| 了解测试覆盖 | [验证体系](docs/VALIDATION.md) · [1.0 体检记录](docs/releases/v1.0.1-audit.md) |
 | 提交问题或报告漏洞 | [GitHub Issues](https://github.com/DyNooob/ForensicsPP/issues) · [安全政策](SECURITY.md) |
 
 ## 主要能力
@@ -38,7 +38,7 @@ Forensics++ 将 **35 个工作台** 集中在一个静态 Web 应用中，覆盖
 
 ## 使用完整离线包
 
-1. 从 [GitHub Release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.0) 下载 `ForensicsPP-v1.0.0-offline-static.zip` 和 `SHA256SUMS-v1.0.0.txt`。
+1. 从 [GitHub Release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1) 下载 `ForensicsPP-v1.0.1-offline-static.zip` 和 `SHA256SUMS-v1.0.1.txt`。
 2. 校验 SHA-256，完整解压整个文件夹。
 3. 本机预装 Python 3 后，在解压目录执行：
 

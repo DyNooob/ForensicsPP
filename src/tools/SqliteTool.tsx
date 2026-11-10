@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
@@ -1152,7 +1153,7 @@ export function SqliteTool({ t, active = true, onDirtyChange }: { t: (typeof cop
           <AButton variant="outlined" disabled={!dbRef.current} onClick={exportDatabase}>{t.sqliteExportDb}</AButton>
           <AButton variant="text" disabled={!hasSqliteDb && !error} onClick={() => confirmDiscardBefore(clearSqliteWorkspace)}>{t.clear}</AButton>
         </div>
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {hasSqliteDb && <div className="sqlite-admin-shell wide-panel">

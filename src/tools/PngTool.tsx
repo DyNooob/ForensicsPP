@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, InfoTable, PanelTitle } from "../components/ui";
@@ -182,7 +183,7 @@ export function PngTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
         </div>
         {loading && <ALinearProgress />}
         {storageNotice && <div className="tool-storage-note" role="status">{storageNotice}</div>}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {analysis && (

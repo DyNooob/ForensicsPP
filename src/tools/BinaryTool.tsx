@@ -20,6 +20,8 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { FindingCard } from "../components/AnalysisNotice";
+import { sortFindings } from "../core/analysisPresentation";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, AInputNumber, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, PanelTitle } from "../components/ui";
@@ -596,7 +598,7 @@ export function BinaryTool({ t, services, active = true, setActiveTool }: { t: (
           {binaryPage === "overview" && structuralFindings.length ? (
             <div className="tool-panel wide-panel binary-findings-panel">
               <PanelTitle title={t.structure_notes} />
-              <div className="finding-list">{structuralFindings.map((finding) => <div className={`finding-item ${finding.level}`} key={`${finding.title}-${finding.detail}`}><strong>{finding.title}</strong><span>{finding.detail}</span></div>)}</div>
+              <div className="finding-list">{sortFindings(structuralFindings).map((finding) => <FindingCard finding={finding} key={`${finding.title}-${finding.detail}`} />)}</div>
             </div>
           ) : null}
         </>

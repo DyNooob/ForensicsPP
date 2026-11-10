@@ -44,7 +44,7 @@ Open **SQLite**, browse live tables and inspect the available forensic pages. Re
 
 ### Chinese text → converted text
 
-Open **Codec / 编码解码 → Chinese conversion / 简繁转换**. Select the Traditional variant, paste text and choose a direction. `Ctrl/⌘ + Enter` converts to Simplified; adding `Shift` converts to Traditional. The Taiwan phrase option changes regional vocabulary in addition to glyphs. Names and ambiguous one-to-many characters still require review.
+Open **Chinese conversion / 简繁转换** directly from the sidebar. Select the Traditional variant, paste text and choose a direction. `Ctrl/⌘ + Enter` converts to Simplified; adding `Shift` converts to Traditional. The Taiwan phrase option changes regional vocabulary in addition to glyphs. Names and ambiguous one-to-many characters still require review.
 
 ## 5. Export and resume / 导出与恢复
 

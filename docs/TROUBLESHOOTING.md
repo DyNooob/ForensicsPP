@@ -45,3 +45,7 @@ Changing a label language need not rewrite the language stored in an existing an
 ## Reporting a reproducible issue
 
 Include version, distribution (website/offline/source), tool ID, browser/OS, steps, expected result, observed result and a synthetic/public sample with provenance. Attach relevant console/error text after removing sensitive values. Do not attach credentials, private evidence or a full unreviewed case report. Use [the private security route](../SECURITY.md) for vulnerabilities.
+
+### PNG opens incorrectly or reports an IHDR CRC error
+
+Open **Image → Repair → Recover dimensions / check repair**. This searches dimensions using the stored IHDR CRC and complete IDAT scanline layout. CRC-only normalization does not recover a hidden width or height. A red CRC notice is an actual mismatch; orange scanline-only candidates remain unconfirmed. [Recovery behavior, limits and severity levels](ANALYSIS_RESULTS.md) explain how to review results.

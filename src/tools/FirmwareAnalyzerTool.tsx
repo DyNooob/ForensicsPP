@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { WarningNotice, ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AButton, ALinearProgress, InfoTable, PanelTitle, ToolFactGrid, ToolPanelHeader } from "../components/ui";
 import { analyzerTargetLabel } from "../core/analyzerRouting";
@@ -272,7 +273,7 @@ export function FirmwareAnalyzerTool({
           <AButton variant="text" disabled={!session && !loading && !error} onClick={clear}>{t.clear}</AButton>
         </div>
         {loading && <div className="firmware-progress"><ALinearProgress /><small>{phaseLabel} · {(progressRatio * 100).toFixed(1)}%</small></div>}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {session && <>
@@ -296,7 +297,7 @@ export function FirmwareAnalyzerTool({
             [t.total_time, `${(session.analysis.timings.totalMs / 1000).toFixed(2)} s`],
             [t.interesting_paths, String(session.analysis.interestingPaths.length)]
           ]} />
-          {session.analysis.warnings.map((warning, index) => <div className="empty-state warning-state" key={`${warning}-${index}`}>{warning}</div>)}
+          {session.analysis.warnings.map((warning, index) => <WarningNotice text={warning} key={`${warning}-${index}`} />)}
           {session.analysis.interestingPaths.length > 0 && <details className="firmware-interesting"><summary>{english ? `Interesting expanded paths (${session.analysis.interestingPaths.length})` : `关注的展开路径 (${session.analysis.interestingPaths.length})`}</summary><pre>{session.analysis.interestingPaths.join("\n")}</pre></details>}
         </div>
 

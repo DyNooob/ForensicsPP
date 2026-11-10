@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -554,7 +555,7 @@ export function EmailTool({ t, active = true }: { t: (typeof copy)["zh"]; active
                 </table>
               </div>
             ) : <div className="empty-state">--</div>}
-            {attachmentHashError && <div className="empty-state error-state">{attachmentHashError}</div>}
+            {attachmentHashError && <ErrorNotice message={attachmentHashError} />}
           </div>
 
           <details className="image-advanced-shell email-advanced-shell wide-panel">

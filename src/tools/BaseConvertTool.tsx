@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -159,7 +160,7 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
           <AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>
         </>} />
         <label className="stack-label">{t.inputText}<AutoTextarea className="single-textarea baseconvert-simple-input" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={t.enter_one_value_or_one_value_per_line} /></label>
-        {conversionError && <div className="empty-state error-state" role="alert">{conversionError}</div>}
+        {conversionError && <ErrorNotice message={conversionError} />}
         <div className="baseconvert-simple-base-row">
           <span>{t.default_input_base}</span>
           <ASegmentedGroup className="baseconvert-base-switch" value={String(base)} selects="single">
@@ -178,7 +179,7 @@ export function BaseConvertTool({ t, active = true }: { t: Translation; active?:
             <AButton variant="text" disabled={single.ascii === "--"} onClick={() => void copyText(single.ascii)}>{t.copy_ascii}</AButton>
           </>}
         />
-        {single.error ? <div className="empty-state error-state">{single.error}</div> : <InfoTable rows={resultRows} />}
+        {single.error ? <ErrorNotice message={single.error} /> : <InfoTable rows={resultRows} />}
       </div>}
 
       {items.length > 1 && <div className="tool-panel wide-panel baseconvert-simple-batch-panel">

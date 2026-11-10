@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
@@ -275,7 +276,7 @@ export function TimelineTool({ t, active = true }: { t: (typeof copy)["zh"]; act
             placeholder={t.paste_logs_or_tabular_text_containing_timestamps}
           />
         </label>
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {hasInput && (

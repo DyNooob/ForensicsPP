@@ -67,8 +67,7 @@ try {
     await click('[data-tool-id="lookup"]', 'Clear');
     console.log('Cold offline lookup passed:', input);
   }
-  await goto('codec');
-  await click('[data-tool-id="codec"]', 'Chinese conversion');
+  await goto('chinese');
   await setText('.chinese-converter textarea:not([readonly])', '头发与发展，后台与皇后。');
   await page.focus('.chinese-converter textarea');
   await page.keyboard.down('Control'); await page.keyboard.down('Shift'); await page.keyboard.press('Enter'); await page.keyboard.up('Shift'); await page.keyboard.up('Control');

@@ -154,5 +154,5 @@ async function verifyClipboardAndImage(page, base) {
   await pasteFiles([{ name: 'clipboard-after-denial.png', bytes: png, type: 'image/png' }]);
   await page.waitForFunction(() => document.querySelector('[data-tool-id="image"]')?.textContent.includes('clipboard-after-denial.png'));
   assert.deepEqual(errors, [], 'clipboard and image workflows must not raise uncaught errors');
-  console.log('Usability passed: 35 tools at two sizes, native file paste, context-menu paste, multi-file import, text selection, permission fallback, image zoom and accessible preview.');
+  console.log('Usability passed: all visible tools at two sizes, native file paste, context-menu paste, multi-file import, text selection, permission fallback, image zoom and accessible preview.');
 }

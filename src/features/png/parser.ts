@@ -83,7 +83,7 @@ export function parsePngFile(bytes: Uint8Array) {
   }
   const ihdr = chunks.find((chunk) => chunk.type === "IHDR");
   const rows: Array<[string, string]> = [["Chunks", String(chunks.length)]];
-  if (ihdr) {
+  if (ihdr && ihdr.length === 13) {
     const ihdrOffset = ihdr.offset + 8;
     rows.unshift(
       ["Width", String(view.getUint32(ihdrOffset))],

@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { AButton, ALinearProgress, ASelect, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
@@ -319,7 +320,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div>
         {loading && <><ALinearProgress /><div className="tool-loading-state">{progress}</div></>}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </section>
 
       {parsedFiles.length > 0 && <section className="tool-panel wide-panel evtx-results-panel">
@@ -355,7 +356,7 @@ export function EvtxTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           <ToolPanelHeader title={t.local_sigma_matcher} subtitle={sigmaRules.length ? `${sigmaRules.length} ${t.rule_s_loaded}` : undefined} actions={<><AButton variant="outlined" onClick={() => sigmaInputRef.current?.click()}>{t.open_rules}</AButton><AButton variant="outlined" disabled={!sigmaText.trim() || sigmaLoading} onClick={loadSigma}>{t.validate}</AButton><AButton variant="filled" disabled={!sigmaText.trim() || !events.length || sigmaLoading} onClick={runSigma}>{sigmaLoading ? (t.running) : (t.run_rules)}</AButton></>} />
           {sigmaLoading && <ALinearProgress />}
           <AutoTextarea className="single-textarea mono-textarea evtx-sigma-editor" value={sigmaText} onChange={(event) => { sigmaFileRef.current += 1; setSigmaText(event.currentTarget.value); }} placeholder={t.paste_one_or_more_sigma_yaml_rules} />
-          {sigmaErrors.length > 0 && <div className="empty-state error-state">{sigmaErrors.join("\n")}</div>}
+          {sigmaErrors.length > 0 && <ErrorNotice message={sigmaErrors.join("\n")} />}
           {sigmaMatches.length > 0 ? <div className="table-scroll evtx-sigma-matches"><table className="data-table"><thead><tr><th>{t.rule}</th><th>{t.level}</th><th>{t.time}</th><th>Event ID</th><th>{t.provider}</th><th>{t.summary}</th></tr></thead><tbody>{sigmaMatches.slice(0, 10_000).map((match, index) => <tr key={`${match.ruleId}:${match.event.id}:${index}`}><td>{match.ruleTitle}</td><td>{match.level || "--"}</td><td>{match.event.timestamp}</td><td>{match.event.eventId ?? "--"}</td><td>{match.event.provider}</td><td>{match.event.message || "--"}</td></tr>)}</tbody></table></div> : sigmaRules.length > 0 && <div className="empty-state">{t.no_rule_matches}</div>}
         </div>}
       </section>}

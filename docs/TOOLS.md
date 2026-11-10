@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Getting started](GETTING_STARTED.md)
 
-This reference covers the **35 visible workspaces in 1.0.0**. The catalog in [`src/config/app.ts`](../src/config/app.ts), individual workspace guards and analyzer limitations are authoritative. Browser memory and file structure can impose additional constraints. A successful parse is not an authenticity or attribution conclusion.
+This reference covers the **36 visible workspaces in the current source tree** (1.0.0 shipped 35). The catalog in [`src/config/app.ts`](../src/config/app.ts), individual workspace guards and analyzer limitations are authoritative. Browser memory and file structure can impose additional constraints. A successful parse is not an authenticity or attribution conclusion.
 
 Use the sidebar search by name, ID or capability. Website routes use canonical slugs where defined and tool IDs otherwise. Offline links use `/#<id>`. Historical Image/Binary aliases resolve to their owning workspace.
 
@@ -34,7 +34,8 @@ Use the sidebar search by name, ID or capability. Website routes use canonical s
 
 | Workspace / ID | Purpose | Boundary |
 | --- | --- | --- |
-| Codec / 编码解码 · `codec` | URL/Base64/Hex/Unicode, supported charsets/text operations; separate OpenCC Chinese conversion page | Encoding is not encryption. Chinese input/file conversion is bounded at 2 MiB; UTF-8 file import. Names and ambiguous forms require review. |
+| Codec / 编码解码 · `codec` | URL/Base64/Hex/Unicode, supported charsets/text operations | Encoding is not encryption. |
+| Chinese conversion / 简繁转换 · `chinese` | Dedicated sidebar workspace; offline OpenCC in both directions, regional variants, file import/export and shortcuts | Input/file conversion is bounded at 2 MiB; UTF-8 file import. Names and ambiguous forms require review. |
 | Cryptography / 密码算法 · `crypto` | Supported digests, HMAC and symmetric operations | Correct algorithm, mode, key/IV and input representation are the user's responsibility. |
 | Hash / 哈希 · `hash` | Text/file digests, identification and comparisons | A matching digest compares bytes under that algorithm; it does not establish provenance or authenticity. |
 | JWT · `jwt` | Decode/edit supported token structures and signing/verification operations | Decoding a payload is not verifying trust in its issuer. |

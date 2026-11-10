@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AButton, ALinearProgress, ASegmentedButton, ASegmentedGroup, InfoTable, ToolPanelHeader } from "../components/ui";
 import { copy } from "../i18n";
@@ -280,7 +281,7 @@ export function BrowserArtifactTool({ t, active = true }: { t: (typeof copy)["zh
           {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div>
         {loading && <><ALinearProgress /><div className="tool-loading-state">{progress}</div></>}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </section>
 
       {analysis && (

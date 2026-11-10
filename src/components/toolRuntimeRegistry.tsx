@@ -52,6 +52,7 @@ const CryptoTool = React.lazy(async () => {
   const [{ CryptoTool }, services] = await Promise.all([import("../tools/CryptoTool"), import("../features/crypto/algorithms")]);
   return { default: (props: Omit<React.ComponentProps<typeof CryptoTool>, "services">) => <CryptoTool {...props} services={services} /> };
 });
+const ChineseTool = React.lazy(() => import("../components/ChineseConverter").then(module => ({ default: module.ChineseConverter })));
 const CodecTool = React.lazy(async () => {
   const [{ CodecTool }, services] = await Promise.all([import("../tools/CodecTool"), import("../features/codec/analyzer")]);
   return { default: (props: Omit<React.ComponentProps<typeof CodecTool>, "services">) => <CodecTool {...props} services={services} /> };
@@ -104,6 +105,7 @@ export const toolRuntimeRegistry: Record<ToolId, RuntimeRenderer> = {
   home: ({ t, lang, recentTools, setActiveTool }) => <HomeTool t={t} lang={lang} recentTools={recentTools} setActiveTool={setActiveTool} />,
   cyberchef: ({ t, active }) => <CyberChefTool t={t} active={active} />,
   image: ({ t, active }) => <ImageTool t={t} active={active} />,
+  chinese: ({ lang, active }) => <div className="tool-grid chinese-workbench"><ChineseTool english={lang === "en"} active={active} /></div>,
   codec: ({ t, active }) => <CodecTool t={t} active={active} />,
   crypto: ({ t, active }) => <CryptoTool t={t} active={active} />,
   jwt: ({ t, active }) => <JwtTool t={t} active={active} />,

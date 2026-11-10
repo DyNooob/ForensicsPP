@@ -49,7 +49,7 @@ function analyzePngEvidence(bytes: Uint8Array, name: string): PngAnalysis {
     parsed.trailer.length ? { level: "danger", title: "Trailing data after IEND", detail: `${formatBytes(parsed.trailer.length)} after logical PNG end.` } : null,
     trailerSignatures.length ? { level: "danger", title: "Embedded signature in trailer", detail: trailerSignatures.map((hit) => `${hit.label}@0x${hit.offset.toString(16).toUpperCase()}`).join(", ") } : null,
     riskChunks.length ? { level: "warn", title: "Chunks worth review", detail: riskChunks.map((chunk) => `${chunk.type}@0x${chunk.offset.toString(16).toUpperCase()}: ${chunk.risk.join("; ")}`).join(" | ") } : null,
-    textEntries.length ? { level: "warn", title: "Text metadata chunks", detail: textEntries.map((item) => `${item.chunk}:${item.keyword}`).join(", ") } : null,
+    textEntries.length ? { level: "info", title: "Text metadata chunks", detail: textEntries.map((item) => `${item.chunk}:${item.keyword}`).join(", ") } : null,
     unknownChunks.length ? { level: "warn", title: "Unknown/private chunks", detail: unknownChunks.map((chunk) => chunk.type).join(", ") } : null,
     !/IHDR.*IDAT.*IEND/.test(criticalOrder) ? { level: "warn", title: "Unusual critical chunk order", detail: criticalOrder } : null,
     parsed.trailer.length && trailerEntropy > 7.35 ? { level: "warn", title: "High-entropy trailer", detail: `Trailer entropy is ${trailerEntropy.toFixed(4)}; it may be compressed, encrypted, or packed data.` } : null,

@@ -21,6 +21,7 @@
 
 import { copyText } from "../utils/clipboard";
 import React from "react";
+import { statusPresentation } from "../core/analysisPresentation";
 import { localizeRowLabel } from "../i18nRowLabels";
 import { Button, Checkbox, Input, InputNumber, Progress, Select } from "antd";
 import type { ButtonProps, CheckboxProps, InputNumberProps, InputProps, SelectProps } from "antd";
@@ -283,12 +284,13 @@ export function InfoTable({ rows }: { rows: Array<[string, string]> }) {
   return (
     <table className="info-table">
       <tbody>
-        {rows.map(([label, value]) => (
-          <tr key={label}>
+        {rows.map(([label, value], index) => {
+          const presentation = statusPresentation(label, value);
+          return <tr key={`${label}-${index}`} data-severity={presentation.level}>
             <th>{localizeRowLabel(label)}</th>
-            <td>{value}</td>
-          </tr>
-        ))}
+            <td>{presentation.value}</td>
+          </tr>;
+        })}
       </tbody>
     </table>
   );

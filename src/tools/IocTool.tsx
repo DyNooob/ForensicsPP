@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -267,7 +268,7 @@ export function IocTool({ t, active = true }: { t: (typeof copy)["zh"]; active?:
   return (
     <div className={`tool-grid ioc-simple-workbench ioc-workbench ${hasInput ? "has-ioc" : "empty-ioc"}`}>
       {(loading || analyzing) && <div className="wide-panel"><ALinearProgress /></div>}
-      {error && <div className="empty-state error-state wide-panel">{error}</div>}
+      {error && <div className="wide-panel"><ErrorNotice message={error} /></div>}
 
       <section className="tool-panel wide-panel ioc-simple-source-panel">
         <ToolPanelHeader

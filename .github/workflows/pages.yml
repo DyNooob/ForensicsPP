@@ -119,7 +119,6 @@ jobs:
           path: dist
 
   deploy:
-    timeout-minutes: 35
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -129,8 +128,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 1800000
 
 # The canonical site is deployed to GitHub Pages from the built `dist/` artifact
 # produced by this workflow. Build verification runs before any deployment.

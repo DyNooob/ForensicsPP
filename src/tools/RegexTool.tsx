@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -174,7 +175,7 @@ export function RegexTool({ t, active = true }: RegexToolProps & { active?: bool
           <label className="stack-label">{t.regexExamples}<ASelect aria-label={t.regexExamples} value={preset} onChange={(value) => applyPreset(String(value))} options={[{ value: "", label: t.choose_preset }, ...presets.map((item) => ({ value: item.label, label: item.label }))]} /></label>
         </div>
         <label className="stack-label">{t.source_text}<AutoTextarea className="single-textarea regex-simple-source" value={source} onChange={(event) => { requestRef.current += 1; setSource(event.currentTarget.value); setFileError(""); setSelectedKey(""); }} placeholder={t.textPlaceholder} /></label>
-        {fileError && <div className="empty-state error-state">{fileError}</div>}
+        {fileError && <ErrorNotice message={fileError} />}
         {(analyzing || result.error) && <div className={`empty-state ${result.error ? "error-state" : ""}`} role={result.error ? "alert" : "status"}>{analyzing ? (t.matching) : result.error}</div>}
       </div>
 

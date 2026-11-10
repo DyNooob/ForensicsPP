@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
@@ -235,7 +236,7 @@ export function HttpTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           <AButton variant="outlined" disabled={!text} onClick={() => void copyText(text)}>{t.copy}</AButton>
           <AButton variant="text" disabled={!text && !error} onClick={() => { setText(""); setError(""); }}>{t.clear}</AButton>
         </div>
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {hasInput && (

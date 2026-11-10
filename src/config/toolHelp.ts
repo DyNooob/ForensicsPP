@@ -23,6 +23,7 @@ import type { ToolId } from "./app";
 
 export const toolHelp: Partial<Record<ToolId, { zh: string; en: string }>> = {
   cyberchef: { zh: "将数据放入 Input，选择配方并查看 Output。Recipe 可组合编码、压缩和哈希操作。内置工具首次打开需载入较大的静态资源。", en: "Put data in Input, compose a Recipe and inspect Output. Recipes combine encoding, compression and hashes. The embedded tool loads a larger static bundle on first use." },
+  chinese: { zh: "使用内置 OpenCC 离线词库执行简繁双向转换，可选择台湾、香港字形与地区词汇。Ctrl / ⌘ + Enter 转简体，加 Shift 转繁体。", en: "Convert Chinese text in either direction with bundled OpenCC dictionaries, including Taiwan and Hong Kong variants. Ctrl / ⌘ + Enter converts to Simplified; add Shift for Traditional." },
   codec: { zh: "选择输入格式后执行编码或解码；可载入示例。转换结果可复制，输入变化后需重新执行。编码不是加密。", en: "Choose a format, then encode or decode; a sample is available. Copy the output and run again after editing the input. Encoding does not provide encryption." },
   crypto: { zh: "选择凯撒、摩斯、栅栏等操作，再填写输入和对应参数并执行。载入示例可快速查看流程。这里的古典密码用于文本分析，不能用于保护现代敏感数据。", en: "Select a classical cipher operation, enter text and its parameters, then run. Load a sample to try the workflow. Classical ciphers are for text analysis and do not protect modern sensitive data." },
   jwt: { zh: "粘贴 JWT 后检查 Header、Payload 和声明；也可校验签名或本地签发测试令牌。能解码不代表签名有效。HMAC 校验需要共享密钥，非对称校验需要公钥。", en: "Paste a JWT to inspect its header, payload and claims, verify a signature or generate a test token locally. Decoding does not prove a valid signature. HMAC requires a shared secret; asymmetric verification requires a public key." },

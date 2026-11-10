@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { useHomeToolDraft } from "../app/useHomeToolDraft";
@@ -445,7 +446,7 @@ export function HashTool({ t, services, active = true }: { t: (typeof copy)["zh"
           {isHashing && <AButton variant="outlined" onClick={cancelHashing}>{t.cancelEdit}</AButton>}
         </div>
         {isHashing && <div className="hash-simple-progress"><progress max={Math.max(1, progress.total)} value={progress.done} /><span>{progress.name || (t.calculating)}{progress.total > 0 ? ` · ${formatBytes(progress.done)} / ${formatBytes(progress.total)}` : ""}</span></div>}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
 
       {mode === "text" && textHashes && (

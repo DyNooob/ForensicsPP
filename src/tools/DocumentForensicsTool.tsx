@@ -19,6 +19,8 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice, AnalysisNotice, WarningNotice } from "../components/AnalysisNotice";
+import { localizeAnalysisText } from "../core/analysisPresentation";
 import React from "react";
 import { subscribeToolHandoff, takeToolHandoff } from "../core/toolHandoff";
 import { useStaleRunGuard } from "../core/runtime";
@@ -214,16 +216,19 @@ export function DocumentForensicsTool({ t, active = true }: { t: (typeof copy)["
       </div>
       <div className="button-row"><AButton variant="outlined" onClick={() => inputRef.current?.click()}>{t.select_file}</AButton><AButton variant="filled" disabled={!file || loading} onClick={() => void analyze()}>{t.inspect_document}</AButton>{loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}</div>
       {loading && <><ALinearProgress /><div className="tool-loading-state">{t.inspecting_document_structure}</div></>}
-      {error && <div className="empty-state error-state">{error}</div>}
+      {error && <ErrorNotice message={error} />}
     </section>
 
     {analysis && <section className="tool-panel wide-panel document-forensics-results">
       <ToolPanelHeader title={analysis.name} subtitle={`${analysis.kind} · ${analysis.subtype}`} actions={<AButton variant="outlined" onClick={exportJson}>JSON</AButton>} />
       <ASegmentedGroup className="document-forensics-tabs" value={view} selects="single">{views.map((item) => { const count = item === "findings" ? analysis.findings.length : item === "metadata" ? analysis.metadata.length : item === "structure" ? analysis.entries.length : item === "extracts" ? analysis.extracts.length : 0; return <ASegmentedButton key={item} value={item} onClick={() => setView(item)}>{labels[item][english ? 1 : 0]}{item !== "summary" ? ` (${count})` : ""}</ASegmentedButton>; })}</ASegmentedGroup>
 
-      {view === "summary" && <InfoTable rows={[[t.container, `${analysis.kind} · ${analysis.subtype}`], [t.file_size, formatBytes(analysis.size)], [t.pages, analysis.pages ? String(analysis.pages) : "--"], [t.revisions, analysis.revisions ? String(analysis.revisions) : "--"], [t.package_parts_streams, String(analysis.entries.length)], [t.external_relationships, String(analysis.findings.filter((item) => item.category === "external").length)], [t.embedded_macro_items, String(analysis.findings.filter((item) => item.category === "embedded" || item.category === "macro").length)], [t.encrypted, analysis.encrypted ? (t.yes) : (t.no_indication)], ...(analysis.notes.length ? [[t.entryRisk, analysis.notes.join("; ")] as [string, string]] : [])]} />}
+      {view === "summary" && <>
+        {analysis.findings.some(item => ["macro", "action", "external", "embedded"].includes(item.category)) && <AnalysisNotice level="warn" title={t.documentReviewTitle} english={english}>{t.documentReviewDetail}</AnalysisNotice>}
+        {analysis.notes.map((note,index) => <WarningNotice key={index} text={note} level="info" english={english} />)}
+        <InfoTable rows={[[t.container, `${analysis.kind} · ${analysis.subtype}`], [t.file_size, formatBytes(analysis.size)], [t.pages, analysis.pages ? String(analysis.pages) : "--"], [t.revisions, analysis.revisions ? String(analysis.revisions) : "--"], [t.package_parts_streams, String(analysis.entries.length)], [t.external_relationships, String(analysis.findings.filter((item) => item.category === "external").length)], [t.embedded_macro_items, String(analysis.findings.filter((item) => item.category === "embedded" || item.category === "macro").length)], [t.encrypted, analysis.encrypted ? (t.yes) : (t.no_indication)]]} /></>}
 
-      {view === "findings" && (analysis.findings.length ? <><div className="document-forensics-filter"><ASelect aria-label={t.filter_check_category} value={findingCategory} onChange={setFindingCategory} options={[{ value: "all", label: t.all_categories }, ...findingCategories.map((category) => ({ value: category, label: categoryLabel(category) }))]} /><span>{findings.length}/{analysis.findings.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{t.category}</th><th>{t.check}</th><th>{t.location}</th><th>{t.detail}</th></tr></thead><tbody>{findings.map((finding, index) => <tr key={`${finding.location}:${finding.label}:${index}`}><td>{categoryLabel(finding.category)}</td><td>{finding.label}</td><td>{finding.location}</td><td>{finding.detail}</td></tr>)}</tbody></table></div></> : <div className="empty-state">{t.no_structural_issue_was_found_by_the_supported_checks}</div>)}
+      {view === "findings" && (analysis.findings.length ? <><div className="document-forensics-filter"><ASelect aria-label={t.filter_check_category} value={findingCategory} onChange={setFindingCategory} options={[{ value: "all", label: t.all_categories }, ...findingCategories.map((category) => ({ value: category, label: categoryLabel(category) }))]} /><span>{findings.length}/{analysis.findings.length}</span></div><div className="table-scroll document-forensics-table"><table className="data-table"><thead><tr><th>{t.category}</th><th>{t.check}</th><th>{t.location}</th><th>{t.detail}</th></tr></thead><tbody>{findings.map((finding, index) => <tr data-severity={["macro", "action", "external", "embedded"].includes(finding.category) ? "warn" : "info"} key={`${finding.location}:${finding.label}:${index}`}><td>{categoryLabel(finding.category)}</td><td><strong>{localizeAnalysisText(finding.label, english)}</strong></td><td>{finding.location}</td><td>{localizeAnalysisText(finding.detail, english)}</td></tr>)}</tbody></table></div></> : <div className="empty-state">{t.no_structural_issue_was_found_by_the_supported_checks}</div>)}
 
       {view === "metadata" && (analysis.metadata.length ? <InfoTable rows={analysis.metadata} /> : <div className="empty-state">{t.no_readable_document_metadata}</div>)}
 

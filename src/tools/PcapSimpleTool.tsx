@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice, WarningNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -564,7 +565,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           {loading && <AButton variant="outlined" onClick={cancel}>{t.cancelEdit}</AButton>}
         </div></>}
         {loading && <ALinearProgress />}
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </section>
 
       {pcap && <>
@@ -600,7 +601,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
 
           {view === "streams" && <div className="pcap-stream-workspace">
             <div className="pcap-list-filter"><input className="text-input" value={streamFilter} onChange={(event) => setStreamFilter(event.currentTarget.value)} placeholder={t.filter_tcp_endpoints} aria-label={t.filter_tcp_streams} /><span>{streams.length}/{pcap.tcpStreams.length}</span></div>
-            <div className="table-scroll pcap-stream-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.endpoint_a}</th><th>{t.endpoint_b}</th><th>{t.packets}</th><th>{"A -> B"}</th><th>{"B -> A"}</th><th>{t.capture_gaps}</th></tr></thead><tbody>{streams.map((stream) => <tr className={stream.key === selectedStream?.key ? "selected-row" : ""} key={stream.key} tabIndex={0} onClick={() => setSelectedStreamKey(stream.key)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedStreamKey(stream.key); }}><td>{streamIndexByKey.get(stream.key) ?? "--"}</td><td>{stream.endpointA}</td><td>{stream.endpointB}</td><td>{stream.packetCount}</td><td>{formatBytes(stream.bytesAtoB)}</td><td>{formatBytes(stream.bytesBtoA)}</td><td>{formatBytes(stream.gapBytesAtoB + stream.gapBytesBtoA)}</td></tr>)}</tbody></table></div>
+            <div className="table-scroll pcap-stream-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.endpoint_a}</th><th>{t.endpoint_b}</th><th>{t.packets}</th><th>{"A -> B"}</th><th>{"B -> A"}</th><th>{t.capture_gaps}</th></tr></thead><tbody>{streams.map((stream) => <tr className={stream.key === selectedStream?.key ? "selected-row" : ""} key={stream.key} tabIndex={0} onClick={() => setSelectedStreamKey(stream.key)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedStreamKey(stream.key); }}><td>{streamIndexByKey.get(stream.key) ?? "--"}</td><td>{stream.endpointA}</td><td>{stream.endpointB}</td><td>{stream.packetCount}</td><td>{formatBytes(stream.bytesAtoB)}</td><td>{formatBytes(stream.bytesBtoA)}</td><td className={stream.gapBytesAtoB + stream.gapBytesBtoA ? "analysis-text-warn" : ""}>{formatBytes(stream.gapBytesAtoB + stream.gapBytesBtoA)}</td></tr>)}</tbody></table></div>
             {selectedStream && <div className="pcap-stream-detail">
               <ToolPanelHeader title={t.followTcpStream} subtitle={`${selectedStream.endpointA} <-> ${selectedStream.endpointB}`} actions={<><AButton variant="text" disabled={!selectedStreamTranscript} onClick={() => void copyText(selectedStreamTranscript)}>{t.copy}</AButton><AButton variant="text" disabled={!selectedStreamTranscript || Boolean(pcap.streamBytesLimited)} onClick={saveStreamTranscript}>{t.save_text}</AButton><AButton variant="outlined" disabled={Boolean(pcap.streamBytesLimited) || streamDirection === "both" || (streamDirection === "a-to-b" ? selectedStream.gapBytesAtoB : selectedStream.gapBytesBtoA) > 0 || !(streamDirection === "a-to-b" ? selectedStream.bytesAtoB : selectedStream.bytesBtoA)} onClick={saveStreamBytes}>{t.save_raw_bytes}</AButton></>} />
               <div className="pcap-stream-controls">
@@ -614,7 +615,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
                 <AButton variant="text" disabled={!streamMatches.length} onClick={() => jumpToStreamMatch(1)} aria-label={t.next_match}>↓</AButton>
               </div>
               <div className="pcap-stream-meta"><span>{t.payload}: {formatBytes(selectedStream.bytesAtoB + selectedStream.bytesBtoA)}</span><span>{t.retransmitted_overlap}: {formatBytes(selectedStream.retransmittedBytes)}</span><span>{t.capture_gaps}: {formatBytes(selectedStream.gapBytesAtoB + selectedStream.gapBytesBtoA)}</span></div>
-              {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <div className="pcap-stream-notice">{t.the_capture_has_sequence_gaps_gap_markers_are_shown_in_the_preview_raw_export_is_available_only_for_a_complete_direction}</div> : null}
+              {(selectedStream.gapBytesAtoB || selectedStream.gapBytesBtoA) ? <WarningNotice text={t.the_capture_has_sequence_gaps_gap_markers_are_shown_in_the_preview_raw_export_is_available_only_for_a_complete_direction} /> : null}
               {pcap.streamBytesLimited ? <div className="pcap-stream-notice">{t.the_restored_workspace_does_not_contain_all_stream_bytes_re_analyze_the_capture_before_exporting}</div> : null}
               <AutoTextarea ref={streamTextareaRef} className="single-textarea pcap-stream-output" value={selectedStreamTranscript || "--"} readOnly aria-label={t.tcp_stream_content} />
             </div>}
@@ -717,7 +718,7 @@ export function PcapTool({ t, active = true }: { t: (typeof copy)["zh"]; active?
           </div>}
 
           {view === "files" && <div className="table-scroll pcap-files-scroll"><table className="data-table"><thead><tr><th>#</th><th>{t.filename}</th><th>Host</th><th>{t.jsonPath}</th><th>{t.componentType}</th><th>{t.fileSize}</th><th>SHA-256</th><th /></tr></thead><tbody>{pcap.extractedFiles.map((item, index) => { const key = extractedFileKey(index); const hash = extractedHashes[key]; const bytesAvailable = extractedBytesAvailable(item); return <tr key={`${item.packetNo}-${index}`}><td>{item.packetNo}</td><td>{item.filename}</td><td>{item.host}</td><td>{item.path}</td><td>{item.signature} / {item.contentType}</td><td>{formatBytes(item.size)}</td><td>{hash ? <button type="button" className="pcap-extracted-hash" title={t.copy} onClick={() => void copyText(hash)}>{hash}</button> : <AButton variant="text" disabled={!bytesAvailable || Boolean(extractedHashingKey)} onClick={() => void hashExtractedFile(index)}>{extractedHashingKey === key ? (t.calculating) : bytesAvailable ? (t.calculate) : (t.re_analyze)}</AButton>}</td><td><AButton variant="outlined" disabled={!bytesAvailable} title={!bytesAvailable ? (t.re_analyze_the_capture_before_saving) : undefined} onClick={() => saveExtracted(index)}>{t.save}</AButton></td></tr>; })}</tbody></table></div>}
-          {extractedHashError && <div className="empty-state error-state">{extractedHashError}</div>}
+          {extractedHashError && <ErrorNotice message={extractedHashError} />}
         </section>
 
         {view === "packets" && selectedPacket && expandedPacketNo !== selectedPacket.no && <section className="tool-panel wide-panel pcap-simple-detail-panel">

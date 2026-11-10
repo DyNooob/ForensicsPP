@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import CryptoJS from "crypto-js";
@@ -359,7 +360,7 @@ export function PasswordTool({ t, services, active = true }: { t: (typeof copy)[
           </div>
         )}
 
-        {error && <div className="empty-state error-state">{error}</div>}
+        {error && <ErrorNotice message={error} />}
       </div>
     </div>
   );

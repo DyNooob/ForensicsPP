@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -205,7 +206,7 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
           />
           {selectedCandidate ? <div className="table-scroll compact-scroll"><table className="data-table timestamp-conversion-table"><thead><tr><th>{t.format}</th><th>{t.httpHeaderValue}</th><th>{t.copy}</th></tr></thead><tbody>
             {visibleConversions.map(([label, value]) => <tr key={`${label}-${value}`}><td>{label}</td><td className="mono-cell">{value}</td><td><AButton variant="text" disabled={!value || value === "--"} onClick={() => void copyText(value)}>{t.copy}</AButton></td></tr>)}
-          </tbody></table></div> : <div className="empty-state error-state">{rows[0]?.[1] || (t.unsupported_timestamp)}</div>}
+          </tbody></table></div> : <ErrorNotice message={rows[0]?.[1] || (t.unsupported_timestamp)} />}
         </div>}
 
         {candidates.length > 1 && <details className="tool-panel wide-panel timestamp-simple-candidates-panel">
@@ -229,13 +230,13 @@ export function TimestampTool({ t, active = true }: { t: (typeof copy)["zh"]; ac
           </>}
         />
         <AutoTextarea className="single-textarea timestamp-simple-batch-input" value={batchInput} onChange={(event) => { setBatchInput(event.currentTarget.value); setSubmittedBatchInput(""); setBatchFilter(""); setBatchFormat(""); }} placeholder={t.textPlaceholder} />
-        {batchInputTooLarge && <div className="empty-state error-state">{t.the_batch_input_exceeds_the_32_mib_limit}</div>}
+        {batchInputTooLarge && <ErrorNotice message={t.the_batch_input_exceeds_the_32_mib_limit} />}
         <div className="timestamp-simple-batch-filter">
           <input className="text-input" aria-label={t.filter_extracted_timestamps} value={batchFilter} onChange={(event) => setBatchFilter(event.currentTarget.value)} placeholder={t.filter_raw_value_iso_or_context} />
           <ASelect aria-label={t.batch_result_format} value={batchFormat} onChange={(value) => setBatchFormat(String(value))} options={[{ value: "", label: t.all_formats }, ...batchFormats.map((format) => ({ value: format, label: format }))]} />
         </div>
         {batchParsing && <ALinearProgress />}
-        {batchError && <div className="empty-state error-state">{batchError}</div>}
+        {batchError && <ErrorNotice message={batchError} />}
         <div className="table-scroll timestamp-simple-batch-scroll">
           {visibleBatchEvents.length ? <table className="data-table timestamp-simple-batch-table"><thead><tr><th>ISO</th><th>{t.localTime}</th><th>{t.format}</th><th>{t.raw}</th><th>{t.iocLine}</th><th>{t.regexContext}</th></tr></thead><tbody>{visibleBatchEvents.map((event) => <tr key={event.id}><td>{event.iso}</td><td>{event.local}</td><td>{event.format}</td><td>{event.raw}</td><td>{event.line}</td><td>{event.context}</td></tr>)}</tbody></table> : <div className="empty-state">{submittedBatchInput ? (t.no_timestamp_found) : t.waiting}</div>}
         </div>

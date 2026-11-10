@@ -20,6 +20,7 @@
  */
 
 import { copyText } from "../utils/clipboard";
+import { ErrorNotice } from "../components/AnalysisNotice";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
 import { zipSync } from "fflate";
@@ -486,7 +487,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
                 [t.verification_time, info.signing.verification ? `${info.signing.verification.durationMs} ms` : "--"]
               ]} />
               {info.signing.warnings.length > 0 && <div className="forensic-inline-note">{info.signing.warnings.join(" · ")}</div>}
-              {info.signing.verification?.errors.length ? <div className="forensic-inline-note error-state">{info.signing.verification.errors.join(" · ")}</div> : null}
+              {info.signing.verification?.errors.length ? <ErrorNotice message={info.signing.verification.errors.join(" · ")} /> : null}
               {info.signing.verification?.warnings.length ? <div className="forensic-inline-note">{info.signing.verification.warnings.join(" · ")}</div> : null}
               {info.signing.verification?.jarV1?.present ? <div className="tool-panel android-signing-signer">
                 <ToolPanelHeader title="V1 / JAR signer" subtitle={info.signing.verification.jarV1.signerBase || undefined} />
@@ -530,7 +531,7 @@ export function AndroidManifestTool({ t, services, active = true }: { t: (typeof
                     [t.signer_cert_v2_v3, v4Result.certificateMatchesV2V3 ? "✓" : "✗"],
                     [t.signer_certificate_sha_256, v4Result.certificateSha256 || "--"]
                   ]} />
-                  {v4Result.errors.length ? <div className="forensic-inline-note error-state">{v4Result.errors.join(" · ")}</div> : null}
+                  {v4Result.errors.length ? <ErrorNotice message={v4Result.errors.join(" · ")} /> : null}
                   {v4Result.warnings.length ? <div className="forensic-inline-note">{v4Result.warnings.join(" · ")}</div> : null}
                 </> : null}
               </div>

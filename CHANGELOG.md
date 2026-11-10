@@ -2,11 +2,13 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
-## Unreleased
+## [1.0.1] — 2026-11-10
 
-### Fixed
-- Pages 发布保留前两次成功部署中的静态资源，修复切换 CDN 后旧缓存页面仍引用同源 JS、产生 404 的问题；合并兼容资源后重新计算 Service Worker 缓存标识，并验证最终产物。
-- 手动部署支持指定已验证的应用 tag，在保持 CDN 版本一致的情况下修复发布流程。
+- Recover PNG width/height with original IHDR CRC and bounded IDAT scanline validation, including packed samples and Adam7; preserve uncertain candidates and original evidence.
+- Present localized findings and errors with consistent severity; connect previously hidden image findings and reorganize the image overview around evidence and next actions.
+- Move OpenCC Chinese conversion into its own sidebar workspace, bringing the current visible catalog to 36.
+- Prevent automatic image scans from aborting explicit repair; retain resources referenced by cached pages and document HTML freshness policy.
+- Ship a new complete offline package, leaving v1.0.0 release bytes unchanged.
 
 ## [1.0.0] - 2026-11-10
 

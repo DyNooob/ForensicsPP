@@ -19,6 +19,7 @@
  * Full source code: https://github.com/DyNooob/ForensicsPP
  */
 
+import { ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import React from "react";
 import { AutoTextarea } from "../components/AutoTextarea";
@@ -195,8 +196,8 @@ export function UuidTool({ t, active = true }: { t: Translation; active?: boolea
       <div className="tool-panel wide-panel uuid-simple-input-panel">
         <ToolPanelHeader title={t.uuid_input} actions={<AButton variant="text" disabled={!hasInput} onClick={clear}>{t.clear}</AButton>} />
         <AutoTextarea className="single-textarea uuid-simple-input" aria-label={t.uuid_input} value={value} placeholder={t.paste_one_or_more_uuid_values} onChange={(event) => { setValue(event.currentTarget.value); setSelectedIndex(0); }} />
-        {inputTooLarge && <div className="empty-state error-state" role="alert">{t.input_is_limited_to_2_mib}</div>}
-        {tooManyValues && <div className="empty-state error-state" role="alert">{t.batch_parsing_is_limited_to_10_000_uuid_values}</div>}
+        {inputTooLarge && <ErrorNotice message={t.input_is_limited_to_2_mib} />}
+        {tooManyValues && <ErrorNotice message={t.batch_parsing_is_limited_to_10_000_uuid_values} />}
         <div className="action-row">
           <AButton variant="filled" onClick={() => replaceWithGenerated(4)}>{t.generate} v4</AButton>
           <AButton variant="outlined" onClick={() => replaceWithGenerated(7)}>{t.generate_v7}</AButton>
@@ -213,7 +214,7 @@ export function UuidTool({ t, active = true }: { t: Translation; active?: boolea
             <AButton variant="outlined" disabled={!selected.valid} onClick={() => void copyText(selected.guidBytes)}>{t.guidBytes}</AButton>
           </>}
         />
-        {selected.valid ? <InfoTable rows={selectedRows} /> : <div className="empty-state error-state">{t.invalid_uuid}</div>}
+        {selected.valid ? <InfoTable rows={selectedRows} /> : <ErrorNotice message={t.invalid_uuid} />}
       </div>}
 
       {hasInput && analyses.length > 1 && <div className="tool-panel wide-panel uuid-simple-batch-panel">

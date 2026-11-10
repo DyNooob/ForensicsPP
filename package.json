@@ -1,6 +1,6 @@
 {
   "name": "forensicspp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -52,6 +52,7 @@
     "validate": "vitest run tests/validation",
     "smoke:settings": "node scripts/smoke-settings.mjs",
     "smoke:image": "node scripts/smoke-image.mjs",
+    "smoke:image-recovery": "node scripts/smoke-image-recovery.mjs",
     "smoke:cdn": "node scripts/smoke-cdn.mjs",
     "smoke:usability": "node scripts/smoke-usability.mjs"
   },
