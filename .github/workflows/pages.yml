@@ -29,9 +29,15 @@ on:
         required: false
         default: false
         type: boolean
+      source_ref:
+        description: Optional application source tag/commit to deploy with this workflow
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -48,6 +54,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -76,6 +85,33 @@ jobs:
       - name: Verify uploaded full resource CDN
         if: env.ASSET_CDN_URL != ''
         run: node scripts/package-resource-cdn.mjs && npm run verify:resources
+
+      - name: Preserve resources referenced by cached pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep prior Pages assets, including the self-origin build before a CDN
+          # switch. Retain inherited files too, so an open lazy-loaded tool works.
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/pages.yml/runs?status=success&per_page=2" --jq '.workflow_runs[].id' > "${RUNNER_TEMP}/previous-page-runs.txt"
+          mapfile -t PREVIOUS_RUNS < "${RUNNER_TEMP}/previous-page-runs.txt"
+          PREVIOUS_ROOTS=()
+          for RUN_ID in "${PREVIOUS_RUNS[@]}"; do
+            PREVIOUS_DIR="${RUNNER_TEMP}/pages-${RUN_ID}"
+            mkdir -p "${PREVIOUS_DIR}/site"
+            gh run download "${RUN_ID}" --repo "${GITHUB_REPOSITORY}" --name github-pages --dir "${PREVIOUS_DIR}"
+            tar -xf "${PREVIOUS_DIR}/artifact.tar" -C "${PREVIOUS_DIR}/site"
+            PREVIOUS_ROOTS+=("${PREVIOUS_DIR}/site")
+          done
+          if [ "${#PREVIOUS_ROOTS[@]}" -gt 0 ]; then
+            # Read the deployment helper from the workflow revision even when
+            # redeploying an older application tag during incident recovery.
+            git show "${GITHUB_WORKFLOW_SHA}:scripts/retain-deployment-assets.mjs" > "${RUNNER_TEMP}/retain-deployment-assets.mjs"
+            node "${RUNNER_TEMP}/retain-deployment-assets.mjs" dist "${PREVIOUS_ROOTS[@]}"
+            git show "${GITHUB_WORKFLOW_SHA}:scripts/verify-dist.mjs" > scripts/verify-deployment-assets.mjs
+            node scripts/verify-deployment-assets.mjs
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

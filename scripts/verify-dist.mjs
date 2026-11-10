@@ -157,7 +157,8 @@ for (const path of files) {
 
 // Offline releases also carry ~18 MiB of lookup data, licenses and corresponding codec sources.
 const offlineDistribution = files.some((file) => relative(distRoot, file) === "OFFLINE_MANIFEST.json");
-const sizeLimitMiB = offlineDistribution ? 128 : 100;
+const retainedDeployment = files.some((file) => relative(distRoot, file) === "deployment-compatibility.json");
+const sizeLimitMiB = offlineDistribution || retainedDeployment ? 128 : 100;
 if (totalBytes > sizeLimitMiB * 1024 * 1024) errors.push(`release artifact exceeds ${sizeLimitMiB} MiB`);
 
 const generatedProjectAssets = files.filter((file) => {

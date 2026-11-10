@@ -61,3 +61,9 @@ Service-worker build identity includes version, shell and emitted asset identity
 A missing/mismatched resource fails validation. Use a standard same-origin build or a previously verified deployment rather than silently combining mismatched modules. Do not introduce a second React instance as a runtime fallback. CDN verification does not replace checking the final deployed HTML, tool routes and worker execution.
 
 Offline builds ignore both CDN variables throughout Vite and finalization. Test the offline ZIP independently; success in either website mode is not evidence of offline completeness.
+
+## Cached-page compatibility
+
+A deployment must retain prior immutable `/assets/` URLs. Switching between a self-origin build and CDN mode changes chunk names; cached HTML and already-open lazy-loaded workspaces can still reference the previous names even when the new CDN files are correct. The Pages workflow restores assets from its two preceding successful artifacts without replacing the active HTML, service worker or current worker bridges. It refreshes the cache fingerprint after merging and validates the final upload, with an explicit retained-deployment size budget. A full cache purge is not a substitute for retaining assets used by open clients.
+
+For recovery, the manual `source_ref` input can redeploy an existing application tag using the current deployment workflow. This allows restoring a validated CDN release without inventing a new resource prefix for a workflow-only repair. The deployment helper always comes from the workflow revision; application bytes come from the selected source revision.

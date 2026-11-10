@@ -2,6 +2,12 @@
 
 Forensics++ follows semantic versioning where practical. This file records user-visible changes and release engineering milestones.
 
+## Unreleased
+
+### Fixed
+- Pages 发布保留前两次成功部署中的静态资源，修复切换 CDN 后旧缓存页面仍引用同源 JS、产生 404 的问题；合并兼容资源后重新计算 Service Worker 缓存标识，并验证最终产物。
+- 手动部署支持指定已验证的应用 tag，在保持 CDN 版本一致的情况下修复发布流程。
+
 ## [1.0.0] - 2026-11-10
 
 ### Added
