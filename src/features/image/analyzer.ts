@@ -24,7 +24,7 @@ import type { BmpStructure, GifFrame, GifStructure, HeifStructure, ImageFinding,
 import { crc32, findEmbeddedFileSignatures, hexPreview, previewText, readAscii, shannonEntropy } from "../../utils/binary";
 import { formatBytes } from "../../utils/files";
 import { inspectHeif } from "./heif";
-import { knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
+import { pngChunkSeverity, knownPngChunks, parsePngFile, pngCriticalChunks } from "../png/parser";
 
 const imageObjectUrls = new Set<string>();
 type ImageMetadata = Record<string, unknown> | number;
@@ -1046,7 +1046,7 @@ function buildFormatLayer(bytes: Uint8Array, format: string, trailer: Uint8Array
     if (pngChunks[0]?.type !== "IHDR") findings.push({ level: "danger", title: "PNG IHDR is not first", detail: "Critical PNG chunk order is invalid; viewers may reject or recover differently." });
     if (!pngChunks.some((chunk) => chunk.type === "IEND")) findings.push({ level: "danger", title: "PNG IEND missing", detail: "The PNG logical end chunk was not parsed; the file may be truncated." });
     if (badChunks.length) findings.push({ level: "danger", title: "PNG CRC mismatch", detail: badChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
-    if (riskChunks.length) findings.push({ level: "warn", title: "Risky / private PNG chunks", detail: riskChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
+    if (riskChunks.length) findings.push({ level: riskChunks.some(chunk => pngChunkSeverity(chunk) === "danger") ? "danger" : "warn", title: riskChunks.some(chunk => pngChunkSeverity(chunk) === "danger") ? "Invalid PNG chunk structure" : "Risky / private PNG chunks", detail: riskChunks.map((chunk) => `${chunk.type}@${chunk.offset}`).join(", ") });
     if (textEntries.length) findings.push({ level: "info", title: "PNG text metadata", detail: textEntries.map((entry) => `${entry.keyword}: ${entry.text.slice(0, 80)}`).join(" / ") });
     const rows: Array<[string, string]> = [
       ["PNG chunks", String(pngChunks.length)],

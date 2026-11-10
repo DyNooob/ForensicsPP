@@ -26,11 +26,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
 import { ErrorNotice, FindingCard } from "../src/components/AnalysisNotice";
 import { buildFormatLayer } from "../src/features/image/analyzer";
-import { parsePngFile } from "../src/features/png/parser";
+import { parsePngFile, pngChunkRisks, pngChunkSeverity } from "../src/features/png/parser";
 import { crc32 } from "../src/utils/binary";
 
 afterEach(()=>setUiLang("zh"));
 describe("localized analysis presentation",()=>{
+  it.each(["invalid IHDR length", "invalid PNG dimensions", "unknown critical chunk"])("marks actual structural errors red even when CRC passes: %s",risk=>{
+    expect(pngChunkSeverity({ok:true,risk:[risk]})).toBe("danger");
+    expect(pngChunkSeverity({ok:true,risk:["private-use chunk"]})).toBe("warn");
+    const header=new Uint8Array(13);header.set([8,6,0,0,0],8);
+    expect(pngChunkRisks("IHDR",header,true,false,false,0)).toContain("invalid PNG dimensions");
+  });
   it("uses red error severity and Chinese copy while retaining offsets and raw analyzer data",()=>{
     const finding={level:"danger",title:"PNG CRC mismatch",detail:"IHDR@8, IDAT@33"};
     const html=renderToStaticMarkup(React.createElement(FindingCard,{finding}));

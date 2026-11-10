@@ -32,12 +32,23 @@ export function pngChunkRisks(type: string, data: Uint8Array, ok: boolean, ancil
   if (privateUse) risk.push("private-use chunk");
   if (pngCriticalChunks.has(type) && type !== "IDAT") {
     if (type === "IHDR" && data.length !== 13) risk.push("invalid IHDR length");
+    if (type === "IHDR" && data.length === 13) {
+      const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      const width = view.getUint32(0), height = view.getUint32(4);
+      if (!width || !height || width > 0x7fffffff || height > 0x7fffffff) risk.push("invalid PNG dimensions");
+      const validDepths: Record<number, number[]> = { 0: [1,2,4,8,16], 2: [8,16], 3: [1,2,4,8], 4: [8,16], 6: [8,16] };
+      if (!validDepths[data[9]]?.includes(data[8]) || data[10] !== 0 || data[11] !== 0 || data[12] > 1) risk.push("invalid PNG encoding fields");
+    }
     if (type === "IEND" && data.length !== 0) risk.push("invalid IEND length");
   }
   if (!pngCriticalChunks.has(type) && data.length > 1024 * 1024) risk.push("large non-image chunk");
   if (!pngCriticalChunks.has(type) && entropy > 7.35 && data.length > 2048) risk.push("high-entropy metadata");
   if (["tEXt", "zTXt", "iTXt"].includes(type) && /https?:\/\/|www\.|token|password|secret|key=|apikey|bearer|flag\{/i.test(previewText(data, 4096))) risk.push("metadata contains IOC/secret-like text");
   return risk;
+}
+
+export function pngChunkSeverity(chunk: Pick<PngChunkInfo, "ok" | "risk">): "danger" | "warn" | "info" {
+  return !chunk.ok || chunk.risk.some(risk => risk.startsWith("invalid ") || risk === "unknown critical chunk") ? "danger" : chunk.risk.length ? "warn" : "info";
 }
 
 export function parsePngFile(bytes: Uint8Array) {

@@ -24,6 +24,7 @@ export type NoticeLevel = "danger" | "warn" | "info" | "success" | "pending";
 export type PresentedFinding = { level: string; title: string; detail: string };
 // UI copy only. Evidence bytes, EXIF values, filenames, claims and exported analyzer results stay intact.
 const TITLES: Record<string, [string, string?]> = {
+  "Invalid PNG chunk structure": ["PNG 数据块结构异常", "发现无效的宽高、长度或编码字段，或未知关键数据块。请在结构页核对具体字段；CRC 匹配不代表这些字段有效。"],
   "PNG CRC mismatch": ["PNG 校验失败", "文件内容与保存的 CRC 校验值不一致，可能被修改或损坏。若 IHDR 异常，请进入修复页恢复真实宽高。"],
   "CRC mismatch": ["CRC 校验失败", "数据与校验值不一致。先保留原文件，再检查数据块和修复候选。"],
   "PNG IHDR is not first": ["PNG 文件头顺序异常", "IHDR 应为首个数据块，顺序异常可能导致解码失败。"],
@@ -168,6 +169,8 @@ const TEXT: Record<string, string> = {
   "XFA form": "XFA 表单",
   "Encryption dictionary": "加密字典",
   "Object stream": "对象数据流",
+  "invalid PNG dimensions": "PNG 宽高字段无效（零或超出格式范围）",
+  "invalid PNG encoding fields": "PNG 位深、颜色类型或编码字段无效",
   "CRC mismatch": "CRC 校验不一致", "unknown ancillary chunk": "未知辅助数据块", "unknown critical chunk": "未知关键数据块", "private-use chunk": "私有数据块", "invalid IHDR length": "IHDR 长度无效", "invalid IEND length": "IEND 长度无效", "large non-image chunk": "非像素数据块较大", "high-entropy metadata": "元数据熵较高", "metadata contains IOC/secret-like text": "元数据含疑似 IOC 或敏感文本",
   "Critical PNG chunk order is invalid; viewers may reject or recover differently.": "PNG 关键块顺序无效，不同查看器可能拒绝打开或采用不同恢复方式。",
   "The PNG logical end chunk was not parsed; the file may be truncated.": "未解析到 PNG 结束块，文件可能被截断。",
@@ -260,6 +263,7 @@ export function sortFindings<T extends PresentedFinding>(findings: T[]) {
 
 /** Only status/check rows receive value translations and severity. User data columns do not. */
 export function statusPresentation(label: string, value: string, english = getUiLang() === "en") {
+  if (/^(?:CRC errors|CRC 错误数)$/i.test(label) && /^\d+$/.test(value)) return { value, level: Number(value) > 0 ? "danger" as const : undefined };
   const controlled = /^(?:CRC|checksum|header checksum|signature status|validation|display|state|status|decode|pixel decode|IEND|repair status|校验和|文件头校验和|签名状态|校验|显示状态|状态|像素解码|修复状态)$/i.test(label.trim());
   if (!controlled) return { value, level: undefined };
   const vocabulary: Record<string, string> = { "OK": "通过", "Passed": "通过", "Present": "存在", "Missing": "缺失", "Not decoded": "无法解码", "decoded": "解码通过", "failed": "失败", "valid": "有效", "invalid": "无效", "unsupported": "暂不支持", "not checked": "尚未检查", "unknown": "未知", "yes": "是", "no": "否" };

@@ -22,6 +22,7 @@
 import { AnalysisNotice, FindingCard, ErrorNotice } from "../components/AnalysisNotice";
 import { copyText } from "../utils/clipboard";
 import { localizeAnalysisText, sortFindings } from "../core/analysisPresentation";
+import { pngChunkSeverity } from "../features/png/parser";
 import { dimensionRecoveryMessage } from "../features/png/presentation";
 import React from "react";
 import { PasteButton } from "../components/ClipboardImport";
@@ -801,7 +802,7 @@ export function ImageTool({ t, services, active = true }: { t: (typeof copy)["zh
                   [isEnglish ? "Risk / private chunks" : "风险 / 私有块", String(pngRiskChunks.length)],
                   [isEnglish ? "Trailer" : "尾部数据", formatBytes(imageInfo.trailerBytes.length)]
                 ]} />
-                {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <FindingCard key={`png-risk-${chunk.offset}-${chunk.type}`} english={isEnglish} finding={{ level: chunk.ok ? "warn" : "danger", title: `${chunk.type} @ 0x${chunk.offset.toString(16).toUpperCase()}`, detail: chunk.risk.map(risk => localizeAnalysisText(risk, isEnglish)).join("；") }} />)}</div>}
+                {pngRiskChunks.length > 0 && <div className="finding-list">{pngRiskChunks.slice(0, 32).map((chunk) => <FindingCard key={`png-risk-${chunk.offset}-${chunk.type}`} english={isEnglish} finding={{ level: pngChunkSeverity(chunk), title: `${chunk.type} @ 0x${chunk.offset.toString(16).toUpperCase()}`, detail: chunk.risk.map(risk => localizeAnalysisText(risk, isEnglish)).join("；") }} />)}</div>}
                 <div className="table-scroll image-chunk-scroll"><table className="data-table"><thead><tr><th>#</th><th>Chunk</th><th>{isEnglish ? "Offset" : "偏移"}</th><th>{isEnglish ? "Length" : "长度"}</th><th>CRC</th><th>{isEnglish ? "Flags" : "属性"}</th></tr></thead><tbody>{imageInfo.pngChunks.map((chunk, index) => <tr className={chunk.ok ? "" : "analysis-row-danger"} key={`${chunk.offset}-${chunk.type}`}><td>{index + 1}</td><td>{chunk.type}</td><td>0x{chunk.offset.toString(16).toUpperCase()}</td><td>{formatBytes(chunk.length)}</td><td>{chunk.ok ? (isEnglish ? "Passed" : "通过") : <><strong className="analysis-text-danger">{isEnglish ? "CRC mismatch" : "校验失败"}</strong><br/>{isEnglish ? "Stored" : "保存值"} {chunk.crc}<br/>{isEnglish ? "Computed" : "计算值"} {chunk.computed}</>}</td><td>{[chunk.ancillary ? (isEnglish ? "ancillary" : "辅助块") : (isEnglish ? "critical" : "关键块"), chunk.privateUse ? (isEnglish ? "private" : "私有") : (isEnglish ? "public" : "公开"), chunk.safeToCopy ? (isEnglish ? "safe-copy" : "可安全复制") : (isEnglish ? "unsafe-copy" : "不可随意复制")].join(" · ")}</td></tr>)}</tbody></table></div>
               </>}
 
