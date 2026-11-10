@@ -168,7 +168,7 @@ export function getToolTitle(tool: ToolDefinition, lang: "zh" | "en", translatio
 export const projectLinks = { repo: "https://github.com/DyNooob/ForensicsPP" } as const;
 
 export const storagePrefix = "forensicspp:";
-export const appVersion = "1.0.1";
+export const appVersion = "1.0.2";
 /** Date this version was published (YYYY-MM-DD). Bump together with `appVersion` on each release. */
 export const appReleaseDate = "2026-11-10";
 /** Where users download new releases. */

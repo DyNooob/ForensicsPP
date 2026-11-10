@@ -6,11 +6,8 @@
 
 | Symptom | Check and action |
 | --- | --- |
-| HTML opens but analysis fails | Check whether the URL starts with `file://`. Use `start_server.py` or an existing local HTTP server for Worker/WASM analysis. |
+| HTML opens but analysis fails | Use the complete v1.0.2+ offline ZIP and current Chrome/Edge. Open its `index.html` directly. Older v1.0.0/v1.0.1 packages required local HTTP; download the replacement instead. |
 | Blank page or missing module | Extract the whole ZIP. Check failed requests and MIME types in browser developer tools. A server must return the requested JS/WASM, not rewrite a missing asset to HTML. |
-| Python command not found | Use an already installed Python 3 runtime, `py -3` on Windows where available, or an existing local static HTTP server. The package installs none automatically. |
-| Port already in use | Run `python3 start_server.py --port 8766` and use the printed URL. |
-| macOS launcher is not executable | Run `python3 start_server.py` directly, or restore execute permission for the trusted extracted `.command` file. |
 | Website deep link becomes a server 404 | Configure SPA fallback for non-generated tool paths. Do not apply that fallback to missing JS/WASM paths. See [hosting](CDN.md). |
 | Old version remains visible | Export important work first, reload, and inspect the displayed version. Clear application/site caches only after understanding that supported local workspace data may be lost. |
 

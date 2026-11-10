@@ -21,12 +21,14 @@
 
 import { launchSmokeBrowser, prepareSmokePage, serveSmokeDist } from "./browser-smoke.mjs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 const root = resolve(process.env.SMOKE_ROOT || "dist");
 const offline = existsSync(resolve(root, "OFFLINE_MANIFEST.json"));
-const server = await serveSmokeDist(root);
+const server = offline ? null : await serveSmokeDist(root);
+const entry = offline ? pathToFileURL(resolve(root, "index.html")).href : server.base + "/";
 let browser;
 try {
   await mkdir("tmp/image-recovery-qa", { recursive: true });
@@ -47,7 +49,7 @@ try {
   page.on("pageerror",e=>errors.push(e.message));
   page.on("response",r=>{ if(r.status()>=400)failed.push(`${r.status()} ${r.url()}`); });
   await page.setViewport({ width: 1440, height: 1000 });
-  await page.goto(`${server.base}/${offline ? "#image" : "tools/image-forensics/"}`,{waitUntil:"networkidle2"});
+  await page.goto(`${entry}${offline ? "#image" : "tools/image-forensics/"}`,{waitUntil:"networkidle2"});
   await page.waitForSelector('[data-tool-id="image"] input[type=file]');
   await page.evaluate(()=>[...document.querySelectorAll('.language-switch button')].find(b=>b.textContent.trim()==="中文").click());
   const upload=async (huge=false)=>{
@@ -106,7 +108,7 @@ try {
   console.log("Checking oversized dimensions");
   await upload(true);await verifyRecovered();
   console.log("Checking Chinese navigation");
-  await page.goto(`${server.base}/#chinese`,{waitUntil:"networkidle2"});
+  await page.goto(`${entry}#chinese`,{waitUntil:"networkidle2"});
   await page.waitForSelector('[data-tool-id="chinese"] textarea:not([readonly])');
   assert.equal(await page.$eval('[data-tool-id="chinese"]',el=>el.hidden),false);
   await page.$eval('.chinese-converter textarea:not([readonly])',(el)=>{
@@ -120,9 +122,9 @@ try {
   await page.waitForSelector('.tool-nav [aria-current="page"]');
   await page.$eval('.tool-nav [aria-current="page"]',el=>el.scrollIntoView({block:"center"}));
   await page.screenshot({path:resolve("tmp/image-recovery-qa/chinese-sidebar.png"),fullPage:true});
-  await page.goto(`${server.base}/#codec`,{waitUntil:"networkidle2"});
+  await page.goto(`${entry}#codec`,{waitUntil:"networkidle2"});
   await page.waitForSelector('[data-tool-id="codec"] .codec-simple-panel');
   assert.equal(await page.$$eval('[data-tool-id="codec"] .chinese-converter',els=>els.length),0);
   assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
   console.log("Image recovery browser regression passed: Chinese severity, cropped and oversized IHDR, exact original PNG bytes and pixels, mobile layout, dedicated Chinese sidebar tool and offline keyboard conversion.");
-} finally { await browser?.close(); await server.close(); }
+} finally { await browser?.close(); if (server) await server.close(); }

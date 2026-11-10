@@ -27,7 +27,11 @@ import { createHash } from "node:crypto";
 export async function verifyOfflineDistribution(root) {
   const manifest = JSON.parse(await readFile(join(root, "OFFLINE_MANIFEST.json"), "utf8"));
   if (manifest.distribution !== "offline" || manifest.externalRuntimeResources !== false) throw new Error("Not a verified offline distribution");
-  for (const path of ["start_server.py", "Start-ForensicsPP.command", "Start-ForensicsPP.bat", "OFFLINE-README.txt", "LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "licenses/DEPENDENCIES.json", "sources/heic-sources.tar.gz"]) await access(join(root, path));
+  for (const path of ["OFFLINE-README.txt", "LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "licenses/DEPENDENCIES.json", "sources/heic-sources.tar.gz"]) await access(join(root, path));
+  if (manifest.launch !== "file" || manifest.requiresLocalServer !== false) throw new Error("Offline package must support direct file:// launch");
+  for (const name of ["start_server.py", "Start-ForensicsPP.command", "Start-ForensicsPP.bat"]) {
+    if ((await readdir(root)).includes(name)) throw new Error(`Unexpected server launcher: ${name}`);
+  }
   for (const pack of manifest.lookup) {
     const bytes = await readFile(join(root, pack.path));
     if (bytes.length !== pack.bytes || createHash("sha256").update(bytes).digest("hex") !== pack.sha256) throw new Error(`Offline data checksum mismatch: ${pack.path}`);

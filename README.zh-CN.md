@@ -7,17 +7,17 @@
 
 Forensics++ 将 **36 个工作台** 集中在一个静态 Web 应用中，覆盖图片、文件、数据库、日志、邮件、网络、系统痕迹和文本转换。核心分析在当前浏览器中执行，无需 Forensics++ 分析后端；已实现的重型任务由 Web Worker 承载。界面支持简体中文和英文。
 
-**1.0.1 修订正式版**提供完整离线包，补齐 PNG 宽高恢复、中文异常分级与图片结果导航；简繁转换已成为左侧独立工具。[查看完整发布说明](docs/releases/v1.0.1.md)。
+**1.0.2 正式版**支持解压后直接双击 `index.html`，无需 Python、本地服务器或首次联网；保留 PNG 宽高恢复、中文异常分级和左侧独立简繁转换工具。[查看完整发布说明](docs/releases/v1.0.2.md)。
 
 ## 选择入口
 
 | 你要做什么 | 从这里开始 |
 | --- | --- |
 | 立即检查文件或文本 | [在线工作台](https://www.forensicspp.com/) |
-| 在竞赛、隔离网或离线环境使用 | [下载 1.0 离线包](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1) · [离线指南](docs/OFFLINE.md) |
+| 在竞赛、隔离网或离线环境使用 | [下载 1.0 离线包](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2) · [离线指南](docs/OFFLINE.md) |
 | 了解工具输入与结果边界 | [工具手册](docs/TOOLS.md) |
 | 从源码开发或添加分析器 | [开发指南](docs/DEVELOPMENT.md) · [架构说明](docs/ARCHITECTURE.md) |
-| 了解测试覆盖 | [验证体系](docs/VALIDATION.md) · [1.0 体检记录](docs/releases/v1.0.1-audit.md) |
+| 了解测试覆盖 | [验证体系](docs/VALIDATION.md) · [1.0 体检记录](docs/releases/v1.0.2-audit.md) |
 | 提交问题或报告漏洞 | [GitHub Issues](https://github.com/DyNooob/ForensicsPP/issues) · [安全政策](SECURITY.md) |
 
 ## 主要能力
@@ -38,17 +38,11 @@ Forensics++ 将 **36 个工作台** 集中在一个静态 Web 应用中，覆盖
 
 ## 使用完整离线包
 
-1. 从 [GitHub Release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1) 下载 `ForensicsPP-v1.0.1-offline-static.zip` 和 `SHA256SUMS-v1.0.1.txt`。
+1. 从 [GitHub Release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2) 下载 `ForensicsPP-v1.0.2-offline-static.zip` 和 `SHA256SUMS-v1.0.2.txt`。
 2. 校验 SHA-256，完整解压整个文件夹。
-3. 本机预装 Python 3 后，在解压目录执行：
+3. 使用当前版本的 Chrome 或 Edge，双击解压目录里的 `index.html` 即可使用，地址栏为 `file://`。
 
-   ```sh
-   python3 start_server.py
-   ```
-
-4. 打开 `http://127.0.0.1:8765/`。Windows 可运行 `Start-ForensicsPP.bat`，macOS 可运行 `Start-ForensicsPP.command`。
-
-启动器仅使用 Python 标准库，只监听本机回环地址，不安装 pip/npm 依赖。Python 运行时不随包分发；也可使用已有的本地静态 HTTP 服务器。完整 Worker/WASM 分析需要 HTTP，不能只双击 `index.html`。
+无需安装 Python 或 Node.js，无需命令行、本地服务器或联网。保留完整目录，供 CyberChef 等随包资源使用。
 
 **离线 ZIP 已包含所有运行所需 JS、CSS、WASM、Worker、CyberChef、OpenCC 词库和三类归属地数据库，首次使用无需联网或预热缓存。** 离线页面限制外部运行资源请求。详细校验、启动和重建步骤见[离线指南](docs/OFFLINE.md)。
 

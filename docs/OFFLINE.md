@@ -10,55 +10,41 @@ The website build has a separate policy and may use configured CDNs or on-demand
 
 ## Download and verify / 下载与校验
 
-Download the offline ZIP and `SHA256SUMS-v1.0.1.txt` from the [1.0.0 release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1).
+Download the offline ZIP and `SHA256SUMS-v1.0.2.txt` from the [1.0.0 release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2).
 
 Run in the directory containing both files:
 
 ```sh
 # macOS
-shasum -a 256 ForensicsPP-v1.0.1-offline-static.zip
+shasum -a 256 ForensicsPP-v1.0.2-offline-static.zip
 # Linux
-sha256sum -c SHA256SUMS-v1.0.1.txt
+sha256sum -c SHA256SUMS-v1.0.2.txt
 ```
 
 Windows PowerShell:
 
 ```powershell
-Get-FileHash .\ForensicsPP-v1.0.1-offline-static.zip -Algorithm SHA256
+Get-FileHash .\ForensicsPP-v1.0.2-offline-static.zip -Algorithm SHA256
 ```
 
 Compare the complete digest with the checksum file. A checksum detects changed bytes; its trust depends on obtaining the checksum from the intended release. There is no separate signed-checksum claim for this version.
 
 ## Launch / 启动
 
-Extract the entire folder, then run inside it:
+Extract the complete folder and double-click `index.html` in current Chrome or Edge. It runs under `file://`; no Python, Node.js, terminal or local server is required.
 
-```sh
-python3 start_server.py
-```
-
-Windows: `Start-ForensicsPP.bat` or `py -3 start_server.py`. macOS: `Start-ForensicsPP.command`. If execution permission is lost during extraction, run `python3 start_server.py` directly.
-
-The launcher uses preinstalled Python 3 standard-library modules, installs nothing and binds only to `127.0.0.1`. The default URL is `http://127.0.0.1:8765/`. Keep the terminal open; press `Ctrl+C` to stop.
-
-```sh
-python3 start_server.py --port 8766
-python3 start_server.py --no-browser
-```
-
-Any existing static HTTP server can instead serve the complete package from its root. Do not expose sensitive evidence through a shared server directory. Full Worker/WASM execution requires HTTP; `file://` is suitable only for the limited shell/basic-tool compatibility that browsers permit.
+The application creates self-contained Blob workers. WASM modules and lookup dictionaries are embedded in the runtime; browser fetches of local `file://` assets are not needed for analysis. Keep the complete folder for CyberChef, legal notices and codec sources. An existing static host can also serve the same files.
 
 ## Package layout
 
 | Path | Purpose |
 | --- | --- |
-| `index.html`, `*.worker-*.js`, other emitted assets | Application and analysis runtime |
+| `index.html`, emitted static assets | Application and analysis runtime |
 | `cyberchef/` | Bundled CyberChef engine, modules and upstream notices |
 | `lookup/` | Fixed-version lookup data and provenance manifest |
 | `licenses/`, `THIRD_PARTY_NOTICES.txt`, `LICENSE.txt` | Dependency/data and project licensing |
 | `sources/heic-sources.tar.gz` | Codec corresponding sources and build instructions |
 | `OFFLINE_MANIFEST.json` | Distribution identity and lookup/source integrity records |
-| `start_server.py`, platform launchers | Local serving without package installation |
 | `RELEASE_NOTES.md`, `TOOL_AUDIT.md` | Release behavior and validation scope |
 
 ## Network and storage boundaries
@@ -74,7 +60,7 @@ Prerequisites: the source checkout, Node.js 22.13+, npm 10+ and the locked depen
 Import the fixed data and codec sources from an already downloaded, checksum-verified offline release:
 
 ```sh
-npm run prepare:offline -- --package /absolute/path/ForensicsPP-v1.0.1-offline-static.zip
+npm run prepare:offline -- --package /absolute/path/ForensicsPP-v1.0.2-offline-static.zip
 npm run build:offline
 node scripts/verify-offline.mjs
 npm run smoke:offline
@@ -92,11 +78,11 @@ VENDOR_CDN_URL=https://must-not-load.invalid \
 ASSET_CDN_URL=https://must-not-load.invalid npm run build:offline
 ```
 
-This verifies resource selection; it does not download from the example host. Browser validation uses a closed proxy for non-loopback traffic, a fresh browser context, local data queries and representative worker/WASM operations. See [validation](VALIDATION.md) for the limits of that check.
+This verifies resource selection; it does not download from the example host. Browser validation opens the package directly under `file://` with a closed network proxy, a fresh browser context, local data queries and representative worker/WASM operations. No server is started for that test. See [validation](VALIDATION.md) for the limits of that check.
 
 ## Known boundaries
 
-- Python is a launcher prerequisite, not included runtime software.
+- Use a current Chrome or Edge browser. Browser security restrictions must not be disabled.
 - Lookup data is static and dated; it is not live positioning or authoritative ownership information.
 - HEIC support is best effort within decoder/resource limits; damaged or unusual encodings may not preview.
 - Tool size limits and browser memory limits still apply when fully offline.

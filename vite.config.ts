@@ -21,7 +21,7 @@
 
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { standalonePlugin } from "./scripts/standalone-plugin";
+import { standalonePlugin, offlineRuntimePlugin } from "./scripts/standalone-plugin";
 import { normalizeVendorCdn, vendorAssetUrl, vendorCdnPlugin } from "./scripts/vendor-cdn";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -71,15 +71,8 @@ function copyrightCssPlugin(): Plugin {
   };
 }
 
-// Opt-in standalone build (SINGLE_FILE=1). Inlines the main-thread app
-// JS/CSS into a single index.html, but Web Workers (per-tool analyzers) are
-// still emitted as separate *.worker-*.js files. Browsers refuse to load
-// Workers from file:// (origin "null"), so worker-backed forensic tools
-// require serving over HTTP (npm run preview or any static server). This is
-// an offline distribution, NOT a single self-contained file.
-// Inlining forces inlineDynamicImports=true, which conflicts
-// with manualChunks, so we drop manualChunks in this mode. The default
-// `npm run build` stays multi-chunk and is unaffected.
+// Portable output embeds app assets and uses self-contained Blob workers, so
+// index.html runs directly under file:// without a local HTTP server.
 const singleFileBuild = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SINGLE_FILE === "1";
 const offlineBuild = singleFileBuild || process.env.OFFLINE_BUILD === "1";
 // Opt in only after uploading the matching vendor package. Offline/standalone
@@ -111,7 +104,7 @@ export default defineConfig({
     // with the build mode. Missing before — the banner silently never showed.
     "import.meta.env.VITE_PREVIEW": JSON.stringify(process.env.VITE_PREVIEW === "1" || process.env.VITE_PREVIEW === "true" ? "1" : "0")
   },
-  plugins: [react(), copyrightCssPlugin(), ...(resourceBase || vendorCdn ? [vendorCdnPlugin(resourceBase || vendorCdn, Boolean(resourceBase))] : []), ...(singleFileBuild ? [standalonePlugin()] : [])],
+  plugins: [react(), copyrightCssPlugin(), ...(resourceBase || vendorCdn ? [vendorCdnPlugin(resourceBase || vendorCdn, Boolean(resourceBase))] : []), ...(singleFileBuild ? [offlineRuntimePlugin(), standalonePlugin()] : [])],
   experimental: resourceBase || vendorCdn ? {
     renderBuiltUrl(filename, { hostType }) {
       if (resourceBase && filename.startsWith("assets/")) {
@@ -147,10 +140,12 @@ export default defineConfig({
     }
   },
   worker: {
-    format: "es",
+    format: singleFileBuild ? "iife" : "es",
+    plugins: () => singleFileBuild ? [offlineRuntimePlugin()] : [],
     rollupOptions: {
       output: {
-        banner: copyrightBanner
+        banner: copyrightBanner,
+        ...(singleFileBuild ? { inlineDynamicImports: true } : {})
       }
     }
   },

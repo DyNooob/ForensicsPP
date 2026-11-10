@@ -16,11 +16,11 @@ Important included components:
 | --- | --- | --- |
 | React, Ant Design and many parser/UI libraries | Their respective MIT/other upstream terms | Dependency inventory and copied license files |
 | OpenCC JS | MIT; incorporated dictionary data under Apache-2.0 | `licenses/opencc-js-LICENSE.txt`, `licenses/opencc-js-THIRD_PARTY_LICENSES.txt` |
-| heic-to, libheif, libde265 | Upstream LGPL terms as included | License texts, separate decoder worker and `sources/heic-sources.tar.gz` |
+| heic-to, libheif, libde265 | Upstream LGPL terms as included | License texts, isolated decoder worker and `sources/heic-sources.tar.gz` |
 | CyberChef | Apache-2.0; its bundled third-party notices also apply | `cyberchef/LICENSE.txt`, `UPSTREAM.txt`, `assets/main.js.LICENSE.txt` |
 | YARA-X and other WASM components | Their upstream license terms | Dependency notices and bundled runtime files |
 
-The separate HEIC worker is loaded for preview decoding and can be rebuilt/replaced. Its corresponding-source archive includes the recorded upstream codec sources and build instructions. Build tools remain build-time prerequisites. Offline packaging also records its HTML-policy modifications to CyberChef separately from unchanged upstream engine files.
+The HEIC worker is loaded for preview decoding. Website builds emit it separately; portable builds embed a self-contained Blob worker. Rebuild the portable package from the tagged project source to replace that decoder; `sources/PORTABLE-BUILD.txt` documents the packaging change. Its corresponding-source archive includes the recorded upstream codec sources and build instructions. Build tools remain build-time prerequisites. Offline packaging also records its HTML-policy modifications to CyberChef separately from unchanged upstream engine files.
 
 ## Lookup datasets
 

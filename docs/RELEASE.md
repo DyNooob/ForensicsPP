@@ -48,11 +48,11 @@ npm run release:package -- --variant offline
 
 For an initial codec/data update, curate and hash the new local inputs before this phase. Follow the upstream license/build requirements and update provenance. Do not make `build:offline` fetch a missing input.
 
-The package must contain local runtime resources, the three fixed datasets, license inventory, codec sources, loopback launcher and readable usage/release/audit instructions. Variant validation rejects a website/CDN artifact being labeled offline.
+The package must contain local runtime resources, the three fixed datasets, license inventory, codec sources and readable usage/release/audit instructions. Variant validation rejects a website/CDN artifact being labeled offline.
 
 ## 4. Verify the delivered ZIP
 
-Independently extract the final ZIP. Verify SHA-256 against the version-specific checksum file, expected member count/paths and launcher executable mode. Run offline browser checks with `OFFLINE_ROOT=<extracted package>` and start the actual packaged launcher. Confirm cold-cache queries and worker/WASM execution with external traffic blocked.
+Independently extract the final ZIP. Verify SHA-256 against the version-specific checksum file, expected member count/paths and absence of server launchers. Run offline browser checks with `OFFLINE_ROOT=<extracted package>`; they must open `index.html` directly with `file://` and must not start a server. Confirm cold-cache queries and worker/WASM execution with external traffic blocked.
 
 Do not assume `dist/` validation covers archive assembly. If only non-runtime packaging metadata changes, demonstrate that the verified extracted runtime bytes still match the final archive.
 

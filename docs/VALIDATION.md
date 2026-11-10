@@ -59,7 +59,7 @@ npm run smoke:standalone
 npm run release:package -- --variant offline
 ```
 
-The offline smoke starts with fresh browser state and sends non-loopback browser/worker HTTP traffic through a closed proxy. It visits all visible tools and executes bundled lookup queries, Chinese conversion, hashing, SQLite WASM and a CyberChef recipe. `HEIC_FIXTURE=/absolute/path/to/fixture.heic` enables the recorded iPhone fixture-specific assertion; that fixture is an optional local test input, not a hidden build download.
+The offline smoke opens `index.html` directly under `file://`, without starting a local HTTP server. It starts with fresh browser state and sends non-loopback browser/worker HTTP traffic through a closed proxy. It visits all visible tools and executes bundled lookup queries, Chinese conversion, hashing, SQLite/YARA WASM, a PDF document and a CyberChef recipe. `HEIC_FIXTURE=/absolute/path/to/fixture.heic` enables the recorded iPhone fixture-specific assertion; that fixture is an optional local test input, not a hidden build download.
 
 `OFFLINE_ROOT=/absolute/path/to/extracted/package` tests independently extracted bytes. Verify the final ZIP checksum, members and launcher mode, and repeat key execution against the extraction rather than assuming a successful build proves correct packaging. The test's no-external-request result covers the app flows it executes, not unrelated browser/OS traffic.
 

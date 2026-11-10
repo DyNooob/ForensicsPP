@@ -28,7 +28,7 @@ export const offlineCsp = "default-src 'self' data: blob:; script-src 'self' 'un
 
 export async function prepareOfflineDistribution(root, projectRoot) {
   await prepareLookupData(root, { allowDownload: false });
-  await cp(join(projectRoot, "packaging/portable"), root, { recursive: true });
+  await cp(join(projectRoot, "packaging/portable/OFFLINE-README.txt"), join(root, "OFFLINE-README.txt"));
   await cp(join(projectRoot, "LICENSE"), join(root, "LICENSE.txt"));
   await mkdir(join(root, "licenses"), { recursive: true });
   const lock = JSON.parse(await readFile(join(projectRoot, "package-lock.json"), "utf8"));
@@ -60,12 +60,13 @@ export async function prepareOfflineDistribution(root, projectRoot) {
     "Full license texts and the dependency inventory are under licenses/.",
     "CyberChef source/version and Apache-2.0 notices: cyberchef/UPSTREAM.txt, cyberchef/LICENSE.txt and cyberchef/assets/main.js.LICENSE.txt.",
     "OpenCC JS: MIT; bundled OpenCC dictionary data: Apache-2.0 (licenses/opencc-js-THIRD_PARTY_LICENSES.txt).",
-    "heic-to 1.6.7, libheif 1.23.7 and libde265 1.0.16: LGPL-3.0-or-later. Corresponding source and build instructions: sources/heic-sources.tar.gz. The separately emitted heic.worker-*.js can be rebuilt/replaced independently.",
+    "heic-to 1.6.7, libheif 1.23.7 and libde265 1.0.16: LGPL-3.0-or-later. Corresponding source and build instructions: sources/heic-sources.tar.gz. The embedded HEIC worker can be rebuilt with the provided source and the project build instructions.",
     "Lookup data versions, authors, hashes and original source URLs: lookup/SOURCES.json; upstream license texts: licenses/lookup/.", "",
     ...inventory.map((item) => `${item.name}@${item.version} — ${typeof item.license === "string" ? item.license : JSON.stringify(item.license)} — ${item.files.join(", ") || "see package metadata/upstream"}`)
   ].join("\n") + "\n");
   await mkdir(join(root, "sources"), { recursive: true });
   await cp(join(projectRoot, "release/offline-inputs/heic-sources.tar.gz"), join(root, "sources/heic-sources.tar.gz"));
+  await writeFile(join(root, "sources/PORTABLE-BUILD.txt"), "Portable packaging (v1.0.2+): the decoder sources and versions in heic-sources.tar.gz are unchanged. The archive's historical statement about a separate emitted worker applies to website builds. For this portable build, scripts/standalone-plugin.ts bundles src/features/image/heic.worker.ts into a self-contained Blob worker in index.html. Rebuild with the tagged ForensicsPP source, locked dependencies and local inputs, then run npm run build:offline. Replacing the HEIC sources and rebuilding replaces the embedded decoder. No application build inputs are downloaded by that command.\n");
   // Every HTML entry carries the same restriction, including the independently opened CyberChef.
   const secureHtml = async (folder) => {
     for (const entry of await readdir(folder, { withFileTypes: true })) {
@@ -84,7 +85,7 @@ export async function prepareOfflineDistribution(root, projectRoot) {
   await writeFile(join(root, "README.md"), await readFile(join(root, "OFFLINE-README.txt")));
   const packs = JSON.parse(await readFile(join(root, "lookup/SOURCES.json"), "utf8"));
   await writeFile(join(root, "OFFLINE_MANIFEST.json"), JSON.stringify({
-    version: lock.version, distribution: "offline", externalRuntimeResources: false, contentSecurityPolicy: offlineCsp,
+    version: lock.version, distribution: "offline", launch: "file", requiresLocalServer: false, externalRuntimeResources: false, contentSecurityPolicy: offlineCsp,
     lookup: Object.values(packs).map((pack) => ({ path: pack.path, sha256: pack.sha256, bytes: pack.bytes })),
     heicSourcesSha256: createHash("sha256").update(await readFile(join(root, "sources/heic-sources.tar.gz"))).digest("hex")
   }, null, 2));

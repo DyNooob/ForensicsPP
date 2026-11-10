@@ -7,10 +7,10 @@
 | Distribution | Requirements | Network behavior |
 | --- | --- | --- |
 | Hosted website | Current browser | Loads the deployed application; configured CDN and lookup requests may occur |
-| Complete offline ZIP | Current browser + existing local HTTP server, or Python 3 launcher | Runtime resources and lookup packs are local; no first-use Internet requirement |
+| Complete offline ZIP | Current Chrome/Edge; double-click `index.html` | Runtime resources and lookup packs are local; no first-use Internet requirement |
 | Source checkout | Node.js 22.13+, npm 10+, browser | Dependency installation is a preparation step; `npm run dev` runs the source |
 
-隔离网、离线竞赛和本地检查请使用 Release 中名字带 `offline-static.zip` 的完整包，完整解压并使用本地 HTTP 启动。GitHub 自动提供的 “Source code” ZIP 是源码快照，不是可直接运行的发布包。
+隔离网、离线竞赛和本地检查请使用 Release 中名字带 `offline-static.zip` 的完整包，完整解压并直接双击 `index.html`。GitHub 自动提供的 “Source code” ZIP 是源码快照，不是可直接运行的发布包。
 
 ## 2. Open a workspace / 打开工具
 

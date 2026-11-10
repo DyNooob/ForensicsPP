@@ -3,7 +3,7 @@
   <h1>Forensics++</h1>
   <p>A browser-based workbench for digital forensics, incident-response triage and CTF analysis.</p>
   <p>
-    <a href="https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1"><img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-4457A6" /></a>
+    <a href="https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2"><img alt="Version 1.0.2" src="https://img.shields.io/badge/version-1.0.2-4457A6" /></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1E6B4B" /></a>
     <a href=".github/workflows/ci.yml"><img alt="Node.js 22.13 or later" src="https://img.shields.io/badge/Node.js-%E2%89%A522.13-339933" /></a>
   </p>
@@ -12,17 +12,17 @@
 
 Forensics++ brings 36 workspaces into one static application: inspect files and images, examine databases and logs, extract network and email artifacts, and transform text without an analysis backend. Parsers run in the browser; expensive operations use Web Workers where implemented. The interface supports English and Simplified Chinese.
 
-Version **1.0.1** adds verified PNG dimension recovery, localized severity levels and clearer image results, and moves Chinese script conversion into its own sidebar workspace. Read the [release notes](docs/releases/v1.0.1.md) for changes, verification and compatibility limits.
+Version **1.0.2** makes the offline package directly usable by opening `index.html`: no Python, local server or first-use downloads. It retains PNG dimension recovery, localized findings and the dedicated Chinese conversion workspace. Read the [release notes](docs/releases/v1.0.2.md) for changes, verification and compatibility limits.
 
 ## Start here
 
 | Your task | Entry point |
 | --- | --- |
 | Examine data immediately | [Online workbench](https://www.forensicspp.com/) |
-| Work in an isolated environment | [Offline release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1) and [offline guide](docs/OFFLINE.md) |
+| Work in an isolated environment | [Offline release](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2) and [offline guide](docs/OFFLINE.md) |
 | Choose a tool | [Tool reference](docs/TOOLS.md) |
 | Develop or add a parser | [Development guide](docs/DEVELOPMENT.md) and [architecture](docs/ARCHITECTURE.md) |
-| Understand checks and limitations | [Validation](docs/VALIDATION.md) and [1.0 audit](docs/releases/v1.0.1-audit.md) |
+| Understand checks and limitations | [Validation](docs/VALIDATION.md) and [1.0 audit](docs/releases/v1.0.2-audit.md) |
 | Report a defect or vulnerability | [Issues](https://github.com/DyNooob/ForensicsPP/issues) · [security policy](SECURITY.md) |
 
 ## What you can examine
@@ -43,17 +43,11 @@ Coverage varies by tool. A parsed field or heuristic finding is a lead to review
 
 ## Run the offline release
 
-1. Download `ForensicsPP-v1.0.1-offline-static.zip` and `SHA256SUMS-v1.0.1.txt` from the [release assets](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.1).
+1. Download `ForensicsPP-v1.0.2-offline-static.zip` and `SHA256SUMS-v1.0.2.txt` from the [release assets](https://github.com/DyNooob/ForensicsPP/releases/tag/v1.0.2).
 2. Verify the ZIP checksum and extract the complete folder.
-3. With Python 3 already installed, run:
+3. Open the extracted `index.html` in current Chrome or Edge. The address starts with `file://`.
 
-   ```sh
-   python3 start_server.py
-   ```
-
-4. Open `http://127.0.0.1:8765/`. Windows users can run `Start-ForensicsPP.bat`; macOS users can run `Start-ForensicsPP.command`.
-
-The launcher uses only the Python standard library, binds to loopback and installs nothing. Python itself is not bundled. Any suitable local static HTTP server can serve the package from its root. Opening `index.html` through `file://` does not provide full Worker/WASM functionality.
+No Python, Node.js, terminal, local server or Internet connection is needed. Keep the complete directory, including the bundled CyberChef resources.
 
 **The offline ZIP includes its JavaScript, CSS, WASM, workers, CyberChef, OpenCC dictionaries and three lookup databases. First use does not require Internet access or a warm browser cache.** External runtime resource requests are restricted by the packaged HTML policy. [Offline operation and rebuilding →](docs/OFFLINE.md)
 

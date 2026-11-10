@@ -91,7 +91,7 @@ The `.fppcase` writer emits schema 1.1 and accepts 1.0/1.1 on import. Internal m
 
 ## Website and offline builds
 
-Website mode emits lazy chunks and can opt into a validated CDN deployment. Offline mode keeps runtime dependencies local, includes fixed datasets and codec sources, adds local-resource policies and rejects missing local inputs. The service-worker namespace is derived from version and built-asset identity rather than a hand-maintained release string.
+Website mode emits lazy chunks and can opt into a validated CDN deployment. Offline mode uses self-contained classic Blob workers (including the PDF worker), embeds WASM and compressed lookup dictionaries, includes codec sources, adds local-resource policies and rejects missing local inputs. It opens directly under `file://` without an HTTP server. Only the portable build applies this transform; website builds retain their normal module workers and lazy chunks. The service-worker namespace is derived from version and built-asset identity rather than a hand-maintained release string.
 
 Build outputs, local input caches, evidence and screenshots do not belong in the source commit. Release ZIPs are published as GitHub assets. [Offline contract](OFFLINE.md) · [hosting](CDN.md) · [release process](RELEASE.md)
 
